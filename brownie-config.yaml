@@ -1,0 +1,25 @@
+project_structure:
+    build: build
+    contracts: contracts
+    interface: contracts/interface
+    scripts: scripts
+    tests: tests
+
+networks:
+  default: development
+
+  development:
+    cmd_settings:
+      gas_limit: 40000000
+      accounts: 100
+      default_balance: 100000000
+      mnemonic: clock radar mass judge dismiss just intact mind resemble fringe diary casino
+      evm_version: berlin
+      port: 8546
+
+compiler:
+  solc:
+    version: 0.6.12
+
+hypothesis:
+  max_examples: 10
