@@ -34,7 +34,6 @@
     "elliptic": ">=6.5.3",
     "ethereum-input-data-decoder": "0.3.0",
     "fails": "^1.1.1",
-    "ganache-cli": "^6.12.2",
     "lodash": ">=4.17.19",
     "mem": ">=4.0.0",
     "minimist": ">=1.2.3",
