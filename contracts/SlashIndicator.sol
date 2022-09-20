@@ -1,4 +1,4 @@
-pragma solidity ^0.6.4;
+pragma solidity 0.6.12;
 import "./System.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
@@ -62,7 +62,6 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
 
   /*********************** External func ********************************/
   // @validator consensus address of validator
-  // this method is called by other validators from golang consensus engine
   function slash(address validator) external onlyCoinbase onlyInit oncePerBlock onlyZeroGasPrice{
     Indicator memory indicator = indicators[validator];
     if (indicator.exist) {
@@ -83,7 +82,6 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     emit validatorSlashed(validator);
   }
 
-  // this method is called by external verifiers
   function doubleSignSlash(bytes calldata header1,bytes calldata header2) external onlyInit {
     RLPDecode.RLPItem[] memory items1 = header1.toRLPItem().toList();
     RLPDecode.RLPItem[] memory items2 = header2.toRLPItem().toList();

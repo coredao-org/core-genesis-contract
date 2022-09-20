@@ -1,4 +1,4 @@
-pragma solidity ^0.6.4;
+pragma solidity 0.6.12;
 
 library RLPDecode {
     uint8 constant STRING_SHORT_START = 0x80;

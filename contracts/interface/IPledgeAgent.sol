@@ -1,4 +1,4 @@
-pragma solidity ^0.6.4;
+pragma solidity 0.6.12;
 
 interface IPledgeAgent {
   function addRoundReward(address[] memory agentList, uint256[] memory rewardList) payable external;
