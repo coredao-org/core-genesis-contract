@@ -14,8 +14,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
   int256 public constant INIT_REQUIRED_MARGIN = 1e22;
   int256 public constant INIT_DUES = 1e18;
-  uint256 public constant INIT_ROUND_INTERVAL = 86400;
-  uint256 public constant INIT_VALIDATOR_COUNT = 9;
+  uint256 public constant INIT_ROUND_INTERVAL = 1800;
+  uint256 public constant INIT_VALIDATOR_COUNT = 42;
   uint256 public constant MAX_COMMISSION_CHANGE = 10;
 
   uint256 public constant SET_CANDIDATE = 1;
@@ -142,15 +142,15 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     (bytes20[] memory miners, uint256[] memory powers) = ILightClient(LIGHT_CLIENT_ADDR).getRoundPowers(roundTag-7);
 
     // step 2. update slashed votingPower
-    uint candidateSize = candidateSet.length;
-    uint validCount = 0;
+    uint256 candidateSize = candidateSet.length;
+    uint256 validCount = 0;
     uint256[] memory statusList = new uint256[](candidateSize);
     for (uint256 i = 0; i < candidateSize; i++) {
       statusList[i] = candidateSet[i].status & DEL_VALIDATOR;
       if (statusList[i] == SET_CANDIDATE) validCount++;
     }
     address[] memory candidates = new address[](validCount);
-    uint j = 0;
+    uint256 j = 0;
     for (uint256 i = 0; i < candidateSize; i++) {
       if (statusList[i] == SET_CANDIDATE) {
         candidates[j++] = candidateSet[i].operateAddr;
@@ -168,7 +168,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     address payable[] memory feeAddrList = new address payable[](totalCount);
     uint256[] memory commissionThousandthsList = new uint256[](totalCount);
 
-    for (uint i = 0; i < totalCount; ++i) {
+    for (uint256 i = 0; i < totalCount; ++i) {
       uint256 index = operateMap[validatorList[i]];
       Candidate storage c = candidateSet[index - 1];
       consensusAddrList[i] = c.consensusAddr;
@@ -215,7 +215,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     // check jail.
     require(jailMap[msg.sender] < roundTag, "it is in jail");
 
-    uint status = SET_CANDIDATE;
+    uint256 status = SET_CANDIDATE;
     candidateSet.push(Candidate(msg.sender, consensusAddr, feeAddr, commissionThousandths, int256(msg.value), status, roundTag, commissionThousandths));
     uint256 index = candidateSet.length;
     operateMap[msg.sender] = index;

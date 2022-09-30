@@ -356,7 +356,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     } else {
       require(deposit != 0, "deposit value is zero");
       CoinDelegator storage d = a.cDelegatorMap[delegator];
-      (uint256 rewardAmount, uint dust) = collectCoinReward(a, d, 0x7FFFFFFF);
+      (uint256 rewardAmount, uint256 dust) = collectCoinReward(a, d, 0x7FFFFFFF);
       distributeReward(delegator, rewardAmount, dust);
       if (d.changeRound < roundTag) {
         d.deposit = d.newDeposit;
@@ -374,7 +374,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 newDeposit = d.newDeposit;
     require(newDeposit > 0, "delegator does not exist");
 
-    (uint256 rewardAmount, uint dust) = collectCoinReward(a, d, 0x7FFFFFFF);
+    (uint256 rewardAmount, uint256 dust) = collectCoinReward(a, d, 0x7FFFFFFF);
     distributeReward(delegator, rewardAmount, dust);
 
     a.totalDeposit -= newDeposit;
@@ -485,8 +485,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   function gatherDust() external onlyInit onlyGov {
     if (totalDust > 0) {
-      address payable govhub = address(uint160(GOV_HUB_ADDR));
-      govhub.transfer(totalDust);
+      GOV_HUB_ADDR.transfer(totalDust);
       totalDust = 0;
     }
   }

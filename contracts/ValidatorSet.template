@@ -252,7 +252,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     if (Memory.compareStrings(key, "blockReward")) {
       require(value.length == 32, "length of blockReward mismatch");
       uint256 newBlockReward = BytesToTypes.bytesToUint256(32, value);
-      require(newBlockReward >= 0 && newBlockReward <= BLOCK_REWARD * 10, "the blockReward out of range");
+      require(newBlockReward <= BLOCK_REWARD * 10, "the blockReward out of range");
       blockReward = newBlockReward;
     } else if (Memory.compareStrings(key, "blockRewardIncentivePercent")) {
       require(value.length == 32, "length of blockRewardIncentivePercent mismatch");
