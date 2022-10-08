@@ -2,7 +2,7 @@ const web3 = require("web3")
 const init_holders = [
    //
    {
-      address: "0xf14c914eA16C216b5f5D0223628016F1228695b2",
+      address: "0xa2d48116761f2af265bed1d9b000ebbcca3f12c4",
       balance: web3.utils.toBN("100000000000000000000000000").toString("hex")
    },
    //

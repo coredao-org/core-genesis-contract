@@ -1,9 +1,9 @@
 const web3 = require("web3")
 const init_cycle = {
     blockPeriod: 3,
-    epochLength: 50,
-    roundInterval: 1800,
-    validatorCount: 42
+    epochLength: 200,
+    roundInterval: 86400,
+    validatorCount: 9
 };
 
 

@@ -19,7 +19,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   uint256 public constant BLOCK_REWARD = 3e18;
   uint256 public constant BLOCK_REWARD_INCENTIVE_PERCENT = 10;
 
-  bytes public constant INIT_VALIDATORSET_BYTES = hex"ebea9401bca3615d24d3c638836691517b2b9b49b054b19401bca3615d24d3c638836691517b2b9b49b054b1";
+  bytes public constant INIT_VALIDATORSET_BYTES = hex"f8d7ea9401bca3615d24d3c638836691517b2b9b49b054b1943ae030dc3717c66f63d6e8f1d1508a5c941ff46dea94a458499604a85e90225a14946f36368ae24df16d94de442f5ba55687a24f04419424e0dc2593cc9f4cea945e00c0d5c4c10d4c805aba878d51129a89d513e094cb089be171e256acdaac1ebbeb32ffba0dd438eeea941cd652bc64af3f09b490daae27f46e53726ce230940a53b7e0ffd97357e444b85f4d683c1d8e22879aea94da37ccecbb2d7c83ae27ee2bebfe8ebce162c60094d82c24274ebbfe438788d684dc6034c3c67664a4";
 
   /*********************** state of the contract **************************/
   uint256 public blockReward;
@@ -252,7 +252,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     if (Memory.compareStrings(key, "blockReward")) {
       require(value.length == 32, "length of blockReward mismatch");
       uint256 newBlockReward = BytesToTypes.bytesToUint256(32, value);
-      require(newBlockReward <= BLOCK_REWARD * 10, "the blockReward out of range");
+      require(newBlockReward >= 0 && newBlockReward <= BLOCK_REWARD * 10, "the blockReward out of range");
       blockReward = newBlockReward;
     } else if (Memory.compareStrings(key, "blockRewardIncentivePercent")) {
       require(value.length == 32, "length of blockRewardIncentivePercent mismatch");
