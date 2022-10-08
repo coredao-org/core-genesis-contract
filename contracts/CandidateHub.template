@@ -30,6 +30,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   uint256 public constant ACTIVE_STATUS = SET_CANDIDATE | SET_VALIDATOR;
   uint256 public constant UNREGISTER_STATUS = SET_CANDIDATE | SET_INACTIVE | SET_MARGIN;
 
+  // margin = refundable deposit 
+  // dues = unregister fee
   int256 public requiredMargin;
   int256 public dues;
 
@@ -43,11 +45,11 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   // value is the index of `candidateSet`.
   mapping(address => uint256) public operateMap;
 
-  // key is the `consensusAddr`,
+  // key is the `consensusAddr` of `Candidate`,
   // value is the index of `candidateSet`.
   mapping(address => uint256) consensusMap;
 
-  // key is consensus address of validator,
+  // key is the `consensusAddr` of `Candidate`,
   // value is release round
   mapping(address => uint256) public jailMap;
 
@@ -115,7 +117,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     Candidate storage c = candidateSet[index - 1];
 
     uint256 status = c.status | SET_JAIL;
-    // store in jail
+    // update jailMap
     uint256 jailRound = roundTag + round;
     if (jailRound < roundTag) jailMap[operateAddress] = type(uint256).max;
     else jailMap[operateAddress] = jailRound;
@@ -130,14 +132,16 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   /********************* External methods  ****************************/
+  // this method is called by Golang consensus engine at the end of a round
   function turnRound() external onlyCoinbase onlyInit onlyZeroGasPrice {
-
-    // distribute last round.
+    // distribute rewards for the about to end round
     IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward();
 
+    // fetch valid BTC miners of the about to end round; 
+    // which will be used to calculate rewards for BTC hash delegators later
     bytes20[] memory lastMiners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(roundTag-7);
 
-    // oncePerRound
+    // update the system round tag; new round starts
     {%if mock %}
     if (controlRoundTimeTag == false) {
     {% endif %}
@@ -149,11 +153,11 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
         roundTag++;
     }
     {% endif %}
-
-    // step 1. get round power.
+    // fetch the valid miners and their accumulated powers, 
+    // which is used to calculate hybrid score for validators in the new round
     (bytes20[] memory miners, uint256[] memory powers) = ILightClient(LIGHT_CLIENT_ADDR).getRoundPowers(roundTag-7);
 
-    // step 2. update slashed votingPower
+    // reset validator flags for all candidates.
     uint256 candidateSize = candidateSet.length;
     uint256 validCount = 0;
     uint256[] memory statusList = new uint256[](candidateSize);
@@ -169,12 +173,14 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       }
     }
 
-    // step 3. calc the terminal validatorsSet 
+    // calculate the hybrid score for all valid candidates and 
+    // choose top ones to form the validator set of the new round
+    // TODO bad naming; should use `hybrid score` instead of integral
     (uint256[] memory integrals, uint256 totalPower, uint256 totalCoin) =
       IPledgeAgent(PLEDGE_AGENT_ADDR).getIntegral(candidates, lastMiners, miners, powers);
     address[] memory validatorList = getValidators(candidates, integrals, validatorCount);
 
-    // step 4. prepare arguments, and notify ValidatorSet contract.
+    // prepare arguments, and notify ValidatorSet contract
     uint256 totalCount = validatorList.length;
     address[] memory consensusAddrList = new address[](totalCount);
     address payable[] memory feeAddrList = new address payable[](totalCount);
@@ -198,7 +204,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     // clean slash contract
     ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
 
+    // notify PledgeAgent contract
     IPledgeAgent(PLEDGE_AGENT_ADDR).setNewRound(validatorList, totalPower, totalCoin, roundTag);
+
+    // update validator jail status
     for (uint256 i = 0; i < candidateSize; i++) {
       address opAddr = candidateSet[i].operateAddr;
       uint256 jailedRound = jailMap[opAddr];
@@ -224,7 +233,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     require(consensusMap[consensusAddr] == 0, "consensus already exists");
     require(!isContract(consensusAddr), "contract is not allowed to be consensus address");
     require(!isContract(feeAddr), "contract is not allowed to be fee address");
-    // check jail.
+    // check jail status
     require(jailMap[msg.sender] < roundTag, "it is in jail");
 
     uint256 status = SET_CANDIDATE;
@@ -318,7 +327,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     }
   }
 
-  /*************************** inner methods ******************************/
+  /*************************** internal methods ******************************/
   function changeStatus(Candidate storage c, uint256 newStatus) internal {
     uint256 oldStatus = c.status;
     if (oldStatus != newStatus) {
@@ -332,7 +341,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
   function getValidators(address[] memory candidateList, uint256[] memory integralList, uint256 count) internal pure returns (address[] memory validatorList){
     uint256 candidateSize = candidateList.length;
-    // quick order by totalDeposit O(nlogk)
+    // quicksort by integrals O(nlogk)
     uint256 l = 0;
     uint256 r = 0;
     if (count < candidateSize) {
@@ -341,7 +350,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       count = candidateSize;
     }
     while (l < r) {
-      // partition candidateList
+      // partition
       uint256 ll = l;
       uint256 rr = r;
       address back = candidateList[ll];

@@ -18,21 +18,26 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   uint256 public constant POWER_BLOCK_FACTOR = {% if mock %}1{% else %}1e18{% endif %};
 
   uint256 public requiredCoinDeposit;
+
+  // powerFactor/10000 determines the weight of BTC hash power vs CORE stakes
+  // the default value of powerFactor is set to 20000 
+  // which means the overall BTC hash power takes 2/3 total weight 
+  // when calculating hybrid score and distributing block rewards
   uint256 public powerFactor;
 
   /* key: candidate's operateAddr */
   mapping(address => Agent) public agentsMap;
 
-  /* key: delegator’s fee address, or eth formated address of btc miner
+  /* key: delegator’s fee address, or eth format address of btc miner
    * value: btc delegator
    */
   mapping(address => BtcDelegator) public btcDelegatorsMap;
   /* key: btc compressed/uncompressed pk hash,
-   * value: eth formated address of btc miner
+   * value: eth format address of btc miner
    */
   mapping(bytes20 => address) public btc2ethMap;
   /* key: round index
-   * value: key information state of round
+   * value: key state information of round
    */
   mapping(uint256 => RoundState) public stateMap;
 
@@ -41,8 +46,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   // It is initialized to 1.
   uint256 public roundTag;
 
-  // When a reward received by delegators,
-  // there is some dust leave in remainReward.
+  // there will be unclaimed rewards when delegators exit
+  // the rewards for the exit day will be delivered by system but can not be claimed - we call them as dust
   uint256 public totalDust;
 
   struct BtcDelegator {
@@ -62,7 +67,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   struct Reward {
     uint256 totalReward;
     uint256 remainReward;
-    uint256 totalIntegral; // calc each delegator's reward which state
+    uint256 totalIntegral;
     uint256 coin;
     uint256 round;
   }
@@ -74,7 +79,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 totalDeposit;
     mapping(address => CoinDelegator) cDelegatorMap;
     Reward[] rewardSet;
-    // round State of lastest validator
     uint256 power;
     uint256 coin;
   }
@@ -118,9 +122,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     alreadyInit = true;
   }
 
-  /*********************** Interface implements ***************************/
+  /*********************** Interface implementations ***************************/
   /**
-   * add reward by validator set. agentList is operator address list
+   * receive round rewards from ValidatorSet, which is triggered at the beginning of turn round
    */
   function addRoundReward(address[] memory agentList, uint256[] memory rewardList)
     external
@@ -152,13 +156,17 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
   }
 
+  /**
+   * calculate hybrid score for all candidates
+   */
+  // TODO bad naming, should use `hybrid score` instead of integral
   function getIntegral(
     address[] memory candidates, bytes20[] memory lastMiners,
     bytes20[] memory miners, uint256[] memory powers
   ) external override onlyCandidate
       returns (uint256[] memory integrals, uint256 totalPower, uint256 totalCoin) {
     require(miners.length == powers.length, "the length of miners and powers should be equal");
-    // collect power reward, reset delegator's power & agent's power、coin
+    // collect hash power rewards, reset delegator's power & agent's power+coin
     uint256 reward = 0;
     for (uint256 i = 0; i < lastMiners.length; i++) {
       address delegator = btc2ethMap[lastMiners[i]];
@@ -180,7 +188,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     for (uint256 i = 0; i < miners.length; i++) {
       address delegator = btc2ethMap[miners[i]];
       if (delegator != address(0x0)) {
-        // in order to deduce denominator deviation, mul 1e18 for each power
+        // in order to improve accuracy, the calculation of power is based on 10^18
         powers[i] *= POWER_BLOCK_FACTOR;
         BtcDelegator storage m = btcDelegatorsMap[delegator];
         Agent storage a = agentsMap[m.agent];
@@ -200,7 +208,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       totalCoin += a.coin;
     }
 
-    // calc integral
+    // calc hybrid score
     integrals = new uint256[](candidateSize);
     for (uint256 i = 0; i < candidateSize; ++i) {
       Agent storage a = agentsMap[candidates[i]];
@@ -209,9 +217,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return (integrals, totalPower, totalCoin);
   }
 
+  // new round starts
   function setNewRound(address[] memory validators, uint256 totalPower,
       uint256 totalCoin, uint256 round) external override onlyCandidate {
-
     RoundState memory rs;
     rs.power = totalPower;
     rs.coin = totalCoin;
@@ -231,7 +239,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     a.power = a.power / POWER_BLOCK_FACTOR * POWER_BLOCK_FACTOR + INVALID_POWER;
   }
 
-  /*********************** External emthods ***************************/
+  /*********************** External methods ***************************/
   function delegateCoin(address agent) external payable {
     require(ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(agent), "agent is inactivated");
     uint256 newDeposit = delegateCoin(agent, msg.sender, msg.value);
@@ -297,7 +305,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   }
 
   function claimReward(address payable delegator, address[] calldata agentList) external returns (uint256, bool) {
-    // In order to avoid the gas out case, limit the round count.
+    // limit round count to control gas usage
     int256 roundLimit = 500;
     uint256 reward;
     uint256 dust;
@@ -433,7 +441,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       rewardIndex++;
     }
 
-    // update index when any one reward collected.
+    // update index whenever claim happens 
     d.rewardIndex = rewardIndex;
     return (rewardAmount, dust);
   }

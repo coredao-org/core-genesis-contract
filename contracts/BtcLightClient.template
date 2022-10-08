@@ -112,7 +112,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
     require(blockHeight + 2160 > getHeight(heaviestBlock), "can't sync header 15 days ago");
 
-    // verify MerkleRoot & pickup coinbase address.
+    // verify MerkleRoot & pickup coinbase address
     uint256 length = blockBytes.length + 32;
     bytes memory input = slice(blockBytes, 0, blockBytes.length);
     bytes32[4] memory result;
@@ -120,8 +120,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     uint32 coinbaseAddrType;
     /* solium-disable-next-line */
     assembly {
-      // call validateBtcHeader precompile contract
-      // Contract address: 0x64
+      // call precompiled contract contracts_lightclient.go 
+      // contract address: 0x64
       if iszero(staticcall(not(0), 0x64, input, length, result, 128)) {
         revert(0, 0)
       }
@@ -130,7 +130,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     }
 
     uint32 adjustment = blockHeight / DIFFICULTY_ADJUSTMENT_INTERVAL;
-    // save
+    // save & update rewards
     blockChain[blockHash] = encode(headerBytes, coinbaseAddr, scoreBlock, blockHeight, adjustment);
     if (blockHeight % DIFFICULTY_ADJUSTMENT_INTERVAL == 0) {
       adjustmentHashes[adjustment] = blockHash;

@@ -78,6 +78,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     return currentValidatorSetMap[addr] > 0;
   }
 
+  // this method is called by the golang consensus engine every block
   function deposit(address valAddr) external payable onlyCoinbase onlyInit onlyZeroGasPrice {
     uint256 value = msg.value;
     if (address(this).balance >= totalInCome + value + blockReward) {
@@ -94,6 +95,8 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
   }
 
+  // this method is called by the CandidateHub contract at the beginning of turn round
+  // this is where we deal with reward distribution logics
   function distributeReward() external override onlyCandidate {
     address payable feeAddress;
     uint256 validatorReward;
