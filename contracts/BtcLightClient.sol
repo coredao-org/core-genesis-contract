@@ -78,9 +78,6 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   constructor() public {}
 
   function init() external onlyNotInit {
-    require(INIT_CHAIN_HEIGHT % DIFFICULTY_ADJUSTMENT_INTERVAL == 0, "The initial block must be the first block of the adjustment cycle.");
-    uint32 blockHeight = INIT_CHAIN_HEIGHT;
-
     bytes32 blockHash = doubleShaFlip(INIT_CONSENSUS_STATE_BYTES);
     bytes20 coinbaseAddr;
 
@@ -90,9 +87,9 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     initBlockHash = blockHash;
 
     bytes memory initBytes = INIT_CONSENSUS_STATE_BYTES;
-    uint32 adjustment = blockHeight / DIFFICULTY_ADJUSTMENT_INTERVAL;
+    uint32 adjustment = INIT_CHAIN_HEIGHT / DIFFICULTY_ADJUSTMENT_INTERVAL;
     adjustmentHashes[adjustment] = blockHash;
-    bytes memory nodeBytes = encode(initBytes, coinbaseAddr, scoreBlock, blockHeight, adjustment);
+    bytes memory nodeBytes = encode(initBytes, coinbaseAddr, scoreBlock, INIT_CHAIN_HEIGHT, adjustment);
     blockChain[blockHash] = nodeBytes;
     rewardForSyncHeader = INIT_REWARD_FOR_SYNC_HEADER;
     callerCompensationMolecule=CALLER_COMPENSATION_MOLECULE;
@@ -116,7 +113,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     require(blockHeight + 2160 > getHeight(heaviestBlock), "can't sync header 15 days ago");
 
     // verify MerkleRoot & pickup coinbase address.
-    uint length = blockBytes.length + 32;
+    uint256 length = blockBytes.length + 32;
     bytes memory input = slice(blockBytes, 0, blockBytes.length);
     bytes32[4] memory result;
     bytes20 coinbaseAddr;
@@ -165,9 +162,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     emit StoreHeader(blockHash, coinbaseAddr, coinbaseAddrType, blockHeight);
   }
 
-  function addMinerPower(bytes32 blockHash) internal {
-    bytes32 preHash = blockHash;
-    for(uint i = 0; i < CONFIRM_BLOCK; ++i){
+  function addMinerPower(bytes32 preHash) internal {
+    for(uint256 i = 0; i < CONFIRM_BLOCK; ++i){
       if (preHash == initBlockHash) return;
       preHash = getPrevHash(preHash);
     }
@@ -230,8 +226,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     }
   }
   
-  function slice(bytes memory input, uint start, uint end) internal pure returns (bytes memory _output) {
-    uint length = end - start;
+  function slice(bytes memory input, uint256 start, uint256 end) internal pure returns (bytes memory _output) {
+    uint256 length = end - start;
     _output = new bytes(length);
     uint256 src = Memory.dataPtr(input);
     uint256 dest;
@@ -459,7 +455,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     return (compact | (nbytes << 24));
   }
 
-  function loadInt256(uint _offst, bytes memory _input) internal pure returns (uint256 _output) {
+  function loadInt256(uint256 _offst, bytes memory _input) internal pure returns (uint256 _output) {
     assembly {
         _output := mload(add(_input, _offst))
     }
@@ -511,11 +507,11 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
   function getRoundPowers(uint256 roundTimeTag) external override view returns (bytes20[] memory miners, uint256[] memory powers) {
     RoundMinersPower storage r = roundMinerPowerMap[roundTimeTag];
-    uint count = r.miners.length;
+    uint256 count = r.miners.length;
     if (count == 0) return (miners,powers);
     miners = new bytes20[](count);
     powers = new uint256[](count);
-    for (uint i = 0; i < count; ++i){
+    for (uint256 i = 0; i < count; ++i){
       miners[i] = r.miners[i];
       powers[i] = r.powerMap[miners[i]];
     }
@@ -524,10 +520,10 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
   function getRoundMiners(uint256 roundTimeTag) external override view returns (bytes20[] memory miners) {
     RoundMinersPower storage r = roundMinerPowerMap[roundTimeTag];
-    /*uint count = r.miners.length;
+    /*uint256 count = r.miners.length;
     if (count > 0) {
       miners = new bytes20[](count);
-      for (uint i = 0; i < count; ++i){
+      for (uint256 i = 0; i < count; ++i){
         miners[i] = r.miners[i];
       }
     }*/

@@ -163,7 +163,7 @@ contract GovHub is System, IParamSubscriber {
     require(state(proposalId) == ProposalState.Active, "voting is closed");
     Proposal storage proposal = proposals[proposalId];
     Receipt storage receipt = proposal.receipts[msg.sender];
-    require(receipt.hasVoted == false, "voter already voted");
+    require(!receipt.hasVoted, "voter already voted");
     if (support) {
       proposal.forVotes += 1;
     } else {

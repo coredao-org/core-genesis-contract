@@ -94,7 +94,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     require(validator1 != address(0x00), "header data is illegal");
     require(validator1 == validator2, "validators of the two blocks must be the same");
     require(IValidatorSet(VALIDATOR_CONTRACT_ADDR).isValidator(validator1), "not a validator");
-    IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(validator1, type(uint).max, felonyDeposit);
+    IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(validator1, type(uint256).max, felonyDeposit);
     ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(msg.sender, rewardForReportDoubleSign);
   }
 
@@ -103,7 +103,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     bytes memory sig = BytesLib.slice(extra, 32, 65);
     bytes[] memory rlpbytes_list = new bytes[](16);
     rlpbytes_list[0] = CHAINID.encodeInt();
-    for(uint i = 0;i < 15;++i){
+    for(uint256 i = 0;i < 15;++i){
       if(i == 12){
         rlpbytes_list[13] = BytesLib.slice(extra, 0, 32).encodeBytes();
       } else {
@@ -147,8 +147,8 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     if(validators.length == 0){
       return;
     }
-    uint i = 0;
-    uint j = validators.length-1;
+    uint256 i = 0;
+    uint256 j = validators.length-1;
     for (;i <= j;) {
       bool findLeft = false;
       bool findRight = false;
