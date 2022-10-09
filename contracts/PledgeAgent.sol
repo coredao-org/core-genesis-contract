@@ -16,7 +16,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   uint256 public constant INIT_REQUIRED_COIN_DEPOSIT = 1e18;
   uint256 public constant INIT_HASH_POWER_FACTOR = 20000;
   uint256 public constant DUST_LIMIT = 1e13;
-  uint256 public constant INVALID_POWER = 1;
   uint256 public constant POWER_BLOCK_FACTOR = 1e18;
 
   uint256 public requiredCoinDeposit;
@@ -30,14 +29,18 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   // key: candidate's operateAddr
   mapping(address => Agent) public agentsMap;
 
-  // key: delegator’s fee address, or eth format address of btc miner
-  // value: btc delegator
-  mapping(address => BtcDelegator) public btcDelegatorsMap;
-  // key: btc compressed/uncompressed pk hash,
-  // value: eth format address of btc miner
+  // This field stores power reward when turn round,
+  // owner can claim coins in claimPowerReward.
+  // It is use in upgrade v1, replace the position of btcDelegatorsMap due to
+  // btcDelegatorsMap is empty.
+  mapping(address => uint256) public powerRewardMap;
+
+  // This field will be unused after upgrade v1 in testnet.
+  // It is only occupy the position for data's compatibility
   mapping(bytes20 => address) public btc2ethMap;
+
   // key: round index
-  // value: key state information of round
+  // value: key state information state of round
   mapping(uint256 => RoundState) public stateMap;
 
   // roundTag is set to be timestamp / round interval,
@@ -45,16 +48,10 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   // It is initialized to 1.
   uint256 public roundTag;
 
-  // there will be unclaimed rewards when delegators exit
-  // the rewards for the exit day will be delivered by system but can not be claimed - we call them as dust
+  // there will be unclaimed rewards when delegators exit.
+  // the rewards for the exit day will be delivered by system
+  // but can not be claimed - we call them as dust
   uint256 public totalDust;
-
-  struct BtcDelegator {
-    bytes20 pkHash;
-    bytes20 compressedPkHash;
-    address agent;
-    uint256 power;
-  }
 
   struct CoinDelegator {
     uint256 deposit;
@@ -89,15 +86,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /*********************** events **************************/
   event paramChange(string key, bytes value);
   event delegatedCoin(address indexed agent, address indexed delegator, uint256 amount, uint256 totalAmount);
-  event delegatedPower(
-    address indexed agent,
-    address indexed delegator,
-    bytes publickey,
-    bytes20 pkHash,
-    bytes20 compressPkHash
-  );
   event undelegatedCoin(address indexed agent, address indexed delegator, uint256 amount);
-  event undelegatedPower(address indexed agent, address indexed delegator);
   event transferredCoin(
     address indexed sourceAgent,
     address indexed targetAgent,
@@ -105,13 +94,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 amount,
     uint256 totalAmount
   );
-  event transferredPower(
-    address indexed sourceAgent,
-    address indexed targetAgent,
-    address indexed delegator
-  );
   event roundReward(address indexed agent, uint256 coinReward, uint256 powerReward);
   event claimedReward(address indexed delegator, address indexed operator, uint256 amount, bool success);
+  event claimedPowerReward(address indexed delegator, uint256 amount, bool success);
 
   function init() external onlyNotInit {
     requiredCoinDeposit = INIT_REQUIRED_COIN_DEPOSIT;
@@ -156,55 +141,24 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   /// Calculate hybrid score for all candidates
   /// @param candidates List of candidate operator addresses
-  /// @param lastMiners List of BTC miners with hash power in last round
-  /// @param miners List of BTC miners with hash power in this round
   /// @param powers List of power value in this round
   /// @return scores List of hybrid scores of all validator candidates in this round
   /// @return totalPower Total power delegate in this round
   /// @return totalCoin Total coin delegate in this round
-  function getHybridScore(
-    address[] memory candidates, bytes20[] memory lastMiners,
-    bytes20[] memory miners, uint256[] memory powers
+  function getHybridScore(address[] memory candidates, uint256[] memory powers
   ) external override onlyCandidate
       returns (uint256[] memory scores, uint256 totalPower, uint256 totalCoin) {
-    require(miners.length == powers.length, "the length of miners and powers should be equal");
-    // collect hash power rewards, reset delegator's power & agent's power+coin
-    uint256 reward = 0;
-    for (uint256 i = 0; i < lastMiners.length; i++) {
-      address delegator = btc2ethMap[lastMiners[i]];
-      if (delegator != address(0x0)) {
-        BtcDelegator storage m = btcDelegatorsMap[delegator];
-        Agent storage a = agentsMap[m.agent];
-        reward = collectPowerReward(a, m);
-        distributeReward(payable(delegator), reward, 0);
-        m.power = 0;
-      }
-    }
-
     uint256 candidateSize = candidates.length;
-    for (uint256 i = 0; i < candidateSize; ++i) {
-      agentsMap[candidates[i]].power = 0;
-    }
-
-    // add power
-    for (uint256 i = 0; i < miners.length; i++) {
-      address delegator = btc2ethMap[miners[i]];
-      if (delegator != address(0x0)) {
-        // in order to improve accuracy, the calculation of power is based on 10^18
-        powers[i] *= POWER_BLOCK_FACTOR;
-        BtcDelegator storage m = btcDelegatorsMap[delegator];
-        Agent storage a = agentsMap[m.agent];
-        if (a.power % POWER_BLOCK_FACTOR != INVALID_POWER) {
-          m.power += powers[i];
-          a.power += powers[i];
-        }
-      }
-    }
+    require(candidateSize == powers.length, "the length of candidates and powers should be equal");
 
     totalPower = 1;
     totalCoin = 1;
+    // set power and coin
+    // the passed caller make sure each powerCandidates is valid or zero
     for (uint256 i = 0; i < candidateSize; ++i) {
       Agent storage a = agentsMap[candidates[i]];
+      // in order to improve accuracy, the calculation of power is based on 10^18
+      a.power = powers[i] * POWER_BLOCK_FACTOR;
       a.coin = a.totalDeposit;
       totalPower += a.power;
       totalCoin += a.coin;
@@ -240,11 +194,36 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
   }
 
-  /// Inactivate a validator
-  /// @param agent The operator address of validator
-  function inactiveAgent(address agent) external override onlyCandidate {
-    Agent storage a = agentsMap[agent];
-    a.power = a.power / POWER_BLOCK_FACTOR * POWER_BLOCK_FACTOR + INVALID_POWER;
+  /// Distribute power rewards for each miner
+  /// This method will be invoked after `function addRoundReward`.
+  /// @param candidate candidate operator addresses
+  /// @param miners List of BTC miners with hash power in last round
+  function distributePowerReward(address candidate, address[] memory miners) external override onlyCandidate {
+    // 1 check whether the round power is empty, if so, return
+    RoundState storage rs = stateMap[roundTag];
+    if (rs.power == 1) {
+      return;
+    }
+    // 2 distribute each validator
+    Agent storage a = agentsMap[candidate];
+    uint256 l = a.rewardSet.length;
+    if (l == 0) return;
+    Reward storage r = a.rewardSet[l-1];
+    if (r.totalReward == 0 || r.round != roundTag) return;
+    uint256 reward = rs.coin * POWER_BLOCK_FACTOR * rs.powerFactor / 10000 * r.totalReward / r.score;
+    uint256 totalReward = reward * miners.length;
+    require(r.remainReward >= totalReward, "there is not enough reward");
+
+    for (uint256 i = 0; i < miners.length; i++) {
+      powerRewardMap[miners[i]] += reward;
+    }
+
+    if (r.coin == 0) {
+      totalDust += (r.remainReward - totalReward);
+      delete a.rewardSet[l-1];
+    } else {
+      r.remainReward -= totalReward;
+    }
   }
 
   /*********************** External methods ***************************/
@@ -256,50 +235,12 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     emit delegatedCoin(agent, msg.sender, msg.value, newDeposit);
   }
 
-  /// Delegate hash power to a validator
-  /// @param agent The operator address of validator
-  /// @param publicKey The public key of the BTC miner
-  /// @param btcHash Hash of a block on BTC network produced by the miner
-  function delegateHashPower(address agent, bytes calldata publicKey, bytes32 btcHash) external {
-    require(ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(agent), "agent is inactivated");
-    require(btcDelegatorsMap[msg.sender].agent == address(0x00), "delegator has delegated");
-
-    address addr = address(uint160(uint256(keccak256(abi.encodePacked(publicKey[1:])))));
-    require(addr == msg.sender, "the delegator is a fake miner");
-
-    bytes20 miner = ILightClient(LIGHT_CLIENT_ADDR).getMiner(btcHash);
-    (bytes20 pkHash, bytes20 compressedPkHash) = getBtcPkHash(publicKey);
-    require(miner == pkHash || miner == compressedPkHash, "the miner has no power");
-
-    btcDelegatorsMap[addr] = BtcDelegator(
-      pkHash,
-      compressedPkHash,
-      agent,
-      0
-    );
-    btc2ethMap[pkHash] = msg.sender;
-    btc2ethMap[compressedPkHash] = msg.sender;
-
-    emit delegatedPower(agent, addr, publicKey, pkHash, compressedPkHash);
-  }
-
   /// Undelegate coin from a validator
   /// @param agent The operator address of validator
   function undelegateCoin(address agent) external {
     uint256 deposit = undelegateCoin(agent, msg.sender);
     msg.sender.transfer(deposit);
     emit undelegatedCoin(agent, msg.sender, deposit);
-  }
-
-  /// Undelegate hash power from a validator
-  function undelegatePower() external {
-    BtcDelegator storage m = btcDelegatorsMap[msg.sender];
-    require(m.agent != address(0x00), "delegator does not exist");
-    emit undelegatedPower(m.agent, msg.sender);
-
-    delete btc2ethMap[m.pkHash];
-    delete btc2ethMap[m.compressedPkHash];
-    delete btcDelegatorsMap[msg.sender];
   }
 
   /// Transfer coin stake to a new validator
@@ -313,20 +254,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     emit transferredCoin(sourceAgent, targetAgent, msg.sender, deposit, newDeposit);
   }
 
-  /// Transfer hash power stake to a new validator
-  /// @param targetAgent The validator to transfer hash power stake to
-  function transferPower(address targetAgent) external {
-    require(ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetAgent), "agent is inactivated");
-    BtcDelegator storage m = btcDelegatorsMap[msg.sender];
-    require(m.agent != address(0x00), "delegator does not exist");
-    address sourceAgent = m.agent;
-    require(sourceAgent!=targetAgent, "source agent and target agent are the same one");
-    m.agent = targetAgent;
-    m.power = 0;
-    emit transferredPower(sourceAgent, targetAgent, msg.sender);
-  }
-
-  /// Claim reward for a delegator
+  /// Claim reward for a coin delegator
   /// @param delegator The delegator address
   /// @param agentList The list of validators to claim rewards on
   /// @return (Amount claimed, Are all rewards claimed)
@@ -354,6 +282,20 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     require(rewardSum > 0, "no pledge reward");
     distributeReward(delegator, rewardSum, dustSum);
     return (rewardSum, roundLimit >= 0);
+  }
+
+  /// Claim reward for a power delegator
+  function claimPowerReward() external {
+    uint256 reward = powerRewardMap[msg.sender];
+    if (reward == 0) {
+      return;
+    }
+    powerRewardMap[msg.sender] = 0;
+    bool success = msg.sender.send(reward);
+    emit claimedPowerReward(msg.sender, reward, success);
+    if (!success) {
+      totalDust += reward;
+    }
   }
 
   /*********************** Internal methods ***************************/
@@ -467,36 +409,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       rewardIndex++;
     }
 
-    // update index whenever claim happens 
+    // update index whenever claim happens
     d.rewardIndex = rewardIndex;
     return (rewardAmount, dust);
-  }
-
-  function collectPowerReward(Agent storage a, BtcDelegator storage m) internal
-      returns (uint256 reward) {
-    uint256 l = a.rewardSet.length;
-    if (m.power == 0 || l == 0) return 0;
-    Reward storage r = a.rewardSet[l - 1];
-    if (r.totalReward == 0 || r.round != roundTag) return 0;
-
-    uint256 rsCoin = stateMap[r.round].coin;
-    uint256 rsFactor = stateMap[r.round].powerFactor;
-
-    reward = r.totalReward * m.power * rsCoin / 10000 * rsFactor / r.score;
-    require(r.remainReward >= reward, "there is not enough reward");
-    r.remainReward -= reward;
-    return reward;
-  }
-
-  function getBtcPkHash(bytes memory publicKey) private pure returns (bytes20 pkHash, bytes20 compressedPkHash) {
-    bytes memory compressedPK = new bytes(33);
-    assembly {
-        mstore(add(compressedPK, 0x21), mload(add(publicKey, 0x21)))
-    }
-    compressedPK[0] = bytes1(2 | (uint8(publicKey[64]) & 1));
-
-    pkHash = ripemd160(abi.encodePacked(sha256(publicKey)));
-    compressedPkHash = ripemd160(abi.encodePacked(sha256(compressedPK)));
   }
 
   /*********************** Governance ********************************/

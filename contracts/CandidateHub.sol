@@ -145,7 +145,11 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
     // fetch valid BTC miners of the about to end round; 
     // which will be used to calculate rewards for BTC hash delegators later
-    bytes20[] memory lastMiners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(roundTag-7);
+    address[] memory lastCandidates = ILightClient(LIGHT_CLIENT_ADDR).getRoundCandidates(roundTag-7);
+    for (uint256 i = 0; i < lastCandidates.length; i++) {
+      address[] memory miners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(roundTag-7, lastCandidates[i]);
+      IPledgeAgent(PLEDGE_AGENT_ADDR).distributePowerReward(lastCandidates[i], miners);
+    }
 
     // update the system round tag; new round starts
     
@@ -153,9 +157,6 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     require(roundTimestamp > roundTag, "can not turn round twice in one round");
     roundTag = roundTimestamp;
     
-    // fetch the valid miners and their accumulated powers, 
-    // which is used to calculate hybrid score for validators in the new round
-    (bytes20[] memory miners, uint256[] memory powers) = ILightClient(LIGHT_CLIENT_ADDR).getRoundPowers(roundTag-7);
 
     // reset validator flags for all candidates.
     uint256 candidateSize = candidateSet.length;
@@ -165,18 +166,25 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       statusList[i] = candidateSet[i].status & DEL_VALIDATOR;
       if (statusList[i] == SET_CANDIDATE) validCount++;
     }
+
+    uint256[] memory powers;
     address[] memory candidates = new address[](validCount);
-    uint256 j = 0;
-    for (uint256 i = 0; i < candidateSize; i++) {
-      if (statusList[i] == SET_CANDIDATE) {
-        candidates[j++] = candidateSet[i].operateAddr;
+    {
+      uint256 j = 0;
+      for (uint256 i = 0; i < candidateSize; i++) {
+        if (statusList[i] == SET_CANDIDATE) {
+          candidates[j++] = candidateSet[i].operateAddr;
+        }
       }
+      // fetch the valid candidates' powers, 
+      // which is used to calculate hybrid score for validators in the new round
+      powers = ILightClient(LIGHT_CLIENT_ADDR).getRoundPowers(roundTag-7, candidates);
     }
 
     // calculate the hybrid score for all valid candidates and 
     // choose top ones to form the validator set of the new round
     (uint256[] memory scores, uint256 totalPower, uint256 totalCoin) =
-      IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(candidates, lastMiners, miners, powers);
+      IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(candidates, powers);
     address[] memory validatorList = getValidators(candidates, scores, validatorCount);
 
     // prepare arguments, and notify ValidatorSet contract
@@ -269,8 +277,6 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     if (value > 0)  msg.sender.transfer(value);
     payable(SYSTEM_REWARD_ADDR).transfer(uint256(dues));
     emit unregistered(msg.sender, c.consensusAddr);
-
-    IPledgeAgent(PLEDGE_AGENT_ADDR).inactiveAgent(msg.sender);
   }
 
   /// Update validator candidate information
@@ -343,9 +349,6 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   function changeStatus(Candidate storage c, uint256 newStatus) internal {
     uint256 oldStatus = c.status;
     if (oldStatus != newStatus) {
-      if (oldStatus | ACTIVE_STATUS == ACTIVE_STATUS && newStatus | ACTIVE_STATUS != ACTIVE_STATUS) {
-        IPledgeAgent(PLEDGE_AGENT_ADDR).inactiveAgent(c.operateAddr);
-      }
       c.status = newStatus;
       statusChanged(c.operateAddr, oldStatus, newStatus);
     }

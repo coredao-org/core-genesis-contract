@@ -10,10 +10,10 @@ import "./lib/Memory.sol";
 contract SystemReward is System, ISystemReward, IParamSubscriber {
   uint256 public constant INCENTIVE_BALANCE_CAP = 1e25;
 
-  bool isBurn;
   uint256 public incentiveBalanceCap;
   uint256 public numOperator;
   mapping(address => bool) operators;
+  bool isBurn;
 
   /*********************** init **************************/
   function init() external onlyNotInit {

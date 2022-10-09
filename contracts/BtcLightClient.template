@@ -56,24 +56,31 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   mapping(address => uint256) public headerRelayersSubmitCount;
   mapping(address => uint256) public relayerRewardVault;
 
-  struct RoundMinersPower {
-    bytes20[] miners;
-    mapping(bytes20 => uint256) powerMap;
+  struct CandidatePower {
+    // miner is the reward address of BTC miner
+    address[] miners;
+    bytes32[] btcBlocks;
   }
-  mapping(uint256 => RoundMinersPower) roundMinerPowerMap;
+
+  struct RoundPower {
+    address[] candidates;
+    // Key is candidate address
+    mapping(address => CandidatePower) powerMap;
+  }
+  mapping(uint256 => RoundPower) roundPowerMap;
 
   // key is blockHash, value composites of following elements
-  // | header   | reversed | coinbase | score    | height  | ADJUSTMENT Hashes index |
-  // | 80 bytes | 4 bytes  | 20 bytes | 16 bytes | 4 bytes | 4 bytes                 |
+  // | header  |reserved | rewardAddr | score    | height  | ADJUSTMENT | Candidate |
+  //                                                       |Hashes index|           |
+  // | 80 bytes| 4 bytes | 20 bytes   | 16 bytes | 4 bytes | 4 bytes    | 20 bytes  |
   // header := version, prevBlock, MerkleRoot, Time, Bits, Nonce
   mapping(bytes32 => bytes) public blockChain;
   mapping(uint32 => bytes32) public adjustmentHashes;
   mapping(bytes32 => address payable) public submitters;
 
   /*********************** events **************************/
-  event initBlock(uint64 initHeight, bytes32 btcHash, address coinbaseAddr);
   event StoreHeaderFailed(bytes32 indexed blockHash, int256 indexed returnCode);
-  event StoreHeader(bytes32 indexed blockHash, bytes20 coinbasePkHash, uint32 coinbaseAddrType, int256 indexed height);
+  event StoreHeader(bytes32 indexed blockHash, address candidate, address indexed rewardAddr, uint32 indexed height, bytes32 bindingHash);
   event paramChange(string key, bytes value);
 
   /* solium-disable-next-line */
@@ -83,7 +90,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /// Initialize 
   function init() external onlyNotInit {
     bytes32 blockHash = doubleShaFlip(INIT_CONSENSUS_STATE_BYTES);
-    bytes20 coinbaseAddr;
+    address rewardAddr;
+    address candidateAddr;
 
     highScore = 1;
     uint256 scoreBlock = 1;
@@ -93,7 +101,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     bytes memory initBytes = INIT_CONSENSUS_STATE_BYTES;
     uint32 adjustment = INIT_CHAIN_HEIGHT / DIFFICULTY_ADJUSTMENT_INTERVAL;
     adjustmentHashes[adjustment] = blockHash;
-    bytes memory nodeBytes = encode(initBytes, coinbaseAddr, scoreBlock, INIT_CHAIN_HEIGHT, adjustment);
+    bytes memory nodeBytes = encode(initBytes, rewardAddr, scoreBlock, INIT_CHAIN_HEIGHT, adjustment, candidateAddr);
     blockChain[blockHash] = nodeBytes;
     rewardForSyncHeader = INIT_REWARD_FOR_SYNC_HEADER;
     callerCompensationMolecule=CALLER_COMPENSATION_MOLECULE;
@@ -119,26 +127,28 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
     require(blockHeight + 2160 > getHeight(heaviestBlock), "can't sync header 15 days ago");
 
-    // verify MerkleRoot & pickup coinbase address
+    // verify MerkleRoot & pickup candidate address, reward address, bindingHash.
     uint256 length = blockBytes.length + 32;
     bytes memory input = slice(blockBytes, 0, blockBytes.length);
     bytes32[4] memory result;
-    bytes20 coinbaseAddr;
-    uint32 coinbaseAddrType;
+    address candidateAddr;
+    address rewardAddr;
+    bytes32 bindingHash;
     /* solium-disable-next-line */
     assembly {
       // call precompiled contract contracts_lightclient.go 
-      // contract address: 0x64
-      if iszero(staticcall(not(0), 0x64, input, length, result, 128)) {
+      // contract address: 0x65
+      if iszero(staticcall(not(0), 0x65, input, length, result, 128)) {
         revert(0, 0)
       }
-      coinbaseAddr := mload(add(result, 0))
-      coinbaseAddrType := mload(add(result, 0x20))
+      candidateAddr := mload(add(result, 0))
+      rewardAddr := mload(add(result, 0x20))
+      bindingHash := mload(add(result, 0x40))
     }
 
     uint32 adjustment = blockHeight / DIFFICULTY_ADJUSTMENT_INTERVAL;
     // save & update rewards
-    blockChain[blockHash] = encode(headerBytes, coinbaseAddr, scoreBlock, blockHeight, adjustment);
+    blockChain[blockHash] = encode(headerBytes, rewardAddr, scoreBlock, blockHeight, adjustment, candidateAddr);
     if (blockHeight % DIFFICULTY_ADJUSTMENT_INTERVAL == 0) {
       adjustmentHashes[adjustment] = blockHash;
     }
@@ -155,6 +165,10 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       countInRound = 0;
     }
 
+    if (bindingHash != 0) {
+      // Todo in future distributeBindingReward
+    }
+
     // equality allows block with same score to become an (alternate) Tip, so
     // that when an (existing) Tip becomes stale, the chain can continue with
     // the alternate Tip
@@ -165,21 +179,25 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       heaviestBlock = blockHash;
       highScore = scoreBlock;
     }
-
-    emit StoreHeader(blockHash, coinbaseAddr, coinbaseAddrType, blockHeight);
+    emit StoreHeader(blockHash, candidateAddr, rewardAddr, blockHeight, bindingHash);
   }
 
-  function addMinerPower(bytes32 preHash) internal {
+
+  function addMinerPower(bytes32 blockHash) internal {
     for(uint256 i = 0; i < CONFIRM_BLOCK; ++i){
-      if (preHash == initBlockHash) return;
-      preHash = getPrevHash(preHash);
+      if (blockHash == initBlockHash) return;
+      blockHash = getPrevHash(blockHash);
     }
-    uint256 roundTimeTag = getTimestamp(preHash) / roundInterval;
-    bytes20 miner = getCoinbase(preHash);
-    RoundMinersPower storage r = roundMinerPowerMap[roundTimeTag];
-    uint256 power = r.powerMap[miner];
-    if (power == 0) r.miners.push(miner);
-    r.powerMap[miner] = power + 1;
+    uint256 roundTimeTag = getTimestamp(blockHash) / roundInterval;
+    address candidate = getCandidate(blockHash);
+    if (candidate != address(0)) {
+      address miner = getRewardAddress(blockHash);
+      RoundPower storage r = roundPowerMap[roundTimeTag];
+      uint256 power = r.powerMap[candidate].miners.length;
+      if (power == 0) r.candidates.push(candidate);
+      r.powerMap[candidate].miners.push(miner);
+      r.powerMap[candidate].btcBlocks.push(blockHash);
+    }
   }
 
   /// Claim relayer rewards
@@ -253,12 +271,14 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     Memory.copy(src, dest, length);
     return _output;
   }
-  
-  function encode(bytes memory headerBytes, bytes20 coinbaseAddr, uint256 scoreBlock,
-      uint32 blockHeight, uint32 adjustment) internal pure returns (bytes memory nodeBytes) {
-    nodeBytes = new bytes(128);
-    uint256 coinbaseValue = uint256(uint160(coinbaseAddr)) << 96;
+
+  function encode(bytes memory headerBytes, address rewardAddr, uint256 scoreBlock,
+      uint32 blockHeight, uint32 adjustment, address candidateAddr) internal pure returns (bytes memory nodeBytes) {
+    nodeBytes = new bytes(160);
+    // keep 4 reserved bytes
+    uint256 rewardAddrValue = uint256(uint160(rewardAddr)) << 64;
     uint256 v = (scoreBlock << (128)) + (uint256(blockHeight) << (96)) + (uint256(adjustment) << 64);
+    uint256 candidateValue = uint256(uint160(candidateAddr)) << 96;
 
     assembly {
         // copy header
@@ -274,18 +294,19 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
         } {
             mstore(mc, mload(cc))
         }
-        // fill reserved bytes
-        mstore(end, 0)
-        // copy coinbase
-        mc := add(end, 4)
-        mstore(mc, coinbaseValue)
+        // copy rewardAddr
+        mc := add(end, 0)
+        mstore(mc, rewardAddrValue)
         // store score, height, adjustment index
-        mc := add(mc, 20)
+        mc := add(mc, 24)
         mstore(mc, v)
+        // store candidate
+        mc := add(mc, 24)
+        mstore(mc, candidateValue)
     }
     return nodeBytes;
   }
-  
+
   // Check Proof of Work of a relayed BTC block
   function checkProofOfWork(bytes memory headerBytes, bytes32 blockHash) internal view returns (
       uint32 blockHeight, uint256 scoreBlock, int256 errCode) {
@@ -401,14 +422,22 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   function getBits(bytes32 hash) public view returns (uint32) {
     return flip4Bytes(uint32(loadInt256(104, blockChain[hash])>>224));
   }
+
+  function getPrevHash(bytes32 hash) public view returns (bytes32) {
+    return flip32Bytes(bytes32(loadInt256(36, blockChain[hash])));
+  }
+
+  function getCandidate(bytes32 hash) public view returns (address) {
+    return address(uint160(loadInt256(160, blockChain[hash]) >> 96));
+  }
+
+  function getRewardAddress(bytes32 hash) public view returns (address) {
+    return address(uint160(loadInt256(116, blockChain[hash]) >> 96));
+  }
   
   // Get the score of block
   function getScore(bytes32 hash) public view returns (uint256) {
     return (loadInt256(136, blockChain[hash]) >> 128);
-  }
-
-  function getPrevHash(bytes32 hash) public view returns (bytes32) {
-    return flip32Bytes(bytes32(loadInt256(36, blockChain[hash])));
   }
 
   function getHeight(bytes32 hash) public view returns (uint32) {
@@ -422,10 +451,6 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   function getAdjustmentHash(bytes32 hash) public view returns (bytes32) {
     uint32 index = uint32(loadInt256(156, blockChain[hash]) >> 224);
     return adjustmentHashes[index];
-  }
-
-  function getCoinbase(bytes32 hash) public view returns (bytes20) {
-    return bytes20(uint160(loadInt256(116, blockChain[hash]) >> 96));
   }
 
   // Bitcoin-way of computing the target from the 'bits' field of a blockheader
@@ -511,52 +536,58 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /// Whether the input BTC block is already stored in Core blockchain
   /// @param btcHash The BTC block hash
   /// @return true/false
-  function isHeaderSynced(bytes32 btcHash) external override view returns (bool) {
+  function isHeaderSynced(bytes32 btcHash) external view returns (bool) {
     return getHeight(btcHash) >= INIT_CHAIN_HEIGHT;
   }
 
   /// Get the submitter/relayer of a specific BTC block
   /// @param btcHash The BTC block hash
   /// @return The address submitted the BTC block
-  function getSubmitter(bytes32 btcHash) external override view returns (address payable) {
+  function getSubmitter(bytes32 btcHash) external view returns (address payable) {
     return submitters[btcHash];
   }
 
   /// Get the heaviest BTC block
   /// @return The BTC block hash
-  function getChainTip() external override view returns (bytes32) {
+  function getChainTip() external view returns (bytes32) {
     return heaviestBlock;
   }
 
-  /// Get the BTC miner address who produced the specific BTC block
-  /// @param btcHash The BTC block hash
-  /// @return The BTC miner address
-  function getMiner(bytes32 btcHash) public override view returns (bytes20) {
-    if(getHeight(btcHash) == 0) return bytes20(0);
-    return getCoinbase(btcHash);
-  }
-
-  /// Get miners and their corresponding powers of a specific round
+  /// Get powers of a specific round with given candidates
   /// @param roundTimeTag The specific round time
-  /// @return miners The miners who produced BTC blocks in the round
+  /// @param candidates The given candidates to get their powers
   /// @return powers The corresponding powers of miners
-  function getRoundPowers(uint256 roundTimeTag) external override view returns (bytes20[] memory miners, uint256[] memory powers) {
-    RoundMinersPower storage r = roundMinerPowerMap[roundTimeTag];
-    uint256 count = r.miners.length;
-    if (count == 0) return (miners,powers);
-    miners = new bytes20[](count);
+  function getRoundPowers(uint256 roundTimeTag, address[] memory candidates) external override view returns (uint256[] memory powers) {
+    uint256 count = candidates.length;
     powers = new uint256[](count);
+
+    RoundPower storage r = roundPowerMap[roundTimeTag];
     for (uint256 i = 0; i < count; ++i){
-      miners[i] = r.miners[i];
-      powers[i] = r.powerMap[miners[i]];
+      powers[i] = r.powerMap[candidates[i]].miners.length;
     }
-    return (miners, powers);
+    return powers;
   }
 
-  /// Get miners of a specific round
+  /// Get miners of a specific round with given candidate
   /// @param roundTimeTag The specific round time
+  /// @param candidate The given candidate to get its miners
   /// @return miners The miners who produced BTC blocks in the round
-  function getRoundMiners(uint256 roundTimeTag) external override view returns (bytes20[] memory miners) {
-    return roundMinerPowerMap[roundTimeTag].miners;
+  function getRoundMiners(uint256 roundTimeTag, address candidate) external override view returns (address[] memory miners) {
+    return roundPowerMap[roundTimeTag].powerMap[candidate].miners;
+  }
+
+  /// Get BTC blocks of a specific round with given candidate
+  /// @param roundTimeTag The specific round time
+  /// @param candidate The given candidate to get its blocks
+  /// @return blocks The blocks who delegate on the given candidate in the round
+  function getRoundBlocks(uint256 roundTimeTag, address candidate) external view returns (bytes32[] memory blocks) {
+    return roundPowerMap[roundTimeTag].powerMap[candidate].btcBlocks;
+  }
+
+  /// Get candidates of a specific round
+  /// @param roundTimeTag The specific round time
+  /// @return candidates The valid candidates in the round
+  function getRoundCandidates(uint256 roundTimeTag) external override view returns (address[] memory candidates) {
+    return roundPowerMap[roundTimeTag].candidates;
   }
 }

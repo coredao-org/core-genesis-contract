@@ -20,11 +20,11 @@ contract BtcLightClientMock is BtcLightClient {
     }
 
     function resetMiners(uint roundTimeTag) public {
-        delete roundMinerPowerMap[roundTimeTag];
+        delete roundPowerMap[roundTimeTag];
     }
 
     function setMiners(uint roundTimeTag, bytes20[] memory miners) public {
-        RoundMinersPower storage rp = roundMinerPowerMap[roundTimeTag];
+        RoundMinersPower storage rp = roundPowerMap[roundTimeTag];
         uint i;
         for (i=0; i < miners.length; i++) {
             if (i < rp.miners.length) {
@@ -39,11 +39,11 @@ contract BtcLightClientMock is BtcLightClient {
     }
 
     function setMinerCount(uint roundTimeTag, bytes20 miner, uint count) public {
-        roundMinerPowerMap[roundTimeTag].powerMap[miner] = count;
+        roundPowerMap[roundTimeTag].powerMap[miner] = count;
     }
 
     function addMiner(uint roundTimeTag, bytes20 miner, uint count) external {
-        RoundMinersPower storage rp = roundMinerPowerMap[roundTimeTag];
+        RoundMinersPower storage rp = roundPowerMap[roundTimeTag];
         uint i;
         for (i=0; i<rp.miners.length; i++) {
             if (rp.miners[i] == miner) {
@@ -57,13 +57,13 @@ contract BtcLightClientMock is BtcLightClient {
     }
 
     function getMinerPower(uint roundTimeTag, bytes20 miner) external view returns(uint) {
-        return roundMinerPowerMap[roundTimeTag].powerMap[miner];
+        return roundPowerMap[roundTimeTag].powerMap[miner];
     }
 
     function batchSetMiners(uint[] calldata roundTimeTags, bytes20[][] calldata miners, uint[][] calldata counts) external {
         uint i;
         for (i=0; i<roundTimeTags.length; i++) {
-            RoundMinersPower storage rp = roundMinerPowerMap[roundTimeTags[i]];
+            RoundPower storage rp = roundPowerMap[roundTimeTags[i]];
             uint j;
             for (j=0; j < miners[i].length; j++) {
                 uint k;
