@@ -493,7 +493,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   function gatherDust() external onlyInit onlyGov {
     if (totalDust > 0) {
-      GOV_HUB_ADDR.transfer(totalDust);
+      payable(GOV_HUB_ADDR).transfer(totalDust);
       totalDust = 0;
     }
   }

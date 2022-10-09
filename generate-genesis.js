@@ -26,6 +26,7 @@ require("./generate-btclightclient");
 require("./generate-slash");
 require("./generate-govhub");
 require("./generate-candidatehub");
+require("./generate-pledgeagent");
 
 program.version("0.0.1")
 program.option(

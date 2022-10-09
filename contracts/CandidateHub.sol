@@ -249,10 +249,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     }
     candidateSet.pop();
 
-    address payable systemPayable = address(uint160(SYSTEM_REWARD_ADDR));
     uint256 value = uint256(c.margin - dues);
     if (value > 0)  msg.sender.transfer(value);
-    systemPayable.transfer(uint256(dues));
+    payable(SYSTEM_REWARD_ADDR).transfer(uint256(dues));
     emit unregistered(msg.sender, c.consensusAddr);
 
     IPledgeAgent(PLEDGE_AGENT_ADDR).inactiveAgent(msg.sender);
