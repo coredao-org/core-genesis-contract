@@ -218,7 +218,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     } else if (Memory.compareStrings(key,"felonyDeposit")) {
       require(value.length == 32, "length of felonyDeposit mismatch");
       int256 newFelonyDeposit = BytesToTypes.bytesToInt256(32, value);
-      require(newFelonyDeposit >= INIT_FELONY_DEPOSIT * 100, "the felonyDeposit out of range");
+      require(newFelonyDeposit >= 1e18, "the felonyDeposit out of range");
       felonyDeposit = newFelonyDeposit;
     } else if (Memory.compareStrings(key,"felonyRound")) {
       require(value.length == 32, "length of felonyRound mismatch");
