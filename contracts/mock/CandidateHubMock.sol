@@ -80,7 +80,7 @@ contract CandidateHubMock is CandidateHub {
     bytes20[] memory miners,
     uint256[] memory powers
   ) external {
-    (integrals, totalPower, totalCoin) = IPledgeAgent(PLEDGE_AGENT_ADDR).getIntegral(
+    (integrals, totalPower, totalCoin) = IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(
       candidates,
       lastMiners,
       miners,

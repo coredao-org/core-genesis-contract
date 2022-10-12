@@ -67,7 +67,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   struct Reward {
     uint256 totalReward;
     uint256 remainReward;
-    uint256 totalIntegral;
+    uint256 score;
     uint256 coin;
     uint256 round;
   }
@@ -140,8 +140,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         continue;
       }
       Reward storage r = a.rewardSet[a.rewardSet.length - 1];
-      uint256 rIntegral = r.totalIntegral;
-      if (rIntegral == 0) {
+      uint256 roundScore = r.score;
+      if (roundScore == 0) {
         delete a.rewardSet[a.rewardSet.length - 1];
         continue;
       }
@@ -150,8 +150,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       }
       r.totalReward = rewardList[i];
       r.remainReward = rewardList[i];
-      uint256 coinReward = rewardList[i] * a.coin * rs.power / rIntegral;
-      uint256 powerReward = rewardList[i] * a.power * rs.coin / 10000 * rs.powerFactor / rIntegral;
+      uint256 coinReward = rewardList[i] * a.coin * rs.power / roundScore;
+      uint256 powerReward = rewardList[i] * a.power * rs.coin / 10000 * rs.powerFactor / roundScore;
       emit roundReward(agentList[i], coinReward, powerReward);
     }
   }
@@ -159,12 +159,11 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /**
    * calculate hybrid score for all candidates
    */
-  // TODO bad naming, should use `hybrid score` instead of integral
-  function getIntegral(
+  function getHybridScore(
     address[] memory candidates, bytes20[] memory lastMiners,
     bytes20[] memory miners, uint256[] memory powers
   ) external override onlyCandidate
-      returns (uint256[] memory integrals, uint256 totalPower, uint256 totalCoin) {
+      returns (uint256[] memory scores, uint256 totalPower, uint256 totalCoin) {
     require(miners.length == powers.length, "the length of miners and powers should be equal");
     // collect hash power rewards, reset delegator's power & agent's power+coin
     uint256 reward = 0;
@@ -209,12 +208,12 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
 
     // calc hybrid score
-    integrals = new uint256[](candidateSize);
+    scores = new uint256[](candidateSize);
     for (uint256 i = 0; i < candidateSize; ++i) {
       Agent storage a = agentsMap[candidates[i]];
-      integrals[i] = a.power * totalCoin * powerFactor / 10000 + a.coin * totalPower;
+      scores[i] = a.power * totalCoin * powerFactor / 10000 + a.coin * totalPower;
     }
-    return (integrals, totalPower, totalCoin);
+    return (scores, totalPower, totalCoin);
   }
 
   // new round starts
@@ -229,8 +228,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     roundTag = round;
     for (uint256 i = 0; i < validators.length; ++i) {
       Agent storage a = agentsMap[validators[i]];
-      uint256 integral = a.power * rs.coin * powerFactor / 10000 + a.coin * rs.power;
-      a.rewardSet.push(Reward(0, 0, integral, a.coin, round));
+      uint256 score = a.power * rs.coin * powerFactor / 10000 + a.coin * rs.power;
+      a.rewardSet.push(Reward(0, 0, score, a.coin, round));
     }
   }
 
@@ -427,7 +426,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         d.deposit = d.newDeposit;
       }
       uint256 rsPower = stateMap[r.round].power;
-      curReward = (r.totalReward * deposit * rsPower) / r.totalIntegral;
+      curReward = (r.totalReward * deposit * rsPower) / r.score;
       rewardAmount += curReward;
       require(r.coin >= deposit, "reward is not enough");
       require(r.remainReward >= curReward, "there is not enough reward");
@@ -456,7 +455,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 rsCoin = stateMap[r.round].coin;
     uint256 rsFactor = stateMap[r.round].powerFactor;
 
-    reward = r.totalReward * m.power * rsCoin / 10000 * rsFactor / r.totalIntegral;
+    reward = r.totalReward * m.power * rsCoin / 10000 * rsFactor / r.score;
     require(r.remainReward >= reward, "there is not enough reward");
     r.remainReward -= reward;
     return reward;

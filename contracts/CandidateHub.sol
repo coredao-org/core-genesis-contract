@@ -163,9 +163,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
     // calculate the hybrid score for all valid candidates and 
     // choose top ones to form the validator set of the new round
-    // TODO bad naming; should use `hybrid score` instead of integral
     (uint256[] memory integrals, uint256 totalPower, uint256 totalCoin) =
-      IPledgeAgent(PLEDGE_AGENT_ADDR).getIntegral(candidates, lastMiners, miners, powers);
+      IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(candidates, lastMiners, miners, powers);
     address[] memory validatorList = getValidators(candidates, integrals, validatorCount);
 
     // prepare arguments, and notify ValidatorSet contract
