@@ -5,7 +5,6 @@ import "./lib/BytesToTypes.sol";
 import "./interface/ILightClient.sol";
 import "./interface/ISystemReward.sol";
 import "./interface/IParamSubscriber.sol";
-import "./interface/ICandidateHub.sol";
 import "./lib/SafeMath.sol";
 import "./System.sol";
 
@@ -73,7 +72,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   event StoreHeaderFailed(bytes32 indexed blockHash, int256 indexed returnCode);
   event StoreHeader(bytes32 indexed blockHash, bytes20 coinbasePkHash, uint32 coinbaseAddrType, int256 indexed height);
   event paramChange(string key, bytes value);
-  
+
   /* solium-disable-next-line */
   constructor() public {}
 
@@ -515,18 +514,10 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       miners[i] = r.miners[i];
       powers[i] = r.powerMap[miners[i]];
     }
-    return (miners,powers);
+    return (miners, powers);
   }
 
   function getRoundMiners(uint256 roundTimeTag) external override view returns (bytes20[] memory miners) {
-    RoundMinersPower storage r = roundMinerPowerMap[roundTimeTag];
-    /*uint256 count = r.miners.length;
-    if (count > 0) {
-      miners = new bytes20[](count);
-      for (uint256 i = 0; i < count; ++i){
-        miners[i] = r.miners[i];
-      }
-    }*/
-    return r.miners;
+    return roundMinerPowerMap[roundTimeTag].miners;
   }
 }

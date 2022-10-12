@@ -8,11 +8,9 @@ import "./interface/IValidatorSet.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/ISystemReward.sol";
 import "./lib/RLPDecode.sol";
-import "./lib/RLPEncode.sol";
 
 contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   using RLPDecode for *;
-  using RLPEncode for *;
 
   uint256 public constant MISDEMEANOR_THRESHOLD = 50;
   uint256 public constant FELONY_THRESHOLD = 150;

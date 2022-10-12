@@ -39,7 +39,7 @@ contract Burn is System, IBurn, IParamSubscriber {
     if (Memory.compareStrings(key, "burnCap")) {
       require(value.length == 32, "length of burnCap mismatch");
       uint256 newBurnCap = BytesToTypes.bytesToUint256(32, value);
-      require(newBurnCap != 0 && newBurnCap > address(this).balance, "the burnCap out of range");
+      require(newBurnCap > address(this).balance, "the burnCap out of range");
       burnCap = newBurnCap;
     } else {
       require(false, "unknown param");

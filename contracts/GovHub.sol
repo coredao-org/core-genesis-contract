@@ -12,11 +12,11 @@ contract GovHub is System, IParamSubscriber {
 
   uint256 public constant PROPOSAL_MAX_OPERATIONS = 10;
   uint256 public constant VOTING_PERIOD = 86400;
+  bytes public constant INIT_MEMBERS = hex"";
 
   uint256 public proposalMaxOperations;
   uint256 public votingPeriod;
 
-  bytes public constant INIT_MEMBERS = hex"f83f9491fb7d8a73d2752830ea189737ea0e007f999b949448bfbc530e7c54c332b0fae07312fba7078b878994de60b7d0e6b758ca5dd8c61d377a2c5f1af51ec1";
   mapping(address => uint256) public members;
   address[] public memberSet;
 
