@@ -10,12 +10,14 @@ import "./lib/Memory.sol";
 contract SystemReward is System, ISystemReward, IParamSubscriber {
   uint256 public constant INCENTIVE_BALANCE_CAP = 1e25;
 
+  bool isBurn;
   uint256 public incentiveBalanceCap;
   uint256 public numOperator;
   mapping(address => bool) operators;
 
   /*********************** init **************************/
   function init() external onlyNotInit {
+    isBurn = false;
     operators[LIGHT_CLIENT_ADDR] = true;
     operators[SLASH_CONTRACT_ADDR] = true;
     numOperator = 2;
@@ -34,8 +36,8 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   event receiveDeposit(address indexed from, uint256 amount);
   event paramChange(string key, bytes value);
 
-  receive() external payable{
-    if (msg.value>0) {
+  receive() external payable {
+    if (msg.value > 0) {
       emit receiveDeposit(msg.sender, msg.value);
     }
   }
@@ -44,7 +46,12 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   function receiveRewards() external payable override {
     if (msg.value > 0) {
       if (address(this).balance > incentiveBalanceCap) {
-        IBurn(BURN_ADDR).burn{value:address(this).balance - incentiveBalanceCap}();
+        uint256 value = address(this).balance - incentiveBalanceCap;
+        if (isBurn) {
+          IBurn(BURN_ADDR).burn{ value: value }();
+        } else {
+          payable(FOUNDATION_ADDR).transfer(value);
+        }
       }
       emit receiveDeposit(msg.sender, msg.value);
     }
@@ -87,6 +94,11 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
       uint256 newIncentiveBalanceCap = BytesToTypes.bytesToUint256(32, value);
       require(newIncentiveBalanceCap > 0, "the incentiveBalanceCap out of range");
       incentiveBalanceCap = newIncentiveBalanceCap;
+    } else if (Memory.compareStrings(key, "isBurn")) {
+      require(value.length == 32, "length of isBurn mismatch");
+      uint256 newIsBurn = BytesToTypes.bytesToUint256(32, value);
+      require(newIsBurn <= 1, "the newIsBurn out of range");
+      isBurn = newIsBurn == 1;
     } else {
       require(false, "unknown param");
     }
