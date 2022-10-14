@@ -16,6 +16,7 @@ contract Burn is System, IBurn, IParamSubscriber {
     alreadyInit = true;
   }
 
+  /*********************** events **************************/
   event burned(address indexed to, uint256 amount);
   event paramChange(string key, bytes value);
 

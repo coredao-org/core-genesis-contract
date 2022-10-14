@@ -25,20 +25,17 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   // when calculating hybrid score and distributing block rewards
   uint256 public powerFactor;
 
-  /* key: candidate's operateAddr */
+  // key: candidate's operateAddr
   mapping(address => Agent) public agentsMap;
 
-  /* key: delegator’s fee address, or eth format address of btc miner
-   * value: btc delegator
-   */
+  // key: delegator’s fee address, or eth format address of btc miner
+  // value: btc delegator
   mapping(address => BtcDelegator) public btcDelegatorsMap;
-  /* key: btc compressed/uncompressed pk hash,
-   * value: eth format address of btc miner
-   */
+  // key: btc compressed/uncompressed pk hash,
+  // value: eth format address of btc miner
   mapping(bytes20 => address) public btc2ethMap;
-  /* key: round index
-   * value: key state information of round
-   */
+  // key: round index
+  // value: key state information of round
   mapping(uint256 => RoundState) public stateMap;
 
   // roundTag is set to be timestamp / round interval,
@@ -72,9 +69,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 round;
   }
 
-  /*
-   * The Agent struct for Candidate.
-   */
+  // The Agent struct for Candidate.
   struct Agent {
     uint256 totalDeposit;
     mapping(address => CoinDelegator) cDelegatorMap;
@@ -89,6 +84,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 powerFactor;
   }
 
+  /*********************** events **************************/
   event paramChange(string key, bytes value);
   event delegatedCoin(address indexed agent, address indexed delegator, uint256 amount, uint256 totalAmount);
   event delegatedPower(
@@ -123,9 +119,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   }
 
   /*********************** Interface implementations ***************************/
-  /**
-   * receive round rewards from ValidatorSet, which is triggered at the beginning of turn round
-   */
+  // receive round rewards from ValidatorSet,
+  // which is triggered at the beginning of turn round
   function addRoundReward(address[] memory agentList, uint256[] memory rewardList)
     external
     payable
@@ -156,9 +151,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
   }
 
-  /**
-   * calculate hybrid score for all candidates
-   */
+  // calculate hybrid score for all candidates
   function getHybridScore(
     address[] memory candidates, bytes20[] memory lastMiners,
     bytes20[] memory miners, uint256[] memory powers

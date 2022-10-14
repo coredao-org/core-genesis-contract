@@ -13,7 +13,6 @@ import "./lib/RLPDecode.sol";
 
 contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   using SafeMath for uint256;
-
   using RLPDecode for *;
 
   uint256 public constant BLOCK_REWARD = 3e18;
@@ -269,7 +268,6 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   }
 
   /*********************** Internal Functions **************************/
-
   function checkValidatorSet(
     address[] memory operateAddrList,
     address[] memory consensusAddrList,

@@ -58,16 +58,15 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   }
   mapping(uint256 => RoundMinersPower) roundMinerPowerMap;
 
-  /**
-   * key is blockHash, value composites of following elements
-   * | header   | reversed | coinbase | score    | height  | ADJUSTMENT Hashes index |
-   * | 80 bytes | 4 bytes  | 20 bytes | 16 bytes | 4 bytes | 4 bytes                 |
-   * header := version, prevBlock, MerkleRoot, Time, Bits, Nonce
-   */
+  // key is blockHash, value composites of following elements
+  // | header   | reversed | coinbase | score    | height  | ADJUSTMENT Hashes index |
+  // | 80 bytes | 4 bytes  | 20 bytes | 16 bytes | 4 bytes | 4 bytes                 |
+  // header := version, prevBlock, MerkleRoot, Time, Bits, Nonce
   mapping(bytes32 => bytes) public blockChain;
   mapping(uint32 => bytes32) public adjustmentHashes;
   mapping(bytes32 => address payable) public submitters;
 
+  /*********************** events **************************/
   event initBlock(uint64 initHeight, bytes32 btcHash, address coinbaseAddr);
   event StoreHeaderFailed(bytes32 indexed blockHash, int256 indexed returnCode);
   event StoreHeader(bytes32 indexed blockHash, bytes20 coinbasePkHash, uint32 coinbaseAddrType, int256 indexed height);
@@ -76,6 +75,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /* solium-disable-next-line */
   constructor() public {}
 
+  /*********************** init **************************/
   function init() external onlyNotInit {
     bytes32 blockHash = doubleShaFlip(INIT_CONSENSUS_STATE_BYTES);
     bytes20 coinbaseAddr;

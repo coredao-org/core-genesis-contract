@@ -30,9 +30,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   uint256 public constant ACTIVE_STATUS = SET_CANDIDATE | SET_VALIDATOR;
   uint256 public constant UNREGISTER_STATUS = SET_CANDIDATE | SET_INACTIVE | SET_MARGIN;
 
-  // margin = refundable deposit 
-  // dues = unregister fee
+  // the refundable deposit
   int256 public requiredMargin;
+  // the unregister fee
   int256 public dues;
 
   uint256 public roundInterval;
@@ -74,6 +74,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     _;
   }
 
+  /*********************** events **************************/
   event registered(address indexed operateAddr, address indexed consensusAddr, address indexed feeAddress, uint256 commissionThousandths, int256 margin);
   event unregistered(address indexed operateAddr, address indexed consensusAddr);
   event updated(address indexed operateAddr, address indexed consensusAddr, address indexed feeAddress, uint256 commissionThousandths);
@@ -82,6 +83,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   event statusChanged(address indexed operateAddr, uint256 oldStatus, uint256 newStatus);
   event paramChange(string key, bytes value);
 
+  /*********************** init **************************/
   function init() external onlyNotInit {
     requiredMargin = INIT_REQUIRED_MARGIN;
     dues = INIT_DUES;

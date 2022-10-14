@@ -8,9 +8,11 @@ import "./interface/IValidatorSet.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/ISystemReward.sol";
 import "./lib/RLPDecode.sol";
+import "./lib/RLPEncode.sol";
 
 contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   using RLPDecode for *;
+  using RLPEncode for *;
 
   uint256 public constant MISDEMEANOR_THRESHOLD = 50;
   uint256 public constant FELONY_THRESHOLD = 150;
@@ -32,10 +34,6 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   int256 public felonyDeposit;
   uint256 public felonyRound;
 
-  event validatorSlashed(address indexed validator);
-  event indicatorCleaned();
-  event paramChange(string key, bytes value);
-
   struct Indicator {
     uint256 height;
     uint256 count;
@@ -48,6 +46,11 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     previousHeight = block.number;
   }
 
+  /*********************** events **************************/
+  event validatorSlashed(address indexed validator);
+  event indicatorCleaned();
+  event paramChange(string key, bytes value);
+
   
   function init() external onlyNotInit{
     misdemeanorThreshold = MISDEMEANOR_THRESHOLD;
@@ -59,8 +62,8 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   }
 
   /*********************** External func ********************************/
-  // @validator consensus address of validator
-  // this method is called by other validators from golang consensus engine
+  // This method is called by other validators from golang consensus engine.
+  // The param @validator is the consensus address of validator
   function slash(address validator) external onlyCoinbase onlyInit oncePerBlock onlyZeroGasPrice{
     Indicator memory indicator = indicators[validator];
     if (indicator.exist) {
@@ -98,50 +101,8 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(msg.sender, rewardForReportDoubleSign);
   }
 
-  function parseHeader(RLPDecode.RLPItem[] memory items) internal pure returns (bytes32,address){
-    bytes memory extra = items[12].toBytes();
-    bytes memory sig = BytesLib.slice(extra, 32, 65);
-    bytes[] memory rlpbytes_list = new bytes[](16);
-    rlpbytes_list[0] = CHAINID.encodeInt();
-    for(uint256 i = 0;i < 15;++i){
-      if(i == 12){
-        rlpbytes_list[13] = BytesLib.slice(extra, 0, 32).encodeBytes();
-      } else {
-        rlpbytes_list[i + 1] = items[i].toRlpBytes();
-      }
-    }
-    bytes memory rlpbytes = rlpbytes_list.encodeList();
-    bytes32 sigHash = keccak256(rlpbytes);
-    return (sigHash , ecrecovery(sigHash,sig));
-  }
-
-  function ecrecovery(bytes32 hash, bytes memory sig) internal pure returns (address) {
-    bytes32 r;
-    bytes32 s;
-    uint8 v;
-
-    if (sig.length != 65) {
-      return address(0x0);
-    }
-
-    assembly {
-      r := mload(add(sig, 32))
-      s := mload(add(sig, 64))
-      v := and(mload(add(sig, 65)), 255)
-    }
-
-    if (v < 27) {
-      v += 27;
-    }
-
-    if (v != 27 && v != 28) {
-      return address(0x0);
-    }
-    return ecrecover(hash, v, r, s);
-  }
-
-
-  // To prevent validator misbehaving and leaving, do not clean slash record to zero, but decrease by felonyThreshold/DECREASE_RATE .
+  // To prevent validator misbehaving and leaving, do not clean slash record
+  // to zero, but decrease by felonyThreshold/DECREASE_RATE .
   // Clean is an effective implement to reorganize "validators" and "indicators".
   function clean() external override(ISlashIndicator) onlyCandidate onlyInit{
     if(validators.length == 0){
@@ -232,5 +193,48 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   function getSlashIndicator(address validator) external view returns (uint256,uint256) {
     Indicator memory indicator = indicators[validator];
     return (indicator.height, indicator.count);
+  }
+
+  /*********************** Internal Functions **************************/
+  function parseHeader(RLPDecode.RLPItem[] memory items) internal pure returns (bytes32,address){
+    bytes memory extra = items[12].toBytes();
+    bytes memory sig = BytesLib.slice(extra, 32, 65);
+    bytes[] memory rlpbytes_list = new bytes[](16);
+    rlpbytes_list[0] = CHAINID.encodeInt();
+    for(uint256 i = 0;i < 15;++i){
+      if(i == 12){
+        rlpbytes_list[13] = BytesLib.slice(extra, 0, 32).encodeBytes();
+      } else {
+        rlpbytes_list[i + 1] = items[i].toRlpBytes();
+      }
+    }
+    bytes memory rlpbytes = rlpbytes_list.encodeList();
+    bytes32 sigHash = keccak256(rlpbytes);
+    return (sigHash , ecrecovery(sigHash,sig));
+  }
+
+  function ecrecovery(bytes32 hash, bytes memory sig) internal pure returns (address) {
+    bytes32 r;
+    bytes32 s;
+    uint8 v;
+
+    if (sig.length != 65) {
+      return address(0x0);
+    }
+
+    assembly {
+      r := mload(add(sig, 32))
+      s := mload(add(sig, 64))
+      v := and(mload(add(sig, 65)), 255)
+    }
+
+    if (v < 27) {
+      v += 27;
+    }
+
+    if (v != 27 && v != 28) {
+      return address(0x0);
+    }
+    return ecrecover(hash, v, r, s);
   }
 }

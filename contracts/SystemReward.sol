@@ -13,6 +13,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   uint256 public numOperator;
   mapping(address => bool) operators;
 
+  /*********************** init **************************/
   function init() external onlyNotInit {
     operators[LIGHT_CLIENT_ADDR] = true;
     operators[SLASH_CONTRACT_ADDR] = true;
@@ -26,6 +27,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     _;
   }
 
+  /*********************** events **************************/
   event rewardTo(address indexed to, uint256 amount);
   event rewardEmpty();
   event receiveDeposit(address indexed from, uint256 amount);
