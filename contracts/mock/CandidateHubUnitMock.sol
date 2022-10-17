@@ -4,7 +4,7 @@ pragma solidity 0.6.12;
 import "../CandidateHub.sol";
 
 contract CandidateHubUnitMock is CandidateHub {
-  uint256[] public integrals;
+  uint256[] public scores;
   uint256 public totalPower;
   uint256 public totalCoin;
 
@@ -37,13 +37,13 @@ contract CandidateHubUnitMock is CandidateHub {
     return candidateSet[operateMap[k] - 1];
   }
 
-  function getIntegralMock(
+  function getScoreMock(
     address[] memory candidates,
     bytes20[] memory lastMiners,
     bytes20[] memory miners,
     uint256[] memory powers
   ) external {
-    (integrals, totalPower, totalCoin) = IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(
+    (scores, totalPower, totalCoin) = IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(
       candidates,
       lastMiners,
       miners,
@@ -51,16 +51,16 @@ contract CandidateHubUnitMock is CandidateHub {
     );
   }
 
-  function getIntegrals() external view returns (uint256[] memory) {
-    return integrals;
+  function getScores() external view returns (uint256[] memory) {
+    return scores;
   }
 
   function getValidatorsMock(
     address[] memory candidateList,
-    uint256[] memory integralList,
+    uint256[] memory scoreList,
     uint256 count
   ) public pure returns (address[] memory validatorList) {
-    return getValidators(candidateList, integralList, count);
+    return getValidators(candidateList, scoreList, count);
   }
 
   function inactiveAgentMock(address agent) external {

@@ -295,13 +295,13 @@ def test_get_integral_success(candidate_hub, validator_set):
     total_coin = required_coin_deposit * 5 + 1 + 10
     total_power = POWER_BLOCK_FACTOR * (3 + 5 + 7) + 1
     candidate_hub.getIntegralMock(agents, [], miners, powers)
-    integrals = candidate_hub.getIntegrals()
-    assert len(integrals) == 5
+    scores = candidate_hub.getScores()
+    assert len(scores) == 5
     for i in range(5):
         expected_integral = (required_coin_deposit + i) * total_power
         if i >= 3:
             expected_integral += total_coin * (powers[2 * (i-3)] + powers[2 * (i-3)+1]) * POWER_BLOCK_FACTOR * POWER_FACTOR // 10000
-        assert expected_integral == integrals[i]
+        assert expected_integral == scores[i]
 
 
 def test_inactive_agent_success(pledge_agent, candidate_hub):

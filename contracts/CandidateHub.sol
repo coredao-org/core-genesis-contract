@@ -165,9 +165,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
     // calculate the hybrid score for all valid candidates and 
     // choose top ones to form the validator set of the new round
-    (uint256[] memory integrals, uint256 totalPower, uint256 totalCoin) =
+    (uint256[] memory scores, uint256 totalPower, uint256 totalCoin) =
       IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(candidates, lastMiners, miners, powers);
-    address[] memory validatorList = getValidators(candidates, integrals, validatorCount);
+    address[] memory validatorList = getValidators(candidates, scores, validatorCount);
 
     // prepare arguments, and notify ValidatorSet contract
     uint256 totalCount = validatorList.length;
@@ -180,7 +180,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       Candidate storage c = candidateSet[index - 1];
       consensusAddrList[i] = c.consensusAddr;
       feeAddrList[i] = c.feeAddr;
-      if (integrals[i] == 0) {
+      if (scores[i] == 0) {
         commissionThousandthsList[i] = 1000;
       } else {
         commissionThousandthsList[i] = c.commissionThousandths;
@@ -327,9 +327,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     }
   }
 
-  function getValidators(address[] memory candidateList, uint256[] memory integralList, uint256 count) internal pure returns (address[] memory validatorList){
+  function getValidators(address[] memory candidateList, uint256[] memory scoreList, uint256 count) internal pure returns (address[] memory validatorList){
     uint256 candidateSize = candidateList.length;
-    // quicksort by integrals O(nlogk)
+    // quicksort by scores O(nlogk)
     uint256 l = 0;
     uint256 r = 0;
     if (count < candidateSize) {
@@ -342,21 +342,21 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       uint256 ll = l;
       uint256 rr = r;
       address back = candidateList[ll];
-      uint256 p = integralList[ll];
+      uint256 p = scoreList[ll];
       while (ll < rr) {
-        while (ll < rr && integralList[rr] < p) {
+        while (ll < rr && scoreList[rr] < p) {
           rr = rr - 1;
         }
         candidateList[ll] = candidateList[rr];
-        integralList[ll] = integralList[rr];
-        while (ll < rr && integralList[ll] >= p) {
+        scoreList[ll] = scoreList[rr];
+        while (ll < rr && scoreList[ll] >= p) {
           ll = ll + 1;
         }
         candidateList[rr] = candidateList[ll];
-        integralList[rr] = integralList[ll];
+        scoreList[rr] = scoreList[ll];
       }
       candidateList[ll] = back;
-      integralList[ll] = p;
+      scoreList[ll] = p;
       uint256 mid = ll;
       // sub sort
       if (mid < count) {

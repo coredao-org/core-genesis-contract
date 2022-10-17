@@ -21,14 +21,14 @@ contract PledgeAgentMock is PledgeAgent {
     function setAgentReward(address agent, uint index,
         uint256 totalReward,
     	uint256 claimedReward,
-    	uint256 totalIntegral,
+    	uint256 totalScore,
     	uint256 coin,
     	uint256 power,
     	uint256 round) external {}
     function setAgentValidator(address agent, uint256 power, uint256 coin) external {
         RoundState memory rs = stateMap[roundTag];
-        uint256 totalIntegral = coin * rs.power + power * rs.coin * rs.powerFactor / 10000;
-        agentsMap[agent].rewardSet.push(Reward(0, 0, totalIntegral, coin, roundTag));
+        uint256 totalScore = coin * rs.power + power * rs.coin * rs.powerFactor / 10000;
+        agentsMap[agent].rewardSet.push(Reward(0, 0, totalScore, coin, roundTag));
         agentsMap[agent].power = power;
         agentsMap[agent].coin = coin;
     }
