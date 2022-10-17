@@ -25,7 +25,7 @@ def parse_delegation(agents, block_reward):
                 "value: 99
             }]
         }]
-    :return: agent integral dict and delegate reward dict
+    :return: agent score dict and delegate reward dict
         example:
         {"0xdasdas213123": 33, "0x12321312312": 23}
         {"0x21312321389123890": 13, "0x21312321389123890": 3}
@@ -33,7 +33,7 @@ def parse_delegation(agents, block_reward):
     btc_count = 1
     coin_count = 1
 
-    agent_integral = {}
+    agent_score = {}
     delegator_reward = defaultdict(int)
 
     for agent in agents:
@@ -45,22 +45,22 @@ def parse_delegation(agents, block_reward):
         coin_count += total_coin
 
     for agent in agents:
-        agent_integral[agent['address']] = 2 * agent['total_power'] * coin_count + agent['total_coin'] * btc_count
+        agent_score[agent['address']] = 2 * agent['total_power'] * coin_count + agent['total_coin'] * btc_count
 
     for agent in agents:
         if not agent['active']:
             continue
         for item in agent['coin']:
-            reward = block_reward * item['value'] * btc_count // agent_integral[agent['address']]
+            reward = block_reward * item['value'] * btc_count // agent_score[agent['address']]
             delegator_reward[item['address']] += reward
             print(f"coin reward: {agent['address']} on {item['address']} => {reward}")
         for item in agent['power']:
             reward = block_reward * item['value'] * coin_count // 10000
-            reward = reward * 20000 // agent_integral[agent['address']]
+            reward = reward * 20000 // agent_score[agent['address']]
             delegator_reward[item['address']] += reward
             print(f"power reward: {agent['address']} on {item['address']} => {reward}")
 
-    return agent_integral, delegator_reward
+    return agent_score, delegator_reward
 
 
 if __name__ == '__main__':
@@ -81,6 +81,6 @@ if __name__ == '__main__':
         "power": [set_delegate("x", 6e18)]
     }]
 
-    _agent_integral, _delegator_reward = parse_delegation(delegate_info, 324000000)
-    print(_agent_integral)
+    _agent_score, _delegator_reward = parse_delegation(delegate_info, 324000000)
+    print(_agent_score)
     print(_delegator_reward)

@@ -378,29 +378,29 @@ def test_add_margin(candidate_hub, required_margin):
 
 def test_get_validators(candidate_hub):
     candidates = []
-    integral_list1 = []
-    integral_list2 = []
+    score_list1 = []
+    score_list2 = []
     indexes = []
 
     for i in range(1000):
         candidates.append(Account.create(str(random.random())).address)
-        integral_list1.append(i)
-        integral_list2.append(999 - i)
+        score_list1.append(i)
+        score_list2.append(999 - i)
         indexes.append(i)
 
     tests = [
-        (candidates, integral_list1, indexes, 1, 1),
-        (candidates, integral_list1, indexes, 10, 10),
-        (candidates, integral_list2, indexes, 1, 1),
-        (candidates, integral_list2, indexes, 10, 10),
-        (candidates[:21], integral_list2[:21], indexes[:21], 21, 21),
-        (candidates[:10], integral_list1[:10], indexes[:10], 21, 10),
-        (candidates[:10], integral_list2[:10], indexes[:10], 21, 10),
+        (candidates, score_list1, indexes, 1, 1),
+        (candidates, score_list1, indexes, 10, 10),
+        (candidates, score_list2, indexes, 1, 1),
+        (candidates, score_list2, indexes, 10, 10),
+        (candidates[:21], score_list2[:21], indexes[:21], 21, 21),
+        (candidates[:10], score_list1[:10], indexes[:10], 21, 10),
+        (candidates[:10], score_list2[:10], indexes[:10], 21, 10),
     ]
 
-    for candidate_list, integral_list, index_list, count, expect_count in tests:
-        validator_list = candidate_hub.getValidatorsMock(candidate_list, integral_list, count)
-        index_list.sort(key=lambda e: integral_list[e], reverse=True)
+    for candidate_list, score_list, index_list, count, expect_count in tests:
+        validator_list = candidate_hub.getValidatorsMock(candidate_list, score_list, count)
+        index_list.sort(key=lambda e: score_list[e], reverse=True)
         for i in range(expect_count):
             flag = False
             for validator in validator_list:
