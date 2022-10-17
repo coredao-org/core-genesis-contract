@@ -14,6 +14,7 @@ npm install
 # install test dependency
 pip install -r requirements.txt
 
+node generate-system.js --mock true
 node generate-candidatehub.js --mock true
 node generate-pledgeagent.js --mock true
 brownie test -v --stateful false

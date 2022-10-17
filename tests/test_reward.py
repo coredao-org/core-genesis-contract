@@ -31,7 +31,7 @@ class Agent:
         self.status = Status.REGISTER
         self.total_power = 0
         self.total_coin = 0
-        self.integral = 0
+        self.score = 0
         self.margin = margin
 
     def delegate_coin(self, address, value):
@@ -55,7 +55,7 @@ class Agent:
         agent.status = self.status
         agent.total_coin = self.total_coin
         agent.total_power = self.total_power
-        agent.integral = self.integral
+        agent.score = self.score
         agent.coin_delegators = {k: deepcopy(v) for k, v in self.coin_delegators.items()}
         agent.power_delegators = {k: deepcopy(v) for k, v in self.power_delegators.items()}
         return agent
@@ -72,8 +72,8 @@ class Validator:
 
 class RoundState:
     def __init__(self):
-        self.power_integral = 1
-        self.coin_integral = 1
+        self.power_score = 1
+        self.coin_score = 1
 
 
 N = 0
@@ -400,21 +400,21 @@ class StateMachine:
                 for delegator, item in agent.coin_delegators.items():
                     if item['valid']:
                         self.delegator_unclaimed_agents_map[delegator].add(validator.operator_address)
-                        reward = delegators_reward * item['coin'] * self.round_state.power_integral // agent.integral
+                        reward = delegators_reward * item['coin'] * self.round_state.power_score // agent.score
                         self.balance_delta[delegator] += reward
                         print(f"\t[Coin] {delegator}({item['coin']}) + {reward}")
                         _reward, _ = self.pledge_agent.claimReward.call(delegator, [validator.operator_address])
                         print(f"\t\t[Coin] call claim reward: {_reward}")
                 for delegator, item in agent.power_delegators.items():
                     if item['valid'] and item['power'] > 0:
-                        reward = delegators_reward * item['power'] * self.round_state.coin_integral // 10000
-                        reward = reward * self.power_factor // agent.integral
+                        reward = delegators_reward * item['power'] * self.round_state.coin_score // 10000
+                        reward = reward * self.power_factor // agent.score
                         self.balance_delta[delegator] += reward
                         print(f"\t[Power] {delegator}({item['power']}) + {reward}")
                 validator.income = 0
 
         # calc round state
-        self.round_state.coin_integral = self.round_state.power_integral = 1
+        self.round_state.coin_score = self.round_state.power_score = 1
 
         agent: Agent
         for operator, agent in self.agents.items():
@@ -429,17 +429,17 @@ class StateMachine:
                 total_coin += agent.coin_delegators[delegator]['coin']
             agent.total_coin = total_coin
             agent.total_power = total_power
-            self.round_state.coin_integral += total_coin
-            self.round_state.power_integral += total_power
+            self.round_state.coin_score += total_coin
+            self.round_state.power_score += total_power
 
-        print(f"round state(local): [coin: {self.round_state.coin_integral}, power: {self.round_state.power_integral}]")
+        print(f"round state(local): [coin: {self.round_state.coin_score}, power: {self.round_state.power_score}]")
 
         for operator, agent in self.agents.items():
             if operator not in valid_candidates:
                 continue
-            agent.integral = self.power_factor // 10000 * agent.total_power * self.round_state.coin_integral + \
-                             agent.total_coin * self.round_state.power_integral
-            print(f"agent info({operator}): power=>{agent.total_power}, coin=>{agent.total_coin}, integral=>{agent.integral}")
+            agent.score = self.power_factor // 10000 * agent.total_power * self.round_state.coin_score + \
+                             agent.total_coin * self.round_state.power_score
+            print(f"agent info({operator}): power=>{agent.total_power}, coin=>{agent.total_coin}, score=>{agent.score}")
 
         self.archive_agents = dict()
         for operator in self.agents:
@@ -553,9 +553,9 @@ class StateMachine:
             for event in tx.events['logCalcCoinRewardFactor']:
                 print(f"\tlogCalcCoinRewardFactor >>> {event}")
 
-        if "logCalcIntegral" in tx.events:
-            for event in tx.events['logCalcIntegral']:
-                print(f"\tlogCalcIntegral >>> {event}")
+        if "logCalcScore" in tx.events:
+            for event in tx.events['logCalcScore']:
+                print(f"\tlogCalcScore >>> {event}")
 
     def __slash(self, _validator: dict):
         consensus = _validator['consensusAddress']

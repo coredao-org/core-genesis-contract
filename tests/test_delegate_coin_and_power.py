@@ -96,7 +96,7 @@ def test_distribute_power_reward_during_turn_round(pledge_agent, btc_light_clien
     V1 = r / 100 * 3 * 15 + 5 * 6 = 120
     V2 = r / 100 * 2 * 15 + 5 * 6 = 114
     """
-    agent_integral, delegate_reward = parse_delegation([{
+    agent_score, delegate_reward = parse_delegation([{
         "address": operators[0],
         "active": True,
         "power": [set_delegate(clients[0], 2), set_delegate(clients[1], 1)],
@@ -406,7 +406,7 @@ def test_scenario5(candidate_hub, pledge_agent, validator_set):
     turn_round(consensuses, tx_fee=TX_FEE)
     assert validator_set.getValidators() == [consensuses[1]]
 
-    agent_integral, delegator_reward = parse_delegation([{
+    agent_score, delegator_reward = parse_delegation([{
         "address": operators[1],
         "active": True,
         "coin": [set_delegate(accounts[1], MIN_INIT_DELEGATE_VALUE)],

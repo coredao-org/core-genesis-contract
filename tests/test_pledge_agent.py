@@ -233,11 +233,11 @@ def test_add_round_reward_success_with_normal_agent(pledge_agent, validator_set)
     expect_power_rewards = [0, 0]
 
     for i in range(len(coins)):
-        c_integral = coins[i] * (total_power + 1)
-        p_integral = (total_coin + 1) * powers[i] * POWER_FACTOR // 10000
-        agent_integral = c_integral + p_integral
-        expect_coin_rewards[i] = rewards[i] * c_integral // agent_integral
-        expect_power_rewards[i] = rewards[i] * p_integral // agent_integral
+        c_score = coins[i] * (total_power + 1)
+        p_score = (total_coin + 1) * powers[i] * POWER_FACTOR // 10000
+        agent_score = c_score + p_score
+        expect_coin_rewards[i] = rewards[i] * c_score // agent_score
+        expect_power_rewards[i] = rewards[i] * p_score // agent_score
 
     __candidate_register(agents[0])
     __candidate_register(agents[1])
@@ -273,7 +273,7 @@ def test_add_round_reward_failed_with_invalid_argument(validator_set):
         validator_set.addRoundRewardMock(agents, rewards)
 
 
-def test_get_integral_success(candidate_hub, validator_set):
+def test_get_score_success(candidate_hub, validator_set):
     agents = accounts[1:6]
     delegators = accounts[6:11]
 
@@ -294,14 +294,14 @@ def test_get_integral_success(candidate_hub, validator_set):
     powers = [3, 5, 7, 0]
     total_coin = required_coin_deposit * 5 + 1 + 10
     total_power = POWER_BLOCK_FACTOR * (3 + 5 + 7) + 1
-    candidate_hub.getIntegralMock(agents, [], miners, powers)
+    candidate_hub.getScoreMock(agents, [], miners, powers)
     scores = candidate_hub.getScores()
     assert len(scores) == 5
     for i in range(5):
-        expected_integral = (required_coin_deposit + i) * total_power
+        expected_score = (required_coin_deposit + i) * total_power
         if i >= 3:
-            expected_integral += total_coin * (powers[2 * (i-3)] + powers[2 * (i-3)+1]) * POWER_BLOCK_FACTOR * POWER_FACTOR // 10000
-        assert expected_integral == scores[i]
+            expected_score += total_coin * (powers[2 * (i-3)] + powers[2 * (i-3)+1]) * POWER_BLOCK_FACTOR * POWER_FACTOR // 10000
+        assert expected_score == scores[i]
 
 
 def test_inactive_agent_success(pledge_agent, candidate_hub):
