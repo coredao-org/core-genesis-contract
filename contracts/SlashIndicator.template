@@ -10,6 +10,7 @@ import "./interface/ISystemReward.sol";
 import "./lib/RLPDecode.sol";
 import "./lib/RLPEncode.sol";
 
+/// This contract manages slash/jail operations to validators on Core blockchain
 contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   using RLPDecode for *;
   using RLPEncode for *;
@@ -65,8 +66,9 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   }
 
   /*********************** External func ********************************/
-  // This method is called by other validators from golang consensus engine.
-  // The param @validator is the consensus address of validator
+  /// Slash the validator because of unavailability
+  /// This method is called by other validators from golang consensus engine.
+  /// @param validator The consensus address of validator
   function slash(address validator) external onlyCoinbase onlyInit oncePerBlock onlyZeroGasPrice{
     Indicator memory indicator = indicators[validator];
     if (indicator.exist) {
@@ -87,7 +89,10 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     emit validatorSlashed(validator);
   }
 
-  // this method is called by external verifiers
+  /// Slash the validator because of double sign
+  /// This method is called by external verifiers
+  /// @param header1 A block header submitted by the validator
+  /// @param header2 Another block header submitted by the validator with same height and parent
   function doubleSignSlash(bytes calldata header1,bytes calldata header2) external onlyInit {
     RLPDecode.RLPItem[] memory items1 = header1.toRLPItem().toList();
     RLPDecode.RLPItem[] memory items2 = header2.toRLPItem().toList();
@@ -104,9 +109,10 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(msg.sender, rewardForReportDoubleSign);
   }
 
-  // To prevent validator misbehaving and leaving, do not clean slash record
-  // to zero, but decrease by felonyThreshold/DECREASE_RATE .
-  // Clean is an effective implement to reorganize "validators" and "indicators".
+  /// Clean slash record by felonyThreshold/DECREASE_RATE.
+  /// @dev To prevent validator misbehaving and leaving, do not clean slash record
+  /// @dev to zero, but decrease by felonyThreshold/DECREASE_RATE.
+  /// @dev Clean is an effective implement to reorganize "validators" and "indicators".
   function clean() external override(ISlashIndicator) onlyCandidate onlyInit{
     if(validators.length == 0){
       return;
@@ -160,6 +166,9 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   }
 
   /*********************** Param update ********************************/
+  /// Update parameters through governance vote
+  /// @param key The name of the parameter
+  /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov{
     if (Memory.compareStrings(key,"misdemeanorThreshold")) {
       require(value.length == 32, "length of misdemeanorThreshold mismatch");
@@ -193,6 +202,8 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   }
 
   /*********************** query api ********************************/
+  /// Get slash indicators of a validator
+  /// @param validator The validator address to query
   function getSlashIndicator(address validator) external view returns (uint256,uint256) {
     Indicator memory indicator = indicators[validator];
     return (indicator.height, indicator.count);

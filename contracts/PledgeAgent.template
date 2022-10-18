@@ -8,6 +8,8 @@ import "./lib/Memory.sol";
 import "./System.sol";
 import "./lib/SafeMath.sol";
 
+/// This contract manages user delegate, also known as stake
+/// Including both coin delegate and hash delegate
 contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   using SafeMath for uint256;
 
@@ -119,8 +121,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   }
 
   /*********************** Interface implementations ***************************/
-  // receive round rewards from ValidatorSet,
-  // which is triggered at the beginning of turn round
+  /// Receive round rewards from ValidatorSet, which is triggered at the beginning of turn round
+  /// @param agentList List of validator operator addresses
+  /// @param rewardList List of reward amount
   function addRoundReward(address[] memory agentList, uint256[] memory rewardList)
     external
     payable
@@ -151,7 +154,14 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
   }
 
-  // calculate hybrid score for all candidates
+  /// Calculate hybrid score for all candidates
+  /// @param candidates List of candidate operator addresses
+  /// @param lastMiners List of BTC miners with hash power in last round
+  /// @param miners List of BTC miners with hash power in this round
+  /// @param powers List of power value in this round
+  /// @return scores List of hybrid scores of all validator candidates in this round
+  /// @return totalPower Total power delegate in this round
+  /// @return totalCoin Total coin delegate in this round
   function getHybridScore(
     address[] memory candidates, bytes20[] memory lastMiners,
     bytes20[] memory miners, uint256[] memory powers
@@ -209,7 +219,11 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return (scores, totalPower, totalCoin);
   }
 
-  // new round starts
+  /// Start new round, this is called by the CandidateHub contract
+  /// @param validators List of elected validators in this round
+  /// @param totalPower Total power delegate in this round
+  /// @param totalCoin Total coin delegate in this round
+  /// @param round The new round tag
   function setNewRound(address[] memory validators, uint256 totalPower,
       uint256 totalCoin, uint256 round) external override onlyCandidate {
     RoundState memory rs;
@@ -226,18 +240,26 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
   }
 
+  /// Inactivate a validator
+  /// @param agent The operator address of validator
   function inactiveAgent(address agent) external override onlyCandidate {
     Agent storage a = agentsMap[agent];
     a.power = a.power / POWER_BLOCK_FACTOR * POWER_BLOCK_FACTOR + INVALID_POWER;
   }
 
   /*********************** External methods ***************************/
+  /// Delegate coin to a validator
+  /// @param agent The operator address of validator
   function delegateCoin(address agent) external payable {
     require(ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(agent), "agent is inactivated");
     uint256 newDeposit = delegateCoin(agent, msg.sender, msg.value);
     emit delegatedCoin(agent, msg.sender, msg.value, newDeposit);
   }
 
+  /// Delegate hash power to a validator
+  /// @param agent The operator address of validator
+  /// @param publicKey The public key of the BTC miner
+  /// @param btcHash Hash of a block on BTC network produced by the miner
   function delegateHashPower(address agent, bytes calldata publicKey, bytes32 btcHash) external {
     require(ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(agent), "agent is inactivated");
     require(btcDelegatorsMap[msg.sender].agent == address(0x00), "delegator has delegated");
@@ -261,12 +283,15 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     emit delegatedPower(agent, addr, publicKey, pkHash, compressedPkHash);
   }
 
+  /// Undelegate coin from a validator
+  /// @param agent The operator address of validator
   function undelegateCoin(address agent) external {
     uint256 deposit = undelegateCoin(agent, msg.sender);
     msg.sender.transfer(deposit);
     emit undelegatedCoin(agent, msg.sender, deposit);
   }
 
+  /// Undelegate hash power from a validator
   function undelegatePower() external {
     BtcDelegator storage m = btcDelegatorsMap[msg.sender];
     require(m.agent != address(0x00), "delegator does not exist");
@@ -277,6 +302,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     delete btcDelegatorsMap[msg.sender];
   }
 
+  /// Transfer coin stake to a new validator
+  /// @param sourceAgent The validator to transfer coin stake from
+  /// @param targetAgent The validator to transfer coin stake to
   function transferCoin(address sourceAgent, address targetAgent) external {
     require(ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetAgent), "agent is inactivated");
     require(sourceAgent!=targetAgent, "source agent and target agent are the same one");
@@ -285,6 +313,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     emit transferredCoin(sourceAgent, targetAgent, msg.sender, deposit, newDeposit);
   }
 
+  /// Transfer hash power stake to a new validator
+  /// @param targetAgent The validator to transfer hash power stake to
   function transferPower(address targetAgent) external {
     require(ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetAgent), "agent is inactivated");
     BtcDelegator storage m = btcDelegatorsMap[msg.sender];
@@ -296,6 +326,10 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     emit transferredPower(sourceAgent, targetAgent, msg.sender);
   }
 
+  /// Claim reward for a delegator
+  /// @param delegator The delegator address
+  /// @param agentList The list of validators to claim rewards on
+  /// @return (Amount claimed, Are all rewards claimed)
   function claimReward(address payable delegator, address[] calldata agentList) external returns (uint256, bool) {
     // limit round count to control gas usage
     int256 roundLimit = 500;
@@ -466,6 +500,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   }
 
   /*********************** Governance ********************************/
+  /// Update parameters through governance vote
+  /// @param key The name of the parameter
+  /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
     if (Memory.compareStrings(key, "requiredCoinDeposit")) {
       require(value.length == 32, "length of requiredCoinDeposit mismatch");
@@ -483,6 +520,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     emit paramChange(key, value);
   }
 
+  /// Collect all dusts and send to DAO treasury
   function gatherDust() external onlyInit onlyGov {
     if (totalDust > 0) {
       payable(GOV_HUB_ADDR).transfer(totalDust);
@@ -491,10 +529,18 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   }
 
   /*********************** Public view ********************************/
+  /// Get delegator information
+  /// @param agent The operator address of validator
+  /// @param delegator The delegator address
+  /// @return CoinDelegator Information of the delegator
   function getDelegator(address agent, address delegator) external view returns (CoinDelegator memory) {
     return agentsMap[agent].cDelegatorMap[delegator];
   }
 
+  /// Get reward information of a validator by index
+  /// @param agent The operator address of validator
+  /// @param index The reward index
+  /// @return Reward The reward information
   function getReward(address agent, uint256 index) external view returns (Reward memory) {
     Agent storage a = agentsMap[agent];
     require(index < a.rewardSet.length, "out of up bound");

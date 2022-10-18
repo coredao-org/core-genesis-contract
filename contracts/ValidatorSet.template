@@ -11,6 +11,8 @@ import "./interface/ICandidateHub.sol";
 import "./lib/SafeMath.sol";
 import "./lib/RLPDecode.sol";
 
+/// This contract manages elected validators in each round
+/// All rewards for validators on Core blockchain are minted in genesis block and stored in this contract
 contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   using SafeMath for uint256;
   using RLPDecode for *;
@@ -73,11 +75,16 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   }
 
   /*********************** External Functions **************************/
+  /// Check whether the input address belongs to an active validator
+  /// @param addr The address to check
+  /// @return true/false
   function isValidator(address addr) public override returns (bool) {
     return currentValidatorSetMap[addr] > 0;
   }
 
-  // this method is called by the golang consensus engine every block
+  /// Add block reward on a validator 
+  /// @dev This method is called by the golang consensus engine every block
+  /// @param valAddr The validator address
   function deposit(address valAddr) external payable onlyCoinbase onlyInit onlyZeroGasPrice {
     uint256 value = msg.value;
     if (address(this).balance >= totalInCome + value + blockReward) {
@@ -94,8 +101,9 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
   }
 
-  // this method is called by the CandidateHub contract at the beginning of turn round
-  // this is where we deal with reward distribution logics
+  /// Distribute rewards to validators (and delegators through PledgeAgent)
+  /// @dev this method is called by the CandidateHub contract at the beginning of turn round
+  /// @dev this is where we deal with reward distribution logics
   function distributeReward() external override onlyCandidate {
     address payable feeAddress;
     uint256 validatorReward;
@@ -137,6 +145,11 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     totalInCome = 0;
   } 
 
+  /// Update validator set of the new round with elected validators 
+  /// @param operateAddrList List of validator operator addresses
+  /// @param consensusAddrList List of validator consensus addresses
+  /// @param feeAddrList List of validator fee addresses
+  /// @param commissionThousandthsList List of validator commission fees in thousandth
   function updateValidatorSet(
     address[] memory operateAddrList,
     address[] memory consensusAddrList,
@@ -171,6 +184,8 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     emit validatorSetUpdated();
   }
 
+  /// Get list of validators in the current round
+  /// @return List of validator consensus addresses
   function getValidators() external view returns (address[] memory) {
     address[] memory consensusAddrs = new address[](currentValidatorSet.length);
     for (uint256 i = 0; i < currentValidatorSet.length; i++) {
@@ -179,6 +194,9 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     return consensusAddrs;
   }
 
+  /// Get incoming, which is the reward to distribute at the end of the round, of a validator
+  /// @param validator The validator address
+  /// @return The incoming reward of the validator
   function getIncoming(address validator) external view returns (uint256) {
     uint256 index = currentValidatorSetMap[validator];
     if (index <= 0) {
@@ -188,6 +206,8 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   }
 
   /*********************** For slash **************************/
+  /// Slash the validator for misdemeanor behaviors
+  /// @param validator The validator to slash
   function misdemeanor(address validator) external override onlySlash {
     uint256 index = currentValidatorSetMap[validator];
     if (index <= 0) {
@@ -216,6 +236,10 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
   }
 
+  /// Slash the validator for felony behaviors
+  /// @param validator The validator to slash
+  /// @param felonyRound The number of rounds to jail
+  /// @param felonyDeposit The amount of deposits to slash
   function felony(address validator, uint256 felonyRound, int256 felonyDeposit) external override onlySlash {
     uint256 index = currentValidatorSetMap[validator];
     if (index <= 0) {
@@ -250,6 +274,9 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   }
 
   /*********************** Param update ********************************/
+  /// Update parameters through governance vote
+  /// @param key The name of the parameter
+  /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
     if (Memory.compareStrings(key, "blockReward")) {
       require(value.length == 32, "length of blockReward mismatch");

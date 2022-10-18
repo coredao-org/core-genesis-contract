@@ -7,6 +7,7 @@ import "./lib/BytesLib.sol";
 import "./lib/RLPDecode.sol";
 import "./interface/IParamSubscriber.sol";
 
+/// This is the smart contract to manage governance votes
 contract GovHub is System, IParamSubscriber {
   using RLPDecode for *;
 
@@ -94,6 +95,13 @@ contract GovHub is System, IParamSubscriber {
     alreadyInit = true;
   }
 
+  /// Make a new proposal
+  /// @param targets List of addresses to interact with
+  /// @param values List of values (CORE amount) to send
+  /// @param signatures List of signatures
+  /// @param calldatas List of calldata
+  /// @param description Description of the proposal
+  /// @return The proposal id
   function propose(
     address[] memory targets,
     uint256[] memory values,
@@ -159,6 +167,9 @@ contract GovHub is System, IParamSubscriber {
     return newProposal.id;
   }
 
+  /// Cast vote on a proposal
+  /// @param proposalId The proposal Id
+  /// @param support Support or not
   function castVote(uint256 proposalId, bool support) public onlyInit onlyMember {
     require(state(proposalId) == ProposalState.Active, "voting is closed");
     Proposal storage proposal = proposals[proposalId];
@@ -175,6 +186,8 @@ contract GovHub is System, IParamSubscriber {
     emit VoteCast(msg.sender, proposalId, support);
   }
 
+  /// Cancel the proposal, can only be done by the proposer
+  /// @param proposalId The proposal Id
   function cancel(uint256 proposalId) public onlyInit {
     ProposalState state = state(proposalId);
     require(state == ProposalState.Pending || state == ProposalState.Active, "cannot cancel finished proposal");
@@ -186,6 +199,8 @@ contract GovHub is System, IParamSubscriber {
     emit ProposalCanceled(proposalId);
   }
 
+  /// Execute the proposal
+  /// @param proposalId The proposal Id
   function execute(uint256 proposalId) public payable onlyInit {
     require(state(proposalId) == ProposalState.Succeeded, "proposal can only be executed if it is succeeded");
     Proposal storage proposal = proposals[proposalId];
@@ -205,6 +220,9 @@ contract GovHub is System, IParamSubscriber {
     emit ProposalExecuted(proposalId);
   }
 
+  /// Check the proposal state
+  /// @param proposalId The proposal Id
+  /// @return The state of the proposal
   function state(uint256 proposalId) public view returns (ProposalState) {
     require(proposalCount >= proposalId && proposalId > 0, "state: invalid proposal id");
     Proposal storage proposal = proposals[proposalId];
@@ -229,6 +247,8 @@ contract GovHub is System, IParamSubscriber {
     }
   }
 
+  /// Add a member
+  /// @param member The new member address
   function addMember(address member) external onlyInit onlyGov {
     require(members[member] == 0, "member already exists");
     memberSet.push(member);
@@ -236,6 +256,8 @@ contract GovHub is System, IParamSubscriber {
     emit MemberAdded(member);
   }
 
+  /// Remove a member
+  /// @param member The address of the member to remove
   function removeMember(address member) external onlyInit onlyGov {
     uint256 index = members[member];
     require(index > 0, "member does not exist");
@@ -249,10 +271,15 @@ contract GovHub is System, IParamSubscriber {
     emit MemberDeleted(member);
   }
 
+  /// Get all members
+  /// @return List of member addresses
   function getMembers() external view returns (address[] memory) {
     return memberSet;
   }
 
+  /// Update parameters through governance vote
+  /// @param key The name of the parameter
+  /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
     if (Memory.compareStrings(key, "proposalMaxOperations")) {
       require(value.length == 32, "length of proposalMaxOperations mismatch");
