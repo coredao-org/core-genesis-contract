@@ -8,6 +8,10 @@ import "./interface/IParamSubscriber.sol";
 import "./lib/SafeMath.sol";
 import "./System.sol";
 
+/// This contract implements a BTC light client on Core blockchain
+/// Relayers store BTC blocks to Core blockchain by calling this contract
+/// This contract calculates powers of BTC miners in each round
+/// Which is used to calculate hybrid score and reward distribution
 contract BtcLightClient is ILightClient, System, IParamSubscriber{
   using SafeMath for uint256;
 
@@ -76,6 +80,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   constructor() public {}
 
   /*********************** init **************************/
+  /// Initialize 
   function init() external onlyNotInit {
     bytes32 blockHash = doubleShaFlip(INIT_CONSENSUS_STATE_BYTES);
     bytes20 coinbaseAddr;
@@ -98,6 +103,9 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     alreadyInit = true;
   }
 
+  /// Store a BTC block in Core blockchain
+  /// @dev This method is called by relayers
+  /// @param blockBytes BTC block bytes
   function storeBlockHeader(bytes calldata blockBytes) external onlyRelayer {
     bytes memory headerBytes = slice(blockBytes, 0, 80);
     bytes32 blockHash = doubleShaFlip(headerBytes);
@@ -174,6 +182,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     r.powerMap[miner] = power + 1;
   }
 
+  /// Claim relayer rewards
+  /// @param relayerAddr The relayer address
   function claimRelayerReward(address relayerAddr) external {
      uint256 reward = relayerRewardVault[relayerAddr];
      require(reward > 0, "no relayer reward");
@@ -182,6 +192,10 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
      ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(recipient, reward);
   }
 
+  /// Distribute relayer rewards
+  /// @dev This method is triggered once per round, the default round value is set to 100 (BTC blocks)
+  /// @dev And the weight of each relayer is calculated based on the `calculateRelayerWeight` method
+  /// @return The reward for the caller of this method
   function distributeRelayerReward() internal returns (uint256) {
     uint256 totalReward = collectedRewardForHeaderRelayer;
 
@@ -213,6 +227,9 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     return callerReward;
   }
 
+  /// Calculate relayer weight based number of BTC blocks relayed
+  /// @param count The number of BTC blocks relayed by a specific validator
+  /// @return The relayer weight
   function calculateRelayerWeight(uint256 count) public view returns(uint256) {
     if (count <= maximumWeight) {
       return count;
@@ -269,6 +286,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     return nodeBytes;
   }
   
+  // Check Proof of Work of a relayed BTC block
   function checkProofOfWork(bytes memory headerBytes, bytes32 blockHash) internal view returns (
       uint32 blockHeight, uint256 scoreBlock, int256 errCode) {
     bytes32 hashPrevBlock = flip32Bytes(bytes32(loadInt256(36, headerBytes))); // 4 is offset for hashPrevBlock
@@ -460,6 +478,9 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     }
   }
 
+  /// Update parameters through governance vote
+  /// @param key The name of the parameter
+  /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov{
     if (Memory.compareStrings(key,"rewardForSyncHeader")) {
       require(value.length == 32, "length of rewardForSyncHeader mismatch");
@@ -487,23 +508,38 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     emit paramChange(key, value);
   }
 
+  /// Whether the input BTC block is already stored in Core blockchain
+  /// @param btcHash The BTC block hash
+  /// @return true/false
   function isHeaderSynced(bytes32 btcHash) external override view returns (bool) {
     return getHeight(btcHash) >= INIT_CHAIN_HEIGHT;
   }
 
+  /// Get the submitter/relayer of a specific BTC block
+  /// @param btcHash The BTC block hash
+  /// @return The address submitted the BTC block
   function getSubmitter(bytes32 btcHash) external override view returns (address payable) {
     return submitters[btcHash];
   }
 
+  /// Get the heaviest BTC block
+  /// @return The BTC block hash
   function getChainTip() external override view returns (bytes32) {
     return heaviestBlock;
   }
 
+  /// Get the BTC miner address who produced the specific BTC block
+  /// @param btcHash The BTC block hash
+  /// @return The BTC miner address
   function getMiner(bytes32 btcHash) public override view returns (bytes20) {
     if(getHeight(btcHash) == 0) return bytes20(0);
     return getCoinbase(btcHash);
   }
 
+  /// Get miners and their corresponding powers of a specific round
+  /// @param roundTimeTag The specific round time
+  /// @return miners The miners who produced BTC blocks in the round
+  /// @return powers The corresponding powers of miners
   function getRoundPowers(uint256 roundTimeTag) external override view returns (bytes20[] memory miners, uint256[] memory powers) {
     RoundMinersPower storage r = roundMinerPowerMap[roundTimeTag];
     uint256 count = r.miners.length;
@@ -517,6 +553,9 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     return (miners, powers);
   }
 
+  /// Get miners of a specific round
+  /// @param roundTimeTag The specific round time
+  /// @return miners The miners who produced BTC blocks in the round
   function getRoundMiners(uint256 roundTimeTag) external override view returns (bytes20[] memory miners) {
     return roundMinerPowerMap[roundTimeTag].miners;
   }

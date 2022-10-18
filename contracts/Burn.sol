@@ -5,6 +5,7 @@ import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./interface/IBurn.sol";
 
+/// This contract burns CORE tokens up to pre defined CAP
 contract Burn is System, IBurn, IParamSubscriber {
   uint256 public constant BURN_CAP = 105e25;
 
@@ -20,6 +21,8 @@ contract Burn is System, IBurn, IParamSubscriber {
   event burned(address indexed to, uint256 amount);
   event paramChange(string key, bytes value);
 
+  /// Burn incoming CORE tokens
+  /// Send back the portion which exceeds the cap
   function burn() external payable override {
     uint256 v = msg.value;
     if (address(this).balance > burnCap) {
@@ -36,6 +39,9 @@ contract Burn is System, IBurn, IParamSubscriber {
   }
 
   /*********************** Param update ********************************/
+  /// Update parameters through governance vote
+  /// @param key The name of the parameter
+  /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
     if (Memory.compareStrings(key, "burnCap")) {
       require(value.length == 32, "length of burnCap mismatch");

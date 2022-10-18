@@ -7,16 +7,16 @@ import "./interface/IParamSubscriber.sol";
 import "./System.sol";
 import "./lib/SafeMath.sol";
 
-
+/// This contract manages BTC relayers on Core blockchain
 contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   using SafeMath for uint256;
 
   uint256 public constant INIT_REQUIRED_DEPOSIT =  1e20;
   uint256 public constant INIT_DUES =  1e17;
 
-  // requiredDeposit = refundable deposit
-  // dues = unregister fee
+  // the refundable deposit
   uint256 public requiredDeposit;
+  // the unregister fee
   uint256 public dues;
 
   mapping(address =>Relayer) relayers;
@@ -53,6 +53,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     alreadyInit = true;
   }
 
+  /// Register as a BTC relayer on Core blockchain
   function register() external payable noExist onlyInit notContract noProxy{
     require(msg.value == requiredDeposit, "deposit value does not match requirement");
     relayers[msg.sender] = Relayer(requiredDeposit, dues);
@@ -60,6 +61,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     emit relayerRegister(msg.sender);
   }
 
+  /// Unregister the BTC relayer role on Core blockchain
   function  unregister() external exist onlyInit{
     Relayer memory r = relayers[msg.sender];
     msg.sender.transfer(r.deposit.sub(r.dues));
@@ -71,6 +73,9 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   }
 
   /*********************** Param update ********************************/
+  /// Update parameters through governance vote
+  /// @param key The name of the parameter
+  /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov{
     if (Memory.compareStrings(key,"requiredDeposit")) {
       require(value.length == 32, "length of requiredDeposit mismatch");
@@ -88,6 +93,9 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     emit paramChange(key, value);
   }
 
+  /// Whether the input address is a relayer
+  /// @param sender The address to check
+  /// @return true/false
   function isRelayer(address sender) external override view returns (bool) {
     return relayersExistMap[sender];
   }

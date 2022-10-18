@@ -9,6 +9,8 @@ import "./interface/ISlashIndicator.sol";
 import "./System.sol";
 import "./lib/SafeMath.sol";
 
+/// This contract manages all validator candidates on Core blockchain
+/// It also exposes the method `turnRound` for the consensus engine to execute the `turn round` workflow
 contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   using SafeMath for uint256;
 
@@ -95,6 +97,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   
 
   /********************* ICandidateHub interface ****************************/
+  /// Whether users can delegate on a validator candidate
+  /// @param agent The operator address of the validator candidate
+  /// @return true/false
   function canDelegate(address agent) external override view returns(bool) {
     uint256 index = operateMap[agent];
     if (index == 0) {
@@ -104,6 +109,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     return status == (status & ACTIVE_STATUS);
   }
 
+  /// Jail a validator for some rounds and slash some amount of deposits
+  /// @param operateAddress The operator address of the validator
+  /// @param round The number of rounds to jail
+  /// @param fine The amount of deposits to slash
   function jailValidator(address operateAddress, uint256 round, int256 fine) external override onlyValidator {
     if (fine < 0) return;
     
@@ -128,7 +137,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   /********************* External methods  ****************************/
-  // this method is called by Golang consensus engine at the end of a round
+  /// The `turn round` workflow
+  /// @dev this method is called by Golang consensus engine at the end of a round
   function turnRound() external onlyCoinbase onlyInit onlyZeroGasPrice {
     // distribute rewards for the about to end round
     IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward();
@@ -212,6 +222,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   /****************** register/unregister ***************************/
+  /// Register as a validator candidate on Core blockchain
+  /// @param consensusAddr Consensus address configured on the validator node
+  /// @param feeAddr Fee address set to collect system rewards
+  /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths
   function register(address consensusAddr, address payable feeAddr, uint32 commissionThousandths)
     external payable
     onlyInit
@@ -234,6 +248,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     emit registered(msg.sender, consensusAddr, feeAddr, commissionThousandths, int256(msg.value));
   }
 
+  /// Unregister the validator candidate role on Core blockchain
   function unregister() external onlyInit exist {
     uint256 index = operateMap[msg.sender];
     Candidate memory c = candidateSet[index - 1];
@@ -258,6 +273,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     IPledgeAgent(PLEDGE_AGENT_ADDR).inactiveAgent(msg.sender);
   }
 
+  /// Update validator candidate information
+  /// @param consensusAddr Consensus address configured on the validator node
+  /// @param feeAddr Fee address set to collect system rewards
+  /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths  
   function update(address consensusAddr, address payable feeAddr, uint32 commissionThousandths) external onlyInit exist{
     require(commissionThousandths > 0 && commissionThousandths < 1000, "commissionThousandths should in range (0, 1000)");
     require(!isContract(consensusAddr), "contract is not allowed to be consensus address");
@@ -287,6 +306,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     emit updated(msg.sender, consensusAddr, feeAddr, commissionThousandths);
   }
 
+  /// Refuse to accept delegate from others
+  /// @dev Candidate will not be elected in this state
   function refuseDelegate() external onlyInit exist {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
@@ -294,6 +315,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     changeStatus(c, status);
   }
 
+  /// Accept delegate from others
   function acceptDelegate() external onlyInit exist {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
@@ -301,6 +323,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     changeStatus(c, status);
   }
 
+  /// Add refundable deposits
+  /// @dev Candidate will not be elected if there are not enough deposits
   function addMargin() external payable onlyInit exist {
     require(msg.value > 0, "value should be not nil");
     uint256 index = operateMap[msg.sender];
@@ -327,6 +351,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     }
   }
 
+  /// Rank validator candidates on hybrid score using quicksort
   function getValidators(address[] memory candidateList, uint256[] memory scoreList, uint256 count) internal pure returns (address[] memory validatorList){
     uint256 candidateSize = candidateList.length;
     // quicksort by scores O(nlogk)
@@ -377,6 +402,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   /*********************** Param update ********************************/
+  /// Update parameters through governance vote
+  /// @param key The name of the parameter
+  /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
     if (Memory.compareStrings(key, "requiredMargin")) {
       require(value.length == 32, "length of requiredMargin mismatch");
@@ -404,6 +432,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     emit paramChange(key, value);
   }
 
+  /// Get list of validator candidates 
+  /// @return List of operator addresses
   function getCandidates() external view returns (address[] memory) {
     address[] memory opAddrs = new address[](candidateSet.length);
     for (uint256 i = 0; i < candidateSet.length; i++) {
@@ -412,14 +442,23 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     return opAddrs;
   }
 
+  /// Whether the input address is operator address of a validator candidate 
+  /// @param operateAddr Operator address of validator candidate
+  /// @return true/false
   function isCandidateByOperate(address operateAddr) external view returns (bool) {
     return operateMap[operateAddr] > 0;
   }
 
+  /// Whether the input address is consensus address a validator candidate
+  /// @param consensusAddr Consensus address of validator candidate
+  /// @return true/false
   function isCandidateByConsensus(address consensusAddr) external view returns (bool) {
     return consensusMap[consensusAddr] > 0;
   }
 
+  /// Whether the validator is jailed
+  /// @param operateAddr Operator address of validator
+  /// @return true/false
   function isJailed(address operateAddr) external view returns (bool) {
     return jailMap[operateAddr] >= roundTag;
   }

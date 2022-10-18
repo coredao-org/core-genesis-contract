@@ -6,6 +6,7 @@ import "./interface/IBurn.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 
+/// This smart contract manages funds for relayers and verifiers
 contract SystemReward is System, ISystemReward, IParamSubscriber {
   uint256 public constant INCENTIVE_BALANCE_CAP = 1e25;
 
@@ -39,6 +40,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     }
   }
 
+  /// Receive funds from system, burn the portion which exceeds cap
   function receiveRewards() external payable override {
     if (msg.value > 0) {
       if (address(this).balance > incentiveBalanceCap) {
@@ -48,6 +50,9 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     }
   }
 
+  /// Claim rewards, this method can only be called by valid operator addresses
+  /// @param to The address to claim rewards to
+  /// @param amount The amount to claim
   function claimRewards(address payable to, uint256 amount)
     external
     override(ISystemReward)
@@ -65,11 +70,17 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     return actualAmount;
   }
 
+  /// Whether the given address is a valid operator
+  /// @param addr The address to check
+  /// @return true/false
   function isOperator(address addr) external view returns (bool) {
     return operators[addr];
   }
 
   /*********************** Param update ********************************/
+  /// Update parameters through governance vote
+  /// @param key The name of the parameter
+  /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
     if (Memory.compareStrings(key, "incentiveBalanceCap")) {
       require(value.length == 32, "length of incentiveBalanceCap mismatch");
