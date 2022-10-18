@@ -523,7 +523,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Collect all dusts and send to DAO treasury
   function gatherDust() external onlyInit onlyGov {
     if (totalDust > 0) {
-      payable(GOV_HUB_ADDR).transfer(totalDust);
+      payable(FOUNDATION_ADDR).transfer(totalDust);
       totalDust = 0;
     }
   }
