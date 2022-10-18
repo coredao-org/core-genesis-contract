@@ -6,7 +6,7 @@ This repo holds all the genesis contracts on Core blockchain, which are part of 
 
 ## List of Contracts
 
-- [BTCLightClient.sol](./contracts/BTCLightClient.sol): This contract implements a BTC light client on Core blockchain. Relayers store BTC blocks to Core blockchain by calling this contract. This contract calculates powers of BTC miners in each round, which is used to calculate hybrid score and reward distribution.
+- [BTCLightClient.sol](./contracts/BtcLightClient.sol): This contract implements a BTC light client on Core blockchain. Relayers store BTC blocks to Core blockchain by calling this contract. This contract calculates powers of BTC miners in each round, which is used to calculate hybrid score and reward distribution.
 - [Burn.sol](./contracts/Burn.sol): This contract burns CORE tokens up to pre defined CAP.
 - [CandidateHub.sol](./contracts/CandidateHub.sol): This contract manages all validator candidates on Core blockchain. It also exposes the method `turnRound` for the consensus engine to execute the `turn round` workflow. 
 - [Foundation.sol](./contracts/Foundation.sol): This is the DAO Treasury smart contract. The funds in this contract can only be moved through governance vote. 
