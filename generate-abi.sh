@@ -1,6 +1,6 @@
 name=$1
 
-contracts=( 'BtcLightClient' "Burn" "CandidateHub" "GovHub" \
+contracts=( "BtcLightClient" "Burn" "CandidateHub" "Foundation" "GovHub" \
     "PledgeAgent" "RelayerHub" "SlashIndicator" "SystemReward" \
     "ValidatorSet" )
 
