@@ -11,7 +11,7 @@ import "./interface/IParamSubscriber.sol";
 contract GovHub is System, IParamSubscriber {
   using RLPDecode for *;
 
-  uint256 public constant PROPOSAL_MAX_OPERATIONS = 10;
+  uint256 public constant PROPOSAL_MAX_OPERATIONS = 1;
   uint256 public constant VOTING_PERIOD = {{votingPeriod}};
   bytes public constant INIT_MEMBERS = hex"{{initMembersBytes}}";
 

@@ -100,6 +100,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       emit deprecatedDeposit(valAddr, value);
     }
   }
+
   /// Distribute rewards to validators (and delegators through PledgeAgent)
   /// @dev this method is called by the CandidateHub contract at the beginning of turn round
   /// @dev this is where we deal with reward distribution logics
@@ -285,7 +286,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     } else if (Memory.compareStrings(key, "blockRewardIncentivePercent")) {
       require(value.length == 32, "length of blockRewardIncentivePercent mismatch");
       uint256 newBlockRewardIncentivePercent = BytesToTypes.bytesToUint256(32, value);
-      require(newBlockRewardIncentivePercent > 0 && newBlockRewardIncentivePercent < 100, "the blockRewardIncentivePercent out of range");
+      require(newBlockRewardIncentivePercent <= 100, "the blockRewardIncentivePercent out of range");
       blockRewardIncentivePercent = newBlockRewardIncentivePercent;
     } else {
       require(false, "unknown param");

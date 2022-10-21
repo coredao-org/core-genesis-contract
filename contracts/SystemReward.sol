@@ -85,7 +85,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     if (Memory.compareStrings(key, "incentiveBalanceCap")) {
       require(value.length == 32, "length of incentiveBalanceCap mismatch");
       uint256 newIncentiveBalanceCap = BytesToTypes.bytesToUint256(32, value);
-      require(newIncentiveBalanceCap >= INCENTIVE_BALANCE_CAP/10, "the incentiveBalanceCap out of range");
+      require(newIncentiveBalanceCap > 0, "the incentiveBalanceCap out of range");
       incentiveBalanceCap = newIncentiveBalanceCap;
     } else {
       require(false, "unknown param");

@@ -23,7 +23,7 @@ program.option(
 program.option(
     "--votingPeriod <votingPeriod>",
     "votingPeriod",
-    86400
+    201600
 )
 
 program.option("--mock <mock>",

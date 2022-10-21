@@ -12,7 +12,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   using SafeMath for uint256;
 
   uint256 public constant INIT_REQUIRED_DEPOSIT =  1e20;
-  uint256 public constant INIT_DUES =  1e17;
+  uint256 public constant INIT_DUES =  1e18;
 
   // the refundable deposit
   uint256 public requiredDeposit;

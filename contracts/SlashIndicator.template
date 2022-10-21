@@ -18,9 +18,9 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   uint256 public constant MISDEMEANOR_THRESHOLD = 50;
   uint256 public constant FELONY_THRESHOLD = 150;
   uint256 public constant DECREASE_RATE = 4;
-  uint256 public constant INIT_REWARD_FOR_REPORT_DOUBLE_SIGN = 1e16;
+  uint256 public constant INIT_REWARD_FOR_REPORT_DOUBLE_SIGN = 5e20;
   uint32 public constant CHAINID = {{chainid}};
-  int256 public constant INIT_FELONY_DEPOSIT = 1e22;
+  int256 public constant INIT_FELONY_DEPOSIT = 1e21;
   uint256 public constant INIT_FELONY_ROUND = 2;
 
   // State of the contract
@@ -178,7 +178,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     } else if (Memory.compareStrings(key,"felonyThreshold")) {
       require(value.length == 32, "length of felonyThreshold mismatch");
       uint256 newFelonyThreshold = BytesToTypes.bytesToUint256(32, value);
-      require(newFelonyThreshold <= 1000 && newFelonyThreshold > misdemeanorThreshold, "the felonyThreshold out of range");
+      require(newFelonyThreshold > misdemeanorThreshold, "the felonyThreshold out of range");
       felonyThreshold = newFelonyThreshold;
     } else if (Memory.compareStrings(key,"rewardForReportDoubleSign")) {
       require(value.length == 32, "length of rewardForReportDoubleSign mismatch");
@@ -193,7 +193,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     } else if (Memory.compareStrings(key,"felonyRound")) {
       require(value.length == 32, "length of felonyRound mismatch");
       uint256 newFelonyRound = BytesToTypes.bytesToUint256(32, value);
-      require(newFelonyRound >= 2, "the felonyRound out of range");
+      require(newFelonyRound >= 1, "the felonyRound out of range");
       felonyRound = newFelonyRound;
     } else {
       require(false, "unknown param");
