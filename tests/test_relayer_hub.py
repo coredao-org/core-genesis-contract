@@ -7,7 +7,7 @@ from .utils import expect_event, get_tracker, padding_left
 
 @pytest.fixture(scope="module", autouse=True)
 def set_up(validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub,
-           gov_hub, pledge_agent, burn):
+           gov_hub, pledge_agent, burn, foundation):
     relay_hub.updateContractAddr(
         validator_set.address,
         slash_indicator.address,
@@ -17,7 +17,8 @@ def set_up(validator_set, slash_indicator, system_reward, btc_light_client, rela
         candidate_hub.address,
         accounts[0],
         pledge_agent.address,
-        burn.address
+        burn.address,
+        foundation.address
     )
 
 

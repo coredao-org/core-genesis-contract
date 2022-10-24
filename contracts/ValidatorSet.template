@@ -20,7 +20,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   uint256 public constant BLOCK_REWARD = 3e18;
   uint256 public constant BLOCK_REWARD_INCENTIVE_PERCENT = 10;
   uint256 public constant REDUCE_FACTOR = 9639;
-  uint256 public constant SUBSIDY_REDUCE_INTERVAL = 10512000;
+  uint256 public {% if not mock %}constant{% endif %}SUBSIDY_REDUCE_INTERVAL = 10512000;
 
   bytes public constant INIT_VALIDATORSET_BYTES = hex"{{initValidatorSetBytes}}";
 

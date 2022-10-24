@@ -16,11 +16,12 @@ CANDIDATE_HUB_ADDR = None
 GOV_HUB_ADDR = None
 PLEDGE_AGENT_ADDR = None
 BURN_ADDR = None
+FOUNDATION_ADDR = None
 
 
 @pytest.fixture(scope="module", autouse=True)
 def set_up(validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub,
-           gov_hub, pledge_agent, burn):
+           gov_hub, pledge_agent, burn, foundation):
     global VALIDATOR_CONTRACT_ADDR
     global SLASH_CONTRACT_ADDR
     global SYSTEM_REWARD_ADDR
@@ -30,6 +31,7 @@ def set_up(validator_set, slash_indicator, system_reward, btc_light_client, rela
     global GOV_HUB_ADDR
     global PLEDGE_AGENT_ADDR
     global BURN_ADDR
+    global FOUNDATION_ADDR
     VALIDATOR_CONTRACT_ADDR = validator_set.address
     SLASH_CONTRACT_ADDR = slash_indicator.address
     SYSTEM_REWARD_ADDR = system_reward.address
@@ -39,6 +41,7 @@ def set_up(validator_set, slash_indicator, system_reward, btc_light_client, rela
     GOV_HUB_ADDR = gov_hub.address
     PLEDGE_AGENT_ADDR = pledge_agent.address
     BURN_ADDR = burn.address
+    FOUNDATION_ADDR = foundation.address
 
 
 def __update_gov_address(burn_instance):
@@ -51,7 +54,8 @@ def __update_gov_address(burn_instance):
         CANDIDATE_HUB_ADDR,
         accounts[0],
         PLEDGE_AGENT_ADDR,
-        BURN_ADDR
+        BURN_ADDR,
+        FOUNDATION_ADDR,
     )
 
 

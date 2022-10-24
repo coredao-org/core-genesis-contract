@@ -98,6 +98,11 @@ def burn(accounts):
     return c
 
 
+@pytest.fixture(scope="module")
+def foundation(accounts):
+    c = accounts[0].deploy(Foundation)
+    return c
+
 @pytest.fixture(scope="module", autouse=True)
 def set_system_contract_address(
     candidate_hub,
@@ -108,11 +113,12 @@ def set_system_contract_address(
     system_reward,
     validator_set,
     pledge_agent,
-    burn
+    burn,
+    foundation
 ):
     args = [validator_set.address, slash_indicator.address, system_reward.address,
             btc_light_client.address, relay_hub.address, candidate_hub.address,
-            gov_hub.address, pledge_agent.address, burn.address]
+            gov_hub.address, pledge_agent.address, burn.address, foundation]
 
     candidate_hub.updateContractAddr(*args)
     btc_light_client.updateContractAddr(*args)
@@ -123,6 +129,7 @@ def set_system_contract_address(
     validator_set.updateContractAddr(*args)
     pledge_agent.updateContractAddr(*args)
     burn.updateContractAddr(*args)
+    foundation.updateContractAddr(*args)
 
     system_reward.init()
     # used for distribute reward

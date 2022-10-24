@@ -11,6 +11,14 @@ contract ValidatorSetMock is ValidatorSet {
         blockReward = blockReward / 1e14;
     }
 
+    function updateBlockReward(uint256 _blockReward) external {
+        blockReward = _blockReward;
+    }
+
+    function updateSubsidyReduceInterval(uint256 _internal) external {
+        SUBSIDY_REDUCE_INTERVAL = _internal;
+    }
+
     function addRoundRewardMock(address[] memory agentList, uint256[] memory rewardList)
     external {
         uint256 rewardSum = 0;

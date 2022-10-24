@@ -33,7 +33,7 @@ def setup(system_reward, validator_set, pledge_agent):
     global validator_set_instance
     global BLOCK_REWARD
     validator_set_instance = validator_set
-    BLOCK_REWARD = validator_set.blockReward()
+    BLOCK_REWARD = validator_set.BLOCK_REWARD()
     account_tracker = get_tracker(accounts[0])
     system_reward_tracker = get_tracker(system_reward)
     validator_set_tracker = get_tracker(validator_set)
@@ -80,7 +80,8 @@ def __fake_validator_set():
         accounts[0],
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
-        Burn[0].address
+        Burn[0].address,
+        Foundation[0].address
     )
 
 
@@ -182,7 +183,7 @@ def test_deposit_to_deprecated_validator_with_positive_balance(validator_address
 
     deposit_value = 999
     tx = validator_set_instance.deposit(validator_address, {'value': deposit_value})
-    amount = BLOCK_REWARD + deposit_value
+    amount = validator_set_instance.blockReward() + deposit_value
     expect_event(tx, "deprecatedDeposit", {
         'validator': validator_address,
         'amount': amount
@@ -201,7 +202,7 @@ def test_deposit_to_validator_with_positive_balance(validator_address, deposit_v
     validator_set_tracker.balance()
 
     tx = validator_set_instance.deposit(validator_address, {'value': deposit_value})
-    amount = BLOCK_REWARD + deposit_value
+    amount = validator_set_instance.blockReward() + deposit_value
     event_name = "validatorDeposit" if validator_address in init_validators else 'deprecatedDeposit'
     expect_event(tx, event_name, {
         'validator': validator_address,
@@ -295,7 +296,8 @@ def test_update_param_success_with_key_blockRewardIncentivePercent():
         CandidateHubMock[0],
         accounts[0].address,
         PledgeAgentMock[0].address,
-        Burn[0].address
+        Burn[0].address,
+        Foundation[0].address
     )
     validator_set_instance.updateParam('blockRewardIncentivePercent', '0x0000000000000000000000000000000000000000000000000000000000000014')
     assert validator_set_instance.blockRewardIncentivePercent() == 20
@@ -395,7 +397,8 @@ def test_misdemeanor_failed_with_after_set_empty_validator_set():
         CandidateHubMock[0].address,
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
-        Burn[0].address
+        Burn[0].address,
+        Foundation[0].address
     )
 
     validator = validator_set_instance.getValidatorByConsensus(init_validators[0]).dict()
@@ -419,7 +422,8 @@ def test_misdemeanor_return_empty_with_empty_validator_set_and_ZERO_ADDRESS():
         CandidateHubMock[0].address,
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
-        Burn[0].address
+        Burn[0].address,
+        Foundation[0].address
     )
     assert validator_set_instance.misdemeanor.call(ZERO_ADDRESS) == ()
 
@@ -437,7 +441,8 @@ def test_misdemeanor_return_empty_with_only_one_validator_set_and_0_income():
         CandidateHubMock[0].address,
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
-        Burn[0].address
+        Burn[0].address,
+        Foundation[0].address
     )
     assert validator_set_instance.misdemeanor.call(init_validators[0]) == ()
     __contract_check(0, [0])
@@ -462,7 +467,8 @@ def test_misdemeanor_return_empty_with_only_one_validator_set():
         CandidateHubMock[0].address,
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
-        Burn[0].address
+        Burn[0].address,
+        Foundation[0].address
     )
     assert validator_set_instance.misdemeanor.call(init_validators[0]) == ()
     __contract_check(deposit_value, [deposit_value])
@@ -478,7 +484,8 @@ def test_misdemeanor_success_0_income():
         CandidateHubMock[0].address,
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
-        Burn[0].address
+        Burn[0].address,
+        Foundation[0].address
     )
     validator_set_instance.misdemeanor.call(init_validators[0])
     __contract_check(0, init_validator_incomes)
@@ -502,7 +509,8 @@ def test_misdemeanor_success():
         CandidateHubMock[0].address,
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
-        Burn[0].address
+        Burn[0].address,
+        Foundation[0].address
     )
     validator_set_instance.misdemeanor(init_validators[2])
     __contract_check(deposit_value, [average_value, average_value, 0, average_value, average_value])
@@ -524,7 +532,8 @@ def test_misdemeanor_return_empty_with_ZERO_ADDRESS_validator():
         CandidateHubMock[0].address,
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
-        Burn[0].address
+        Burn[0].address,
+        Foundation[0].address
     )
     assert validator_set_instance.felony.call(ZERO_ADDRESS, felony_round, felony_deposit) == ()
 
@@ -541,7 +550,8 @@ def test_felony_failed_with_one_validator_which_has_0_income():
         CandidateHubMock[0].address,
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
-        Burn[0].address
+        Burn[0].address,
+        Foundation[0].address
     )
     assert validator_set_instance.felony.call(init_validators[0], felony_round, felony_deposit) == ()
     __contract_check(0, [0])
@@ -562,7 +572,8 @@ def test_felony_failed_with_one_validator_which_has_income():
         CandidateHubMock[0].address,
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
-        Burn[0].address
+        Burn[0].address,
+        Foundation[0].address
     )
     assert validator_set_instance.felony.call(init_validators[0], felony_round, felony_deposit) == ()
     validator_set_instance.felony(init_validators[0], felony_round, felony_deposit)
@@ -585,7 +596,8 @@ def test_felony_success_with_validator_set_which_has_0_income(candidate_hub):
         CandidateHubMock[0].address,
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
-        Burn[0].address
+        Burn[0].address,
+        Foundation[0].address
     )
 
     candidate = candidate_hub.candidateSet(0).dict()
@@ -626,7 +638,8 @@ def test_felony_success_with_validator_set_which_has_income(candidate_hub):
         CandidateHubMock[0].address,
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
-        Burn[0].address
+        Burn[0].address,
+        Foundation[0].address
     )
 
     deposit_value = 1000000000
@@ -655,4 +668,30 @@ def test_felony_success_with_validator_set_which_has_income(candidate_hub):
     })
     __contract_check(deposit_value, [average_value])
     __balance_check((deposit_value + Web3.toWei(20000, 'ether')) * -1, deposit_value, 0, 0)
+
+
+def test_subsidy_reduce():
+    validator_set_instance.updateBlockReward(BLOCK_REWARD)
+    validator_set_instance.updateSubsidyReduceInterval(3)
+    reduce_interval = validator_set_instance.SUBSIDY_REDUCE_INTERVAL()
+    chain.mine(reduce_interval - chain.height % reduce_interval - 1)
+    validator_set_instance.deposit(ZERO_ADDRESS, {'value': 1})
+    assert validator_set_instance.blockReward() == validator_set_instance.BLOCK_REWARD() * validator_set_instance.REDUCE_FACTOR() // 10000
+
+
+def test_subsidy_reduce_for_81_times():
+    block_reward = validator_set_instance.BLOCK_REWARD()
+    for _ in range(81):
+        block_reward = block_reward * validator_set_instance.REDUCE_FACTOR() // 10000
+
+    validator_set_instance.updateBlockReward(BLOCK_REWARD)
+    validator_set_instance.updateSubsidyReduceInterval(3)
+    reduce_interval = validator_set_instance.SUBSIDY_REDUCE_INTERVAL()
+    chain.mine(reduce_interval - chain.height % reduce_interval - 1)
+    validator_set_instance.deposit(ZERO_ADDRESS, {'value': 1})
+    for _ in range(80):
+        chain.mine(reduce_interval - 1)
+        validator_set_instance.deposit(ZERO_ADDRESS, {'value': 1})
+    assert validator_set_instance.blockReward() == block_reward
+
 

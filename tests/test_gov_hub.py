@@ -30,7 +30,8 @@ def fake_gov():
         CandidateHubMock[0].address,
         accounts[0],
         PledgeAgentMock[0].address,
-        Burn[0].address
+        Burn[0].address,
+        Foundation[0].address
     )
 
 

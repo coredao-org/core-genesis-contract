@@ -1,18 +1,20 @@
+import math
+
 import pytest
 import brownie
 from web3 import Web3
 from brownie import *
-from .utils import expect_event, get_tracker, random_address
-
+from .utils import expect_event, get_tracker, random_address, padding_left
 
 account_tracker = None
 system_reward_tracker = None
 burn_tracker = None
+foundation_tracker = None
 
 
 @pytest.fixture(scope="module", autouse=True)
 def set_up(validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub,
-           gov_hub, pledge_agent, burn):
+           gov_hub, pledge_agent, burn, foundation):
     system_reward.updateContractAddr(
         validator_set.address,
         slash_indicator.address,
@@ -22,16 +24,19 @@ def set_up(validator_set, slash_indicator, system_reward, btc_light_client, rela
         candidate_hub.address,
         accounts[0],
         pledge_agent.address,
-        burn.address
+        burn.address,
+        foundation.address
     )
 
     global account_tracker
     global system_reward_tracker
     global burn_tracker
+    global foundation_tracker
 
     account_tracker = get_tracker(accounts[0])
     system_reward_tracker = get_tracker(system_reward)
     burn_tracker = get_tracker(burn)
+    foundation_tracker = get_tracker(foundation)
 
 
 @pytest.fixture(autouse=True)
@@ -39,12 +44,14 @@ def clear_tracker():
     account_tracker.balance()
     system_reward_tracker.balance()
     burn_tracker.balance()
+    foundation_tracker.balance()
 
 
-def __balance_check(account_delta=0, system_delta=0, burn_delta=0):
+def __balance_check(account_delta=0, system_delta=0, burn_delta=0, foundation_delta=0):
     assert account_tracker.delta() == account_delta
     assert system_reward_tracker.delta() == system_delta
     assert burn_tracker.delta() == burn_delta
+    assert foundation_tracker.delta() == foundation_delta
 
 
 def test_update_param_failed_with_unknown_key(system_reward):
@@ -68,6 +75,15 @@ def test_update_param_incentive_balance_cap_success(system_reward):
         "key": "incentiveBalanceCap",
         "value": "0x00000000000000000000000000000000000000000000d3c21bcecceda1000000"
     })
+
+
+@pytest.mark.parametrize("value,success", [(0, True), (1, True), (2, False), (int(math.pow(2, 256))-1, False)])
+def test_update_param_is_burn(system_reward, value, success):
+    if success:
+        system_reward.updateParam("isBurn", padding_left(Web3.toHex(value), 64))
+    else:
+        with brownie.reverts("the newIsBurn out of range"):
+            system_reward.updateParam("isBurn", padding_left(Web3.toHex(value), 64))
 
 
 def test_receive_rewards_with_value_0(system_reward):
@@ -100,7 +116,11 @@ def test_receive_rewards_success_with_balance_equal_to_incentive_balance_cap(sys
     __balance_check(account_delta=(init_balance + value) * -1, system_delta=init_balance + value)
 
 
-def test_receive_rewards_success_with_balance_more_than_incentive_balance_cap(system_reward):
+@pytest.mark.parametrize("is_burn", [False, True])
+def test_receive_rewards_success_with_balance_more_than_incentive_balance_cap(system_reward, foundation, burn, is_burn):
+    if is_burn:
+        system_reward.updateParam("isBurn", padding_left(Web3.toHex(1), 64))
+
     incentive_balance_cap = system_reward.incentiveBalanceCap()
     init_balance = incentive_balance_cap - Web3.toWei(1, 'ether')
     accounts[0].transfer(system_reward.address, init_balance)
@@ -111,11 +131,18 @@ def test_receive_rewards_success_with_balance_more_than_incentive_balance_cap(sy
         'from': accounts[0],
         "amount": value
     })
-    __balance_check(
-        account_delta=(init_balance + value) * -1,
-        system_delta=incentive_balance_cap,
-        burn_delta=init_balance + value - incentive_balance_cap
-    )
+    if is_burn:
+        __balance_check(
+            account_delta=(init_balance + value) * -1,
+            system_delta=incentive_balance_cap,
+            burn_delta=init_balance + value - incentive_balance_cap,
+        )
+    else:
+        __balance_check(
+            account_delta=(init_balance + value) * -1,
+            system_delta=incentive_balance_cap,
+            foundation_delta=init_balance + value - incentive_balance_cap
+        )
 
 
 def test_claim_rewards_failed_with_address_which_is_not_operator(system_reward):
