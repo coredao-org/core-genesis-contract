@@ -74,16 +74,9 @@ contract CandidateHubMock is CandidateHub {
     return candidateSet[operateMap[k] - 1];
   }
 
-  function getScoreMock(
-    address[] memory candidates,
-    bytes20[] memory lastMiners,
-    bytes20[] memory miners,
-    uint256[] memory powers
-  ) external {
+  function getScoreMock(address[] memory candidates, uint256[] memory powers) external {
     (scores, totalPower, totalCoin) = IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(
       candidates,
-      lastMiners,
-      miners,
       powers
     );
   }
@@ -98,10 +91,6 @@ contract CandidateHubMock is CandidateHub {
     uint256 count
   ) public pure returns (address[] memory validatorList) {
     return getValidators(candidateList, scoreList, count);
-  }
-
-  function inactiveAgentMock(address agent) external {
-    IPledgeAgent(PLEDGE_AGENT_ADDR).inactiveAgent(agent);
   }
 
   function cleanMock() public {

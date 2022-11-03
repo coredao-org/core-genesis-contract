@@ -185,26 +185,6 @@ class TestUndelegateCoin:
         pledge_agent.undelegateCoin(operator)
 
 
-class TestDelegatePower:
-    def test_delegate_power(self, pledge_agent, btc_light_client):
-        operator = accounts[1]
-        register_candidate(operator=operator)
-        public_key = get_public_key_by_idx(0)
-        btc_block_hash = '0x' + secrets.token_hex(32)
-        pkHash = public_key2PKHash(public_key)
-        compressed_pkHash = public_key2PKHash(get_public_key_by_idx(0, True))
-
-        btc_light_client.setBlock(btc_block_hash, pkHash)
-        tx = pledge_agent.delegateHashPower(operator, public_key, btc_block_hash)
-        expect_event(tx, "delegatedPower", {
-            "agent": operator,
-            "delegator": accounts[0],
-            "publickey": public_key,
-            "pkHash": pkHash,
-            "compressPkHash": compressed_pkHash
-        })
-
-
 class TestUpdateParams:
     def test_update_power_factor(self, pledge_agent):
         new_power_factor = 250
@@ -284,37 +264,20 @@ def test_get_score_success(candidate_hub, validator_set):
     turn_round()
     for i in range(3):
         validator_set.deposit(agents[i], {'value': TX_FEE})
-    miners = []
+
     for i in range(3, 5):
         __candidate_register(agents[i])
         __delegate_coin_success(agents[i], delegators[i], 0, required_coin_deposit + i)
-        pk_hash_list = __delegate_power_success(agents[i], i+6)
-        miners.extend(pk_hash_list)
 
-    powers = [3, 5, 7, 0]
+    powers = [0, 0, 0, 3, 5]
     total_coin = required_coin_deposit * 5 + 1 + 10
-    total_power = POWER_BLOCK_FACTOR * (3 + 5 + 7) + 1
-    candidate_hub.getScoreMock(agents, [], miners, powers)
+    total_power = POWER_BLOCK_FACTOR * (3 + 5) + 1
+    candidate_hub.getScoreMock(agents, powers)
     scores = candidate_hub.getScores()
     assert len(scores) == 5
     for i in range(5):
-        expected_score = (required_coin_deposit + i) * total_power
-        if i >= 3:
-            expected_score += total_coin * (powers[2 * (i-3)] + powers[2 * (i-3)+1]) * POWER_BLOCK_FACTOR * POWER_FACTOR // 10000
+        expected_score = (required_coin_deposit + i) * total_power + total_coin * powers[i] * POWER_BLOCK_FACTOR * POWER_FACTOR // 10000
         assert expected_score == scores[i]
-
-
-def test_inactive_agent_success(pledge_agent, candidate_hub):
-    agent = accounts[1]
-    __candidate_register(agent)
-    a = pledge_agent.agentsMap(agent).dict()
-    assert a['power'] == 0
-    candidate_hub.inactiveAgentMock(agent)
-    a = pledge_agent.agentsMap(agent).dict()
-    assert a['power'] == 1
-    candidate_hub.inactiveAgentMock(agent)
-    a = pledge_agent.agentsMap(agent).dict()
-    assert a['power'] == 2
 
 
 def test_collect_coin_reward_success(validator_set, pledge_agent):
@@ -410,63 +373,6 @@ def test_delegate_coin_failed_with_invalid_candidate(pledge_agent):
         pledge_agent.delegateCoin(agent, {'from': delegator, 'value': required_coin_deposit - 1})
 
 
-def test_delegate_hash_power_success():
-    agent = accounts[1]
-    delegator = accounts[2]
-    account_idx = 2
-    __candidate_register(agent)
-
-    pk_hash, compressed_pk_hash = __delegate_power_success(agent, account_idx)
-    __check_power_delegator(delegator, pk_hash, compressed_pk_hash, agent, 0)
-
-
-def delegate_hash_power_failed_with_invalid_candidate(btc_light_client, pledge_agent):
-    agent = accounts[1]
-    delegator = accounts[2]
-    account_idx = 2
-    btc_block_hash = padding_left("0x12345", 32)
-    public_key = get_public_key_by_idx(account_idx)
-    pk_hash = public_key2PKHash(public_key)
-    btc_light_client.setBlock(btc_block_hash, pk_hash)
-
-    with brownie.reverts("agent is inactivated"):
-        pledge_agent.delegateHashPower(agent, public_key, btc_block_hash, {'from': delegator})
-
-
-def delegate_hash_power_failed_with_duplicated(btc_light_client, pledge_agent):
-    agent = accounts[1]
-    delegator = accounts[2]
-    account_idx = 2
-    __candidate_register(agent)
-
-    btc_block_hash = padding_left("0x12345", 32)
-    public_key = get_public_key_by_idx(account_idx)
-    pk_hash = public_key2PKHash(public_key)
-    btc_light_client.setBlock(btc_block_hash, pk_hash)
-    pledge_agent.delegateHashPower(agent, public_key, btc_block_hash, {'from': delegator})
-
-    with brownie.reverts("delegator has delegated"):
-        pledge_agent.delegateHashPower(agent, public_key, btc_block_hash, {'from': delegator})
-
-
-def test_delegate_hash_power_failed_with_empty_hash_power(btc_light_client, pledge_agent):
-    agent = accounts[1]
-    delegator = accounts[2]
-    account_idx = 2
-    __candidate_register(agent)
-
-    btc_block_hash = padding_left("0x12345", 32)
-    public_key = get_public_key_by_idx(account_idx)
-    pk_hash = public_key2PKHash(public_key)
-
-    with brownie.reverts("the miner has no power"):
-        pledge_agent.delegateHashPower(agent, public_key, btc_block_hash, {'from': delegator})
-
-    btc_light_client.setBlock(btc_block_hash, pk_hash)
-    with brownie.reverts("the delegator is a fake miner"):
-        pledge_agent.delegateHashPower(agent, public_key, btc_block_hash, {'from': accounts[3]})
-
-
 def test_undelegate_coin_success(pledge_agent):
     agent = accounts[1]
     delegator = accounts[2]
@@ -493,22 +399,6 @@ def test_undelegate_coin_failed_with_no_delegate(pledge_agent):
 
     with brownie.reverts("delegator does not exist"):
         pledge_agent.undelegateCoin(agent, {'from': delegator})
-
-
-def test_undelegate_power_success(pledge_agent):
-    agent = accounts[1]
-    account_idx = 2
-    delegator = accounts[account_idx]
-    __candidate_register(agent)
-    pk_hash, compressed_pk_hash = __delegate_power_success(agent, account_idx)
-
-    tx = pledge_agent.undelegatePower({'from': delegator})
-    expect_event(tx, "undelegatedPower", {
-        "agent": agent,
-        "delegator": delegator
-    })
-
-    __check_unpower_delegator(delegator, pk_hash, compressed_pk_hash)
 
 
 def test_transfer_coin_success(pledge_agent):
@@ -568,63 +458,6 @@ def test_transfer_coin_failed_with_same_agent(pledge_agent):
     __delegate_coin_success(agent_source, delegator, 0, required_coin_deposit)
     with brownie.reverts("source agent and target agent are the same one"):
         pledge_agent.transferCoin(agent_source, agent_target, {'from': delegator})
-
-
-def test_transfer_power_success(pledge_agent):
-    agent_source = accounts[1]
-    agent_target = accounts[3]
-    __candidate_register(agent_source)
-    __candidate_register(agent_target)
-    account_idx = 2
-    delegator = accounts[account_idx]
-
-    pk_hash, compressed_pk_hash = __delegate_power_success(agent_source, account_idx)
-    __check_power_delegator(delegator, pk_hash, compressed_pk_hash, agent_source, 0)
-    tx = pledge_agent.transferPower(agent_target, {'from': delegator})
-    expect_event(tx, 'transferredPower', {
-        'sourceAgent': agent_source,
-        'targetAgent': agent_target,
-        'delegator': delegator
-    })
-    __check_power_delegator(delegator, pk_hash, compressed_pk_hash, agent_target, 0)
-
-
-def test_transfer_power_failed_with_no_delegator_in_source_agent(pledge_agent):
-    agent_source = accounts[1]
-    agent_target = accounts[3]
-    __candidate_register(agent_source)
-    __candidate_register(agent_target)
-    account_idx = 2
-    delegator = accounts[account_idx]
-
-    with brownie.reverts("delegator does not exist"):
-        pledge_agent.transferPower(agent_target, {'from': delegator})
-
-
-def test_transfer_power_failed_with_inactive_target_agent(pledge_agent):
-    agent_source = accounts[1]
-    agent_target = accounts[3]
-    __candidate_register(agent_source)
-    account_idx = 2
-    delegator = accounts[account_idx]
-
-    pk_hash, compressed_pk_hash = __delegate_power_success(agent_source, account_idx)
-    __check_power_delegator(delegator, pk_hash, compressed_pk_hash, agent_source, 0)
-
-    with brownie.reverts("agent is inactivated"):
-        pledge_agent.transferPower(agent_target, {'from': delegator})
-
-
-def test_transfer_power_failed_with_same_agent(pledge_agent):
-    agent_source = accounts[1]
-    agent_target = agent_source
-    __candidate_register(agent_source)
-    account_idx = 2
-    delegator = accounts[account_idx]
-
-    __delegate_power_success(agent_source, account_idx)
-    with brownie.reverts("source agent and target agent are the same one"):
-        pledge_agent.transferPower(agent_target, {'from': delegator})
 
 
 def test_claim_reward_success_with_one_agent(pledge_agent, validator_set):
@@ -717,41 +550,6 @@ def __check_coin_delegator(c_delegator, deposit, new_deposit, change_round, rewa
     assert c_delegator['newDeposit'] == new_deposit
     assert c_delegator['changeRound'] == change_round
     assert c_delegator['rewardIndex'] == reward_idx
-
-
-def __delegate_power_success(agent, account_idx):
-    btc_block_hash = padding_left('0x12345', 32)
-    public_key = get_public_key_by_idx(account_idx)
-    pk_hash = public_key2PKHash(public_key)
-    compressed_key = get_public_key_by_idx(account_idx, True)
-    compressed_key_hash = public_key2PKHash(compressed_key)
-    btc_light_client_instance.setBlock(btc_block_hash, pk_hash)
-    delegator = accounts[account_idx]
-    tx = pledge_agent_instance.delegateHashPower(agent, public_key, btc_block_hash, {'from': delegator})
-    expect_event(tx, 'delegatedPower', {
-        "agent": agent,
-        "delegator": delegator,
-        "publickey": public_key,
-        "pkHash": pk_hash,
-        "compressPkHash": compressed_key_hash
-    })
-    return pk_hash, compressed_key_hash
-
-
-def __check_power_delegator(delegator, pk_hash, compressed_pk_hash, agent, power):
-    bd = pledge_agent_instance.btcDelegatorsMap(delegator).dict()
-    assert pk_hash == bd['pkHash']
-    assert compressed_pk_hash == bd['compressedPkHash']
-    assert agent == bd['agent']
-    assert power == bd['power']
-
-
-def __check_unpower_delegator(delegator, pk_hash, compressed_pk_hash):
-    bd = pledge_agent_instance.btcDelegatorsMap(delegator).dict()
-    aa = pledge_agent_instance.btc2ethMap(pk_hash)
-    assert "0x0000000000000000000000000000000000000000" == aa
-    aa = pledge_agent_instance.btc2ethMap(compressed_pk_hash)
-    assert "0x0000000000000000000000000000000000000000" == aa
 
 
 

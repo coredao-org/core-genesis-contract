@@ -38,6 +38,7 @@ pip install -r requirements.txt
 node generate-system.js --mock true
 node generate-candidatehub.js --mock true
 node generate-pledgeagent.js --mock true
+node generate-validatorset.js --mock true
 
 # run brownie tests
 brownie test -v --stateful false

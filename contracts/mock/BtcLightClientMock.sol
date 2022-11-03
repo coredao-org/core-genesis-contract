@@ -1,9 +1,13 @@
 pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 import "../BtcLightClient.sol";
+import "../lib/BytesLib.sol";
 
 contract BtcLightClientMock is BtcLightClient {
-    uint32 _blockHeight;
+    using BytesLib for bytes;
+    uint32 public _blockHeight;
+    uint256 public constant mockScore = 24371874614346;
+    uint32 public constant mockAdjustment = 11;
 
     constructor() BtcLightClient() public {
         _blockHeight = INIT_CHAIN_HEIGHT;
@@ -13,70 +17,43 @@ contract BtcLightClientMock is BtcLightClient {
         rewardForSyncHeader = rewardForSyncHeader / 1e16;
     }
 
-    function setBlock(bytes32 hash, bytes20 coinbase) public {
+    function setBlock(bytes32 hash, bytes32 prevHash, address rewardAddr, address candidateAddr) public {
         _blockHeight = _blockHeight + 1;
-        bytes memory headerBytes = new bytes(80);
-        blockChain[hash] = encode(headerBytes, coinbase, 1000, _blockHeight, 11);
+        bytes memory headerBytes = new bytes(4);
+        headerBytes = headerBytes.concat(abi.encodePacked(prevHash));
+        blockChain[hash] = encode(
+            headerBytes.concat(new bytes(44)), rewardAddr, mockScore, _blockHeight, mockAdjustment, candidateAddr);
     }
 
-    function resetMiners(uint roundTimeTag) public {
+    function setCandidates(uint roundTimeTag, address[] memory candidates) public {
         delete roundPowerMap[roundTimeTag];
-    }
-
-    function setMiners(uint roundTimeTag, bytes20[] memory miners) public {
-        RoundMinersPower storage rp = roundPowerMap[roundTimeTag];
         uint i;
-        for (i=0; i < miners.length; i++) {
-            if (i < rp.miners.length) {
-                rp.miners[i] = miners[i];
-            } else {
-                rp.miners.push(miners[i]);
-            }
-        }
-        while (rp.miners.length > miners.length) {
-          rp.miners.pop();
+        for (i=0; i< candidates.length; i++) {
+            roundPowerMap[roundTimeTag].candidates.push(candidates[i]);
         }
     }
 
-    function setMinerCount(uint roundTimeTag, bytes20 miner, uint count) public {
-        roundPowerMap[roundTimeTag].powerMap[miner] = count;
-    }
-
-    function addMiner(uint roundTimeTag, bytes20 miner, uint count) external {
-        RoundMinersPower storage rp = roundPowerMap[roundTimeTag];
-        uint i;
-        for (i=0; i<rp.miners.length; i++) {
-            if (rp.miners[i] == miner) {
+    function setMiners(uint roundTimeTag, address candidate, address[] memory rewardAddrs) public {
+        RoundPower storage r = roundPowerMap[roundTimeTag];
+        bool exist;
+        for(uint i=0; i<r.candidates.length; i++) {
+            if (r.candidates[i] == candidate) {
+                exist = true;
                 break;
             }
         }
-        if (i == rp.miners.length) {
-            rp.miners.push(miner);
+        if (exist == false) {
+            r.candidates.push(candidate);
         }
-        rp.powerMap[miner] = count;
-    }
-
-    function getMinerPower(uint roundTimeTag, bytes20 miner) external view returns(uint) {
-        return roundPowerMap[roundTimeTag].powerMap[miner];
-    }
-
-    function batchSetMiners(uint[] calldata roundTimeTags, bytes20[][] calldata miners, uint[][] calldata counts) external {
+        delete r.powerMap[candidate];
         uint i;
-        for (i=0; i<roundTimeTags.length; i++) {
-            RoundPower storage rp = roundPowerMap[roundTimeTags[i]];
-            uint j;
-            for (j=0; j < miners[i].length; j++) {
-                uint k;
-                for (k=0; k<rp.miners.length;k++) {
-                    if (rp.miners[k] == miners[i][j]) {
-                        break;
-                    }
-                }
-                if (k == rp.miners.length) {
-                    rp.miners.push(miners[i][j]);
-                }
-                rp.powerMap[miners[i][j]] = counts[i][j];
-            }
+        for (i=0; i<rewardAddrs.length; i++) {
+            r.powerMap[candidate].miners.push(rewardAddrs[i]);
+            r.powerMap[candidate].btcBlocks.push(bytes32(0));
         }
+    }
+
+    function addMinerPowerMock(bytes32 blockHash) external {
+        addMinerPower(blockHash);
     }
 }

@@ -54,9 +54,9 @@ def parse_delegation(agents, block_reward):
             reward = block_reward * item['value'] * btc_count // agent_score[agent['address']]
             delegator_reward[item['address']] += reward
             print(f"coin reward: {agent['address']} on {item['address']} => {reward}")
+        reward_each_power = coin_count * 20000 // 10000 * block_reward // agent_score[agent['address']]
         for item in agent['power']:
-            reward = block_reward * item['value'] * coin_count // 10000
-            reward = reward * 20000 // agent_score[agent['address']]
+            reward = item['value'] * reward_each_power
             delegator_reward[item['address']] += reward
             print(f"power reward: {agent['address']} on {item['address']} => {reward}")
 

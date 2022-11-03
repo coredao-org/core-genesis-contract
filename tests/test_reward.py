@@ -23,11 +23,8 @@ class Status:
 
 class Agent:
     def __init__(self, margin):
-        """
-        delegator => {'coin': 100, 'valid': True}
-        """
-        self.coin_delegators: Dict[str, dict] = {}
-        self.power_delegators: Dict[str, dict] = {}
+        self.coin_delegators: Dict[str, dict] = {}  # delegator => {'coin': 100, 'valid': True}
+        self.power_delegators: Dict[str, int] = {}  # delegator => 100
         self.status = Status.REGISTER
         self.total_power = 0
         self.total_coin = 0
@@ -43,12 +40,9 @@ class Agent:
         else:
             self.coin_delegators[address]['coin'] += value
 
-    def delegate_power(self, address):
-        if address not in self.power_delegators:
-            self.power_delegators[address] = {
-                "power": 0,
-                "valid": True
-            }
+    def delegate_power(self, delegator, count):
+        assert count > 0
+        self.power_delegators[delegator] = count
 
     def copy(self) -> "Agent":
         agent = Agent(self.margin)
@@ -57,7 +51,7 @@ class Agent:
         agent.total_power = self.total_power
         agent.score = self.score
         agent.coin_delegators = {k: deepcopy(v) for k, v in self.coin_delegators.items()}
-        agent.power_delegators = {k: deepcopy(v) for k, v in self.power_delegators.items()}
+        agent.power_delegators = {k: v for k, v in self.power_delegators.items()}
         return agent
 
 
@@ -98,10 +92,6 @@ class StateMachine:
 
         accounts[-2].transfer(self.validator_set.address, Web3.toWei(100000, 'ether'))
 
-        self.address2pkHash = {}
-        for idx, account in enumerate(accounts):
-            self.address2pkHash[account] = public_key2PKHash(get_public_key_by_idx(idx))
-
     def setup(self):
         global N
         N += 1
@@ -119,9 +109,9 @@ class StateMachine:
         self.balance_delta = defaultdict(int)
         self.current_validators: [Validator] = []
         self.round_state = RoundState()
-        self.power_delegation_map: Dict[str, str] = {}
         self.delegator_unclaimed_agents_map = defaultdict(set)
-        self.miners = {}
+        self.unclaimed_power_rewards = set()
+        self.miners = []
         self.slash_counter: Dict[str, int] = defaultdict(int)
         self.consensus2operator = {}
 
@@ -133,7 +123,7 @@ class StateMachine:
                                margin=self.candidate_margin)
             self.__register_candidate(operator)
         turn_round()
-        self.__turn_round([])
+        self.__turn_round([], self.pledge_agent.stateMap(self.pledge_agent.roundTag()).dict())
         for consensus in self.validator_set.getValidators():
             validator = self.validator_set.currentValidatorSet(self.validator_set.currentValidatorSetMap(consensus) - 1).dict()
             self.current_validators.append(
@@ -149,34 +139,11 @@ class StateMachine:
 
     def initialize(self):
         print(f"{'@' * 47} initialize start {'@' * 47}")
-        # set miner power
         # choice 10 miners
         miners = random.sample(accounts[1:-1], 10)
         for miner in miners:
             print(f"miner: {miner}")
-            public_key = get_public_key_by_address(miner)
-            pkHash = public_key2PKHash(public_key)
-            block_hash = '0x' + secrets.token_hex(32)
-            self.btc_light_client.setBlock(block_hash, pkHash)
-            self.miners[miner] = {
-                "public_key": public_key,
-                "block_hash": block_hash
-            }
-        miners_weight = [random.randint(0, 5) for _ in miners]
-        current_round = self.candidate_hub.roundTag()
-        round_list = []
-        miner_list = []
-        power_list = []
-        for i in range(20):
-            _round = current_round - 7 + i
-            round_list.append(_round)
-
-            blocks = random.choices(miners, weights=miners_weight, k=144)
-            blocks_stats = Counter(blocks)
-
-            miner_list.append([self.address2pkHash[address] for address in blocks_stats.keys()])
-            power_list.append(list(blocks_stats.values()))
-        self.btc_light_client.batchSetMiners(round_list, miner_list, power_list)
+        self.miners.extend(miners)
         print(f"{'@' * 48} initialize end {'@' * 48}")
 
     def rule_register_candidate(self):
@@ -205,7 +172,7 @@ class StateMachine:
         tx: TransactionReceipt = self.pledge_agent.delegateCoin(agent, {"value": value, "from": delegator})
         self.__delegate_coin(delegator, agent, value)
 
-        self.__parse_claim_reward_event(tx)
+        self.__parse_event(tx)
 
     def rule_undelegate_coin(self):
         if not self.coin_delegators:
@@ -216,7 +183,7 @@ class StateMachine:
         agent = random.choice(list(self.coin_delegators[delegator].keys()))
         print(f"[UNDELEGATE COIN] >>> delegator = {delegator}, agent = {agent}, coin = {self.coin_delegators[delegator][agent]}")
         tx: TransactionReceipt = self.pledge_agent.undelegateCoin(agent, {'from': delegator})
-        self.__parse_claim_reward_event(tx)
+        self.__parse_event(tx)
         self.__cancel_delegate_coin(delegator, agent)
 
     def rule_transfer_coin(self):
@@ -237,51 +204,22 @@ class StateMachine:
         amount = self.coin_delegators[delegator][source]
         print(f"[TRANSFER COIN] >>> {delegator} transfer from {source} to {target} value {amount}")
         tx: TransactionReceipt = self.pledge_agent.transferCoin(source, target, {'from': delegator})
-        self.__parse_claim_reward_event(tx)
+        self.__parse_event(tx)
         self.__transfer_coin(delegator, source, target, amount)
 
     def rule_delegate_power(self):
-        candidates = self.candidate_hub.getCanDelegateCandidates()
-        if not candidates:
-            return
-        agent = random.choice(candidates)
-        valid_miners = list(set(self.miners.keys()).difference(self.power_delegation_map.keys()))
-        if not valid_miners:
-            return
-        miner = random.choice(valid_miners)
-        self.pledge_agent.delegateHashPower(
-            agent,
-            self.miners[miner]['public_key'],
-            self.miners[miner]['block_hash'],
-            {'from': miner}
-        )
-        self.__delegate_power(miner, agent)
-        self.__add_tracker(miner)
-        print(f"[DELEGATE POWER] >>> {miner} delegate to {agent}")
-
-    def rule_undelegate_power(self):
-        if not self.power_delegation_map:
-            return
-        delegator = random.choice(list(self.power_delegation_map.keys()))
-        print(f"[UNDELEGATE POWER] >>> delegator = {delegator}, agent = {self.power_delegation_map[delegator]}")
-        self.pledge_agent.undelegatePower({'from': delegator})
-        self.__cancel_delegate_power(delegator)
-
-    def rule_transfer_power(self):
-        if not self.power_delegation_map:
-            return
-        delegator = random.choice(list(self.power_delegation_map.keys()))
-        source = self.power_delegation_map[delegator]
         candidates = list(self.candidate_hub.getCanDelegateCandidates())
-        if source in candidates:
-            candidates.remove(source)
-        if not candidates:
-            return
-        target = random.choice(candidates)
-
-        print(f"[TRANSFER POWER] {delegator} transfer from {source} to {target}")
-        self.pledge_agent.transferPower(target, {'from': delegator})
-        self.__transfer_power(delegator, target)
+        candidates.append("0x0000000000000000000000000000000000001234")
+        agent = random.choice(candidates)
+        blocks = random.randint(10, 144//4)
+        miners_weight = [random.randint(0, 5) for _ in self.miners]
+        miners = random.choices(self.miners, weights=miners_weight, k=blocks)
+        self.btc_light_client.setMiners(self.candidate_hub.roundTag() - 6, agent, miners)
+        self.__delegate_power(agent, miners)
+        print(f"[DELEGATE POWER] >>> Agent({agent}) has power({len(miners)}):")
+        for miner, count in Counter(miners).items():
+            print(f"\t{miner}: {count}")
+        self.__log_agents_power_info()
 
     def rule_refuse_delegate(self):
         candidates = self.candidate_hub.getCanDelegateCandidates()
@@ -318,10 +256,12 @@ class StateMachine:
         print(f"{'>' * 46} turn round {_round + 1} start {'<' * 46}")
         valid_candidates = self.candidate_hub.getCanDelegateCandidates()
         tx: TransactionReceipt = turn_round()
-        self.__parse_claim_reward_event(tx)
+        print("events in turn round transaction: --------------")
+        self.__parse_event(tx)
         round_state = self.pledge_agent.stateMap(self.pledge_agent.roundTag()).dict()
         print(f"Round State(read from contract): power => {round_state['power']}, coin => {round_state['coin']}")
-        self.__turn_round(valid_candidates)
+        self.__log_agents_power_info()
+        self.__turn_round(valid_candidates, round_state)
         # update current validators
         self.current_validators.clear()
         print(f"{'-' * 46} current validators {'-' * 46}")
@@ -346,7 +286,12 @@ class StateMachine:
             if self.delegator_unclaimed_agents_map[delegator]:
                 print(f"claim coin reward: delegator: {delegator}, agents: {self.delegator_unclaimed_agents_map[delegator]}")
                 tx: TransactionReceipt = self.pledge_agent.claimReward(delegator, list(self.delegator_unclaimed_agents_map[delegator]))
-                self.__parse_claim_reward_event(tx)
+                self.__parse_event(tx)
+        # claim power reward
+        for delegator in self.unclaimed_power_rewards:
+            print(f"claim power reward: delegator: {delegator}")
+            tx: TransactionReceipt = self.pledge_agent.claimPowerReward({'from': delegator})
+            self.__parse_event(tx)
         # compare balance changed
         for address in self.trackers:
             print(f"check balance: {address} -> {self.balance_delta[address]}")
@@ -383,7 +328,7 @@ class StateMachine:
             if random.randint(1, 3) == 1:
                 self.slash(consensus)
 
-    def __turn_round(self, valid_candidates: list):
+    def __turn_round(self, valid_candidates: list, round_state_in_contract):
         # distributeReward
         for validator in self.current_validators:
             incentive_value = validator.income * self.block_reward_incentive_percent // 100
@@ -405,12 +350,12 @@ class StateMachine:
                         print(f"\t[Coin] {delegator}({item['coin']}) + {reward}")
                         _reward, _ = self.pledge_agent.claimReward.call(delegator, [validator.operator_address])
                         print(f"\t\t[Coin] call claim reward: {_reward}")
-                for delegator, item in agent.power_delegators.items():
-                    if item['valid'] and item['power'] > 0:
-                        reward = delegators_reward * item['power'] * self.round_state.coin_score // 10000
-                        reward = reward * self.power_factor // agent.score
-                        self.balance_delta[delegator] += reward
-                        print(f"\t[Power] {delegator}({item['power']}) + {reward}")
+                for delegator, power_value in agent.power_delegators.items():
+                    self.unclaimed_power_rewards.add(delegator)
+                    reward_each_power = self.power_factor * self.round_state.coin_score // 10000 * delegators_reward // agent.score
+                    reward = reward_each_power * power_value
+                    self.balance_delta[delegator] += reward
+                    print(f"\t[Power] {delegator}(power: {power_value}) + {reward} --- powerRewardMap: {self.pledge_agent.powerRewardMap(delegator)}")
                 validator.income = 0
 
         # calc round state
@@ -420,11 +365,8 @@ class StateMachine:
         for operator, agent in self.agents.items():
             if operator not in valid_candidates:
                 continue
-            total_power = 0
             total_coin = 0
-            for miner in agent.power_delegators:
-                agent.power_delegators[miner]['power'] = self.__get_power(miner, self.candidate_hub.roundTag() - 7)
-                total_power += agent.power_delegators[miner]['power']
+            total_power = sum(agent.power_delegators.values())
             for delegator in agent.coin_delegators:
                 total_coin += agent.coin_delegators[delegator]['coin']
             agent.total_coin = total_coin
@@ -432,7 +374,9 @@ class StateMachine:
             self.round_state.coin_score += total_coin
             self.round_state.power_score += total_power
 
-        print(f"round state(local): [coin: {self.round_state.coin_score}, power: {self.round_state.power_score}]")
+        print(f"round state(local): power => {self.round_state.power_score}, coin => {self.round_state.coin_score}")
+        assert self.round_state.power_score == round_state_in_contract['power']
+        assert self.round_state.coin_score == round_state_in_contract['coin']
 
         for operator, agent in self.agents.items():
             if operator not in valid_candidates:
@@ -445,20 +389,15 @@ class StateMachine:
         for operator in self.agents:
             self.archive_agents[operator] = self.agents[operator].copy()
 
+        # clear power delegate data
+        for agent in self.agents.values():
+            agent.total_power = 0
+            agent.power_delegators = dict()
+
         # decrease slash count
         for consensus in self.slash_counter:
             if self.slash_counter[consensus] > 0:
                 self.slash_counter[consensus] -= self.felony_threshold // self.slash_indicator.DECREASE_RATE()
-
-    def __get_power(self, address, _round):
-        return self.btc_light_client.getMinerPower(_round, self.address2pkHash[address])
-
-    def __delegate_power(self, delegator: str, agent: str):
-        if delegator in self.power_delegation_map:
-            old_agent = self.power_delegation_map[delegator]
-            self.agents[old_agent].power_delegators.pop(delegator)
-        self.power_delegation_map[delegator] = agent
-        self.agents[agent].delegate_power(delegator)
 
     def __delegate_coin(self, delegator, agent, amount, update_balance=True):
         self.agents[agent].delegate_coin(delegator, amount)
@@ -488,19 +427,20 @@ class StateMachine:
         if not self.coin_delegators[delegator]:
             self.coin_delegators.pop(delegator)
 
-    def __cancel_delegate_power(self, delegator: str):
-        agent = self.power_delegation_map.pop(delegator)
-        self.agents[agent].power_delegators.pop(delegator)
-        if agent in self.archive_agents and delegator in self.archive_agents[agent].power_delegators:
-            self.archive_agents[agent].power_delegators[delegator]['valid'] = False
-
     def __transfer_coin(self, delegator, source, target, amount):
         self.__cancel_delegate_coin(delegator, source, update_balance=False)
         self.__delegate_coin(delegator, target, amount, update_balance=False)
 
-    def __transfer_power(self, delegator, target):
-        self.__cancel_delegate_power(delegator)
-        self.__delegate_power(delegator, target)
+    def __delegate_power(self, agent_address: str, miners: list):
+        if agent_address not in self.agents:
+            return
+        agent = self.agents[agent_address]
+        agent.total_power = 0
+        agent.power_delegators = dict()
+        for miner, count in Counter(miners).items():
+            agent.delegate_power(miner, count)
+            self.__add_tracker(miner)
+        agent.total_power = len(miners)
 
     def __register_candidate(self, operator):
         if operator in self.agents:
@@ -536,26 +476,22 @@ class StateMachine:
         if address not in self.trackers:
             self.trackers[address] = get_tracker(address)
 
-    def __parse_claim_reward_event(self, tx: TransactionReceipt):
-        if 'directTransfer' in tx.events:
-            for event in tx.events['directTransfer']:
-                print(f"\tdirectTransfer >>> {event}")
+    @staticmethod
+    def __parse_event(tx: TransactionReceipt):
+        events = ['directTransfer', 'claimedReward', 'logCalcPowerRewardFactor', 'logCalcCoinRewardFactor',
+                  'logCalcScore', 'claimedPowerReward', 'roundReward']
 
-        if 'claimedReward' in tx.events:
-            for event in tx.events["claimedReward"]:
-                print(f"\tClaimReward >>> {event['delegator']} receive {event['amount']}")
+        for event_name in events:
+            if event_name in tx.events:
+                for event in tx.events[event_name]:
+                    print(f"\t{event_name} >>> {event}")
 
-        if "logCalcPowerRewardFactor" in tx.events:
-            for event in tx.events['logCalcPowerRewardFactor']:
-                print(f"\tlogCalcPowerRewardFactor >>> {event}")
-
-        if "logCalcCoinRewardFactor" in tx.events:
-            for event in tx.events['logCalcCoinRewardFactor']:
-                print(f"\tlogCalcCoinRewardFactor >>> {event}")
-
-        if "logCalcScore" in tx.events:
-            for event in tx.events['logCalcScore']:
-                print(f"\tlogCalcScore >>> {event}")
+    def __log_agents_power_info(self):
+        print("current agents power info >>>>>>>>>>>>>>>>")
+        for address, agent in self.agents.items():
+            print(f"{address} total power is {agent.total_power}")
+            print(agent.power_delegators)
+        print("<" * 42)
 
     def __slash(self, _validator: dict):
         consensus = _validator['consensusAddress']

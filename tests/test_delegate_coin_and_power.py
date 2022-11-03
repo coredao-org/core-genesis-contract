@@ -1,10 +1,8 @@
-import secrets
-
 import pytest
 from web3 import Web3
 from brownie import accounts
-from .common import turn_round, register_candidate, set_miner_power
-from .utils import get_tracker, get_public_key_by_idx, public_key2PKHash
+from .common import turn_round, register_candidate
+from .utils import get_tracker
 from .calc_reward import parse_delegation, set_delegate
 
 
@@ -59,23 +57,10 @@ def test_distribute_power_reward_during_turn_round(pledge_agent, btc_light_clien
     pledge_agent.delegateCoin(operators[0], {"value": MIN_INIT_DELEGATE_VALUE * 4, "from": clients[1]})
     pledge_agent.delegateCoin(operators[1], {"value": MIN_INIT_DELEGATE_VALUE * 9, "from": clients[2]})
 
-    # prepare btc block
-    clients_pub_keys = [get_public_key_by_idx(idx) for idx in range(3)]
-    clients_pkHash_list = [public_key2PKHash(public_key) for public_key in clients_pub_keys]
-    clients_btc_block_hash = ['0x' + secrets.token_hex(32) for _ in clients]
-    for idx in range(3):
-        btc_light_client.setBlock(clients_btc_block_hash[idx], clients_pkHash_list[idx])
-
     round_time_tag = candidate_hub.roundTag() - 6
-    btc_light_client.setMiners(round_time_tag, clients_pkHash_list)
-    btc_light_client.setMinerCount(round_time_tag, clients_pkHash_list[0], 2)
-    btc_light_client.setMinerCount(round_time_tag, clients_pkHash_list[1], 1)
-    btc_light_client.setMinerCount(round_time_tag, clients_pkHash_list[2], 2)
 
-    # delegate power
-    pledge_agent.delegateHashPower(operators[0], clients_pub_keys[0], clients_btc_block_hash[0], {"from": clients[0]})
-    pledge_agent.delegateHashPower(operators[0], clients_pub_keys[1], clients_btc_block_hash[1], {"from": clients[1]})
-    pledge_agent.delegateHashPower(operators[1], clients_pub_keys[2], clients_btc_block_hash[2], {"from": clients[2]})
+    btc_light_client.setMiners(round_time_tag, operators[0], [clients[0]] * 2 + [clients[1]])
+    btc_light_client.setMiners(round_time_tag, operators[1], [clients[2]] * 2)
 
     turn_round()
     """
@@ -113,7 +98,9 @@ def test_distribute_power_reward_during_turn_round(pledge_agent, btc_light_clien
 
     turn_round(consensuses, tx_fee=TX_FEE)
 
+    pledge_agent.claimPowerReward({'from': clients[0]})
     pledge_agent.claimReward(clients[0], operators)
+    pledge_agent.claimPowerReward({'from': clients[1]})
     pledge_agent.claimReward(clients[1], operators)
 
     assert tracker1.delta() == delegate_reward[clients[0]]
@@ -125,7 +112,7 @@ def test_distribute_power_reward_during_turn_round(pledge_agent, btc_light_clien
     pytest.param(1, id="adjacent rounds"),
     pytest.param(2, id="spanning multiple rounds"),
 ])
-def test_delegate2one_agent_twice_in_different_rounds(candidate_hub, pledge_agent, set_candidate, internal):
+def test_delegate2one_agent_twice_in_different_rounds(candidate_hub, pledge_agent, btc_light_client, set_candidate, internal):
     round_time_tag = 7
     candidate_hub.setControlRoundTimeTag(True)
     candidate_hub.setRoundTag(round_time_tag)
@@ -136,18 +123,18 @@ def test_delegate2one_agent_twice_in_different_rounds(candidate_hub, pledge_agen
     pledge_agent.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE})
     turn_round(round_count=internal)
 
-    public_key, btc_block_hash = set_miner_power(candidate_hub.roundTag() - 6, [0], [100])
-    pledge_agent.delegateHashPower(operator, public_key, btc_block_hash)
+    btc_light_client.setMiners(candidate_hub.roundTag() - 6, operator, [accounts[0]] * 100)
 
     turn_round()
 
     tracker = get_tracker(accounts[0])
     turn_round([consensus], tx_fee=TX_FEE)
+    pledge_agent.claimPowerReward({'from': accounts[0]})
     pledge_agent.claimReward(accounts[0], [operator])
     assert tracker.delta() == BLOCK_REWARD / 2
 
 
-def test_scenario1(candidate_hub, pledge_agent):
+def test_scenario1(candidate_hub, pledge_agent, btc_light_client):
     """
     round x delegate coin to N1, delegate power to N2, round x+2 claim reward
     """
@@ -159,12 +146,10 @@ def test_scenario1(candidate_hub, pledge_agent):
     turn_round()
 
     round_tag = candidate_hub.roundTag() - 7
-    public_key, btc_block_hash = set_miner_power(round_tag, [0], [1])
-    set_miner_power(round_tag + 1, [0], [1])
-    set_miner_power(round_tag + 2, [0], [1])
 
+    btc_light_client.setMiners(round_tag + 1, accounts[2], [accounts[0]])
+    btc_light_client.setMiners(round_tag + 2, accounts[2], [accounts[0]])
     pledge_agent.delegateCoin(accounts[1], {'value': MIN_INIT_DELEGATE_VALUE, 'from': accounts[0]})
-    pledge_agent.delegateHashPower(accounts[2], public_key, btc_block_hash, {'from': accounts[0]})
 
     _, delegator_reward = parse_delegation([{
         "address": accounts[1],
@@ -184,12 +169,13 @@ def test_scenario1(candidate_hub, pledge_agent):
 
     tracker = get_tracker(accounts[0])
     turn_round([consensus1, consensus2], tx_fee=TX_FEE)
+    pledge_agent.claimPowerReward({'from': accounts[0]})
     assert tracker.delta() == power_reward
     pledge_agent.claimReward(accounts[0], accounts[1:3])
     assert tracker.delta() == coin_reward
 
 
-def test_scenario2(candidate_hub, pledge_agent):
+def test_scenario2(candidate_hub, pledge_agent, btc_light_client):
     """
     round x delegate coin to N1, round x+1 delegate power to N2, round x+3 claim reward
     """
@@ -204,10 +190,8 @@ def test_scenario2(candidate_hub, pledge_agent):
     turn_round()
 
     round_tag = candidate_hub.roundTag() - 7
-    public_key, btc_block_hash = set_miner_power(round_tag, [0], [1])
-    set_miner_power(round_tag + 1, [0], [1])
-    set_miner_power(round_tag + 2, [0], [1])
-    pledge_agent.delegateHashPower(accounts[2], public_key, btc_block_hash, {'from': accounts[0]})
+    btc_light_client.setMiners(round_tag + 1, accounts[2], [accounts[0]])
+    btc_light_client.setMiners(round_tag + 2, accounts[2], [accounts[0]])
     turn_round()
 
     _, delegator_reward = parse_delegation([{
@@ -226,17 +210,18 @@ def test_scenario2(candidate_hub, pledge_agent):
 
     tracker = get_tracker(accounts[0])
     turn_round([consensus1, consensus2], tx_fee=TX_FEE)
+    pledge_agent.claimPowerReward({'from': accounts[0]})
     assert tracker.delta() == power_reward
     pledge_agent.claimReward(accounts[0], accounts[1:3])
     assert tracker.delta() == coin_reward
 
 
-def test_scenario3(candidate_hub, pledge_agent):
+def test_scenario3(candidate_hub, pledge_agent, btc_light_client):
     """
     round x delegate coin to N1,
     round x+1 delegate power to N2,
     round x+2 delegate coin to N3,
-    round x+4 transfer from N1 to N3
+    round x+4 transfer coin from N1 to N3
     round x+6 claim reward
     """
     candidate_hub.setControlRoundTimeTag(True)
@@ -252,10 +237,11 @@ def test_scenario3(candidate_hub, pledge_agent):
     turn_round()
 
     round_tag = candidate_hub.roundTag() - 7
-    public_key, btc_block_hash = set_miner_power(round_tag, [0], [1])
-    for i in range(1, 5):
-        set_miner_power(round_tag + i, [0], [1])
-    pledge_agent.delegateHashPower(operators[1], public_key, btc_block_hash, {'from': accounts[0]})
+
+    btc_light_client.setMiners(round_tag, operators[1], [accounts[0]])
+    for i in range(0, 5):
+        btc_light_client.setMiners(round_tag + i, operators[1], [accounts[0]])
+
     turn_round()
 
     pledge_agent.delegateCoin(operators[2], {'value': MIN_INIT_DELEGATE_VALUE, 'from': accounts[0]})
@@ -281,6 +267,7 @@ def test_scenario3(candidate_hub, pledge_agent):
 
     tracker = get_tracker(accounts[0])
     turn_round(consensuses, tx_fee=TX_FEE)
+    pledge_agent.claimPowerReward({'from': accounts[0]})
     assert tracker.delta() == power_reward
     pledge_agent.transferCoin(operators[0], operators[2])
     assert tracker.delta() == BLOCK_REWARD // 2 * 2
@@ -299,57 +286,14 @@ def test_scenario3(candidate_hub, pledge_agent):
     }], BLOCK_REWARD // 2)
     power_reward = delegator_reward[accounts[0]] - BLOCK_REWARD // 2
 
+    pledge_agent.claimPowerReward({'from': accounts[0]})
     assert tracker.delta() == power_reward * 2
 
     pledge_agent.claimReward(accounts[0], operators)
     assert tracker.delta() == BLOCK_REWARD // 2 * 2
 
 
-def test_scenario4(candidate_hub, pledge_agent):
-    """
-    round x delegate coin to N1,
-    round x+1 delegate power to N2,
-    round x+2 delegate coin to N3,
-    round x+4 transfer power to N3
-    round x+6 claim reward
-    """
-    round_time_tag = 7
-    candidate_hub.setControlRoundTimeTag(True)
-    candidate_hub.setRoundTag(round_time_tag)
-
-    operators = accounts[1:4]
-    consensuses = []
-    for operator in operators:
-        consensuses.append(register_candidate(operator=operator))
-    turn_round()
-
-    pledge_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE, 'from': accounts[0]})
-    turn_round()
-
-    round_time_tag = candidate_hub.roundTag() - 6
-    public_key, btc_block_hash = set_miner_power(round_time_tag, [0], [100])
-    for i in range(1, 5):
-        set_miner_power(round_time_tag + i, [0], [100])
-    pledge_agent.delegateHashPower(operators[1], public_key, btc_block_hash, {'from': accounts[0]})
-    turn_round()
-    pledge_agent.delegateCoin(operators[2], {'value': MIN_INIT_DELEGATE_VALUE, 'from': accounts[0]})
-    turn_round()
-
-    tracker = get_tracker(accounts[0])
-    turn_round(consensuses, tx_fee=TX_FEE)
-    assert tracker.delta() == BLOCK_REWARD // 2
-    pledge_agent.transferPower(operators[2], {'from': accounts[0]})
-    assert tracker.delta() == 0
-    turn_round(consensuses, tx_fee=TX_FEE)
-    assert tracker.delta() == 0
-    turn_round(consensuses, tx_fee=TX_FEE)
-    assert tracker.delta() == BLOCK_REWARD // 2 * 100 * 2 * 201 // 50300
-
-    pledge_agent.claimReward(accounts[0], operators)
-    assert tracker.delta() == BLOCK_REWARD // 2 * 5 + BLOCK_REWARD // 2 * 100 * 101 // 50300
-
-
-def test_scenario5(candidate_hub, pledge_agent, validator_set):
+def test_scenario4(candidate_hub, pledge_agent, validator_set, btc_light_client):
     """
     round
         x P1 delegate coin to N1, power to N2
@@ -369,14 +313,12 @@ def test_scenario5(candidate_hub, pledge_agent, validator_set):
     turn_round()
 
     round_tag = candidate_hub.roundTag() - 7
-    public_key_list, btc_block_hash_list = set_miner_power(round_tag, [0, 1], [1, 2])
-    for i in range(1, 5):
-        set_miner_power(round_tag + i, [0, 1], [1, 2])
+    for i in range(0, 5):
+        btc_light_client.setMiners(round_tag + i, operators[1], [accounts[0]])
+        btc_light_client.setMiners(round_tag + i, operators[0], [accounts[1]] * 2)
 
     pledge_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE * 4, 'from': accounts[0]})
-    pledge_agent.delegateHashPower(operators[1], public_key_list[0], btc_block_hash_list[0], {'from': accounts[0]})
     pledge_agent.delegateCoin(operators[1], {'value': MIN_INIT_DELEGATE_VALUE, 'from': accounts[1]})
-    pledge_agent.delegateHashPower(operators[0], public_key_list[1], btc_block_hash_list[1], {'from': accounts[1]})
 
     _, delegator_reward = parse_delegation([{
         "address": operators[0],
@@ -397,6 +339,8 @@ def test_scenario5(candidate_hub, pledge_agent, validator_set):
     tracker1 = get_tracker(accounts[1])
     turn_round(consensuses, tx_fee=TX_FEE)
 
+    pledge_agent.claimPowerReward({'from': accounts[0]})
+    pledge_agent.claimPowerReward({'from': accounts[1]})
     pledge_agent.claimReward(accounts[0], operators)
     pledge_agent.claimReward(accounts[1], operators)
 
@@ -418,7 +362,7 @@ def test_scenario5(candidate_hub, pledge_agent, validator_set):
     assert tracker1.delta() == delegator_reward[accounts[1]]
 
 
-def test_scenario6(candidate_hub, pledge_agent, validator_set):
+def test_scenario5(candidate_hub, pledge_agent, validator_set, btc_light_client):
     """
     round X: N has power, delegate to A
     round X+1: A didn't become validator
@@ -436,8 +380,8 @@ def test_scenario6(candidate_hub, pledge_agent, validator_set):
     consensus2 = register_candidate(operator=operator)
 
     round_time_tag = candidate_hub.roundTag() - 6
-    public_key, btc_block_hash = set_miner_power(round_time_tag, [0], [1])
-    pledge_agent.delegateHashPower(operator, public_key, btc_block_hash, {'from': accounts[0]})
+    btc_light_client.setMiners(round_time_tag, operator, [accounts[0]])
+
     candidate_hub.refuseDelegate({'from': operator})
     turn_round()
 
@@ -452,10 +396,11 @@ def test_scenario6(candidate_hub, pledge_agent, validator_set):
     assert len(validator_set.getValidators()) == 2
     turn_round([consensus1, consensus2], tx_fee=TX_FEE)
 
+    pledge_agent.claimPowerReward({'from': accounts[0]})
     assert tracker.delta() == 0
 
 
-def test_scenario7(candidate_hub, pledge_agent, validator_set):
+def test_scenario6(candidate_hub, pledge_agent, validator_set):
     agent0xD53 = accounts.at('0xD53434e5DcD1127dB61aeD63d19bB9d044F59BCE', force=True)
     accounts[0].transfer(agent0xD53, ONE_ETHER)
     agent0x97b = accounts.at('0x97bBEe4F4CDf2709945f5869BE5b58BF349ead63', force=True)
@@ -509,3 +454,24 @@ def test_scenario7(candidate_hub, pledge_agent, validator_set):
 
     pledge_agent.claimReward(delegator0xB66, [agent0xDe7])
     assert tracker.delta() == BLOCK_REWARD // 2 * 3 - MIN_INIT_DELEGATE_VALUE
+
+
+def test_scenario7(pledge_agent, btc_light_client, candidate_hub, set_candidate):
+    """
+    round X: N has power, delegate to A
+    round X+1: N has not power
+    round X+1: N claim power reward
+    """
+    round_time_tag = 7
+    candidate_hub.setControlRoundTimeTag(True)
+    candidate_hub.setRoundTag(round_time_tag)
+
+    btc_light_client.setMiners(candidate_hub.roundTag() - 6, accounts[1], [accounts[0]])
+    consensus, operator = set_candidate
+    turn_round()
+    turn_round([consensus], tx_fee=TX_FEE)
+
+    tracker = get_tracker(accounts[0])
+    pledge_agent.claimPowerReward({'from': accounts[0]})
+    assert tracker.delta() == BLOCK_REWARD / 2
+

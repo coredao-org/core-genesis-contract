@@ -51,30 +51,6 @@ def turn_round(miners: list = None, tx_fee=100, round_count=1):
     return tx
 
 
-def set_miner_power(round_tag, idx_list, power_list):
-    assert len(idx_list) == len(power_list)
-
-    ret_public_key = []
-    ret_btc_block_hash = []
-
-    for idx, power in zip(idx_list, power_list):
-        if not isinstance(idx, int):
-            public_key = get_public_key_by_address(idx)
-        else:
-            public_key = get_public_key_by_idx(idx)
-        ret_public_key.append(public_key)
-        pkHash = public_key2PKHash(public_key)
-        btc_block_hash = '0x' + secrets.token_hex(32)
-        ret_btc_block_hash.append(btc_block_hash)
-
-        BtcLightClientMock[0].setBlock(btc_block_hash, pkHash)
-        BtcLightClientMock[0].addMiner(round_tag, pkHash, power)
-
-    if len(ret_public_key) == 1:
-        return ret_public_key[0], ret_btc_block_hash[0]
-    return ret_public_key, ret_btc_block_hash
-
-
 def execute_proposal(target, value, signature, calldata, msg):
     tx = GovHubMock[0].propose([target], [value], [signature], [calldata], [msg])
     proposal_id = tx.events['ProposalCreated'][0]['id']

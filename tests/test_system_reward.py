@@ -66,7 +66,7 @@ def test_update_param_incentive_balance_cap_with_unmatched_length(system_reward)
 
 def test_update_param_incentive_balance_cap_with_value_out_of_range(system_reward):
     with brownie.reverts("the incentiveBalanceCap out of range"):
-        system_reward.updateParam("incentiveBalanceCap", "0x00000000000000000000000000000000000000000000d3c21bcecceda0ffffff")
+        system_reward.updateParam("incentiveBalanceCap", "0x0000000000000000000000000000000000000000000000000000000000000000")
 
 
 def test_update_param_incentive_balance_cap_success(system_reward):
