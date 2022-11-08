@@ -29,18 +29,17 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   // key: candidate's operateAddr
   mapping(address => Agent) public agentsMap;
 
-  // This field stores power reward when turn round,
-  // owner can claim coins in claimPowerReward.
-  // It is use in upgrade v1, replace the position of btcDelegatorsMap due to
-  // btcDelegatorsMap is empty.
+  // this field is used to store rewards of delegated hash powers
+  // key: reward address set by BTC miners
+  // value: amount of CORE tokens claimable
   mapping(address => uint256) public powerRewardMap;
 
-  // This field will be unused after upgrade v1 in testnet.
-  // It is only occupy the position for data's compatibility
+  // This field is not used in the latest implementation
+  // It stays here in order to keep data compatibility for TestNet upgrade
   mapping(bytes20 => address) public btc2ethMap;
 
   // key: round index
-  // value: key state information state of round
+  // value: useful state information of round
   mapping(uint256 => RoundState) public stateMap;
 
   // roundTag is set to be timestamp / round interval,
@@ -153,8 +152,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
     totalPower = 1;
     totalCoin = 1;
-    // set power and coin
-    // the passed caller make sure each powerCandidates is valid or zero
+    // setup `power` and `coin` values for every candidate
     for (uint256 i = 0; i < candidateSize; ++i) {
       Agent storage a = agentsMap[candidates[i]];
       // in order to improve accuracy, the calculation of power is based on 10^18
@@ -194,22 +192,29 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
   }
 
-  /// Distribute power rewards for each miner
-  /// This method will be invoked after `function addRoundReward`.
-  /// @param candidate candidate operator addresses
-  /// @param miners List of BTC miners with hash power in last round
+  /// Distribute rewards for delegated hash power on one validator candidate
+  /// This method is called at the beginning of `turn round` workflow
+  /// @param candidate The operator address of the validator candidate
+  /// @param miners List of BTC miners who delegated hash power to the candidate
   function distributePowerReward(address candidate, address[] memory miners) external override onlyCandidate {
-    // 1 check whether the round power is empty, if so, return
+    // if no hash power is delegated in the round, return
     RoundState storage rs = stateMap[roundTag];
     if (rs.power == 1) {
       return;
     }
-    // 2 distribute each validator
+    // distribute rewards to every miner
+    // note that the miners are represented in the form of reward addresses
+    // and they can be duplicated because everytime a miner delegates a BTC block
+    // to a validator on Core blockchain, a new record is added in BTCLightClient
     Agent storage a = agentsMap[candidate];
     uint256 l = a.rewardSet.length;
-    if (l == 0) return;
+    if (l == 0) {
+      return;
+    }
     Reward storage r = a.rewardSet[l-1];
-    if (r.totalReward == 0 || r.round != roundTag) return;
+    if (r.totalReward == 0 || r.round != roundTag) {
+      return;
+    }
     uint256 reward = rs.coin * POWER_BLOCK_FACTOR * rs.powerFactor / 10000 * r.totalReward / r.score;
     uint256 totalReward = reward * miners.length;
     require(r.remainReward >= totalReward, "there is not enough reward");
@@ -254,7 +259,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     emit transferredCoin(sourceAgent, targetAgent, msg.sender, deposit, newDeposit);
   }
 
-  /// Claim reward for a coin delegator
+  /// Claim reward for coin delegate
   /// @param delegator The delegator address
   /// @param agentList The list of validators to claim rewards on
   /// @return (Amount claimed, Are all rewards claimed)
@@ -284,7 +289,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return (rewardSum, roundLimit >= 0);
   }
 
-  /// Claim reward for a power delegator
+  /// Claim reward for hash power delegate
   function claimPowerReward() external {
     uint256 reward = powerRewardMap[msg.sender];
     if (reward == 0) {

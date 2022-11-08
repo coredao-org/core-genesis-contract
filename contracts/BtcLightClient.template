@@ -10,7 +10,6 @@ import "./System.sol";
 
 /// This contract implements a BTC light client on Core blockchain
 /// Relayers store BTC blocks to Core blockchain by calling this contract
-/// This contract calculates powers of BTC miners in each round
 /// Which is used to calculate hybrid score and reward distribution
 contract BtcLightClient is ILightClient, System, IParamSubscriber{
   using SafeMath for uint256;
@@ -70,9 +69,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   mapping(uint256 => RoundPower) roundPowerMap;
 
   // key is blockHash, value composites of following elements
-  // | header  |reserved | rewardAddr | score    | height  | ADJUSTMENT | Candidate |
-  //                                                       |Hashes index|           |
-  // | 80 bytes| 4 bytes | 20 bytes   | 16 bytes | 4 bytes | 4 bytes    | 20 bytes  |
+  // | header   |reserved | reward address | score    | height  | ADJUSTMENT hash index| candidate address |                                                                
+  // | 80 bytes | 4 bytes | 20 bytes       | 16 bytes | 4 bytes | 4 bytes              | 20 bytes          |
   // header := version, prevBlock, MerkleRoot, Time, Bits, Nonce
   mapping(bytes32 => bytes) public blockChain;
   mapping(uint32 => bytes32) public adjustmentHashes;
@@ -127,7 +125,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
     require(blockHeight + 2160 > getHeight(heaviestBlock), "can't sync header 15 days ago");
 
-    // verify MerkleRoot & pickup candidate address, reward address, bindingHash.
+    // verify MerkleRoot & pickup candidate address, reward address and bindingHash.
     uint256 length = blockBytes.length + 32;
     bytes memory input = slice(blockBytes, 0, blockBytes.length);
     bytes32[4] memory result;
@@ -165,8 +163,11 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       countInRound = 0;
     }
 
+    // bindingHash is left for future use
+    // BTC miners who add latest Core block hash to their OP_RETURN output 
+    // will be incentivized with extra rewards
     if (bindingHash != 0) {
-      // Todo in future distributeBindingReward
+      // Todo for future use
     }
 
     // equality allows block with same score to become an (alternate) Tip, so
@@ -194,7 +195,9 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       address miner = getRewardAddress(blockHash);
       RoundPower storage r = roundPowerMap[roundTimeTag];
       uint256 power = r.powerMap[candidate].miners.length;
-      if (power == 0) r.candidates.push(candidate);
+      if (power == 0) {
+        r.candidates.push(candidate);
+      }
       r.powerMap[candidate].miners.push(miner);
       r.powerMap[candidate].btcBlocks.push(blockHash);
     }
@@ -275,7 +278,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   function encode(bytes memory headerBytes, address rewardAddr, uint256 scoreBlock,
       uint32 blockHeight, uint32 adjustment, address candidateAddr) internal pure returns (bytes memory nodeBytes) {
     nodeBytes = new bytes(160);
-    // keep 4 reserved bytes
+    // keep 4 reserved bytes in `rewardAddrValue` field
     uint256 rewardAddrValue = uint256(uint160(rewardAddr)) << 64;
     uint256 v = (scoreBlock << (128)) + (uint256(blockHeight) << (96)) + (uint256(adjustment) << 64);
     uint256 candidateValue = uint256(uint160(candidateAddr)) << 96;
@@ -553,10 +556,10 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     return heaviestBlock;
   }
 
-  /// Get powers of a specific round with given candidates
+  /// Get powers of given candidates (number of BTC blocks delegated to candidates) in a specific round
   /// @param roundTimeTag The specific round time
   /// @param candidates The given candidates to get their powers
-  /// @return powers The corresponding powers of miners
+  /// @return powers The corresponding powers of given candidates
   function getRoundPowers(uint256 roundTimeTag, address[] memory candidates) external override view returns (uint256[] memory powers) {
     uint256 count = candidates.length;
     powers = new uint256[](count);
@@ -568,18 +571,18 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     return powers;
   }
 
-  /// Get miners of a specific round with given candidate
+  /// Get miners (in the form of reward addresses) who delegated to a given candidate in a specific round
   /// @param roundTimeTag The specific round time
   /// @param candidate The given candidate to get its miners
-  /// @return miners The miners who produced BTC blocks in the round
+  /// @return miners The miners who delegated to the candidate in the round
   function getRoundMiners(uint256 roundTimeTag, address candidate) external override view returns (address[] memory miners) {
     return roundPowerMap[roundTimeTag].powerMap[candidate].miners;
   }
 
-  /// Get BTC blocks of a specific round with given candidate
+  /// Get BTC blocks delegated to a given candidate in a specific round
   /// @param roundTimeTag The specific round time
   /// @param candidate The given candidate to get its blocks
-  /// @return blocks The blocks who delegate on the given candidate in the round
+  /// @return blocks The blocks delegated to the candidate in the round
   function getRoundBlocks(uint256 roundTimeTag, address candidate) external view returns (bytes32[] memory blocks) {
     return roundPowerMap[roundTimeTag].powerMap[candidate].btcBlocks;
   }

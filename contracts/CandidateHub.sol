@@ -143,8 +143,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     // distribute rewards for the about to end round
     IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward();
 
-    // fetch valid BTC miners of the about to end round; 
-    // which will be used to calculate rewards for BTC hash delegators later
+    // fetch BTC miners who delegated hash power in the about to end round; 
+    // and distribute rewards to them
     address[] memory lastCandidates = ILightClient(LIGHT_CLIENT_ADDR).getRoundCandidates(roundTag-7);
     for (uint256 i = 0; i < lastCandidates.length; i++) {
       address[] memory miners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(roundTag-7, lastCandidates[i]);
@@ -169,17 +169,15 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
     uint256[] memory powers;
     address[] memory candidates = new address[](validCount);
-    {
-      uint256 j = 0;
-      for (uint256 i = 0; i < candidateSize; i++) {
-        if (statusList[i] == SET_CANDIDATE) {
-          candidates[j++] = candidateSet[i].operateAddr;
-        }
+    uint256 j = 0;
+    for (uint256 i = 0; i < candidateSize; i++) {
+      if (statusList[i] == SET_CANDIDATE) {
+        candidates[j++] = candidateSet[i].operateAddr;
       }
-      // fetch the valid candidates' powers, 
-      // which is used to calculate hybrid score for validators in the new round
-      powers = ILightClient(LIGHT_CLIENT_ADDR).getRoundPowers(roundTag-7, candidates);
     }
+    // fetch hash power delegated on list of candidates
+    // which is used to calculate hybrid score for validators in the new round
+    powers = ILightClient(LIGHT_CLIENT_ADDR).getRoundPowers(roundTag-7, candidates);
 
     // calculate the hybrid score for all valid candidates and 
     // choose top ones to form the validator set of the new round
