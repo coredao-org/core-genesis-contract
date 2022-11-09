@@ -135,8 +135,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     /* solium-disable-next-line */
     assembly {
       // call precompiled contract contracts_lightclient.go 
-      // contract address: 0x65
-      if iszero(staticcall(not(0), 0x65, input, length, result, 128)) {
+      // contract address: 0x64
+      if iszero(staticcall(not(0), 0x64, input, length, result, 128)) {
         revert(0, 0)
       }
       candidateAddr := mload(add(result, 0))
