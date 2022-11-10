@@ -6,13 +6,12 @@ import "./interface/ICandidateHub.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/IPledgeAgent.sol";
 import "./interface/ISlashIndicator.sol";
+import "./interface/ILightClient.sol";
 import "./System.sol";
-import "./lib/SafeMath.sol";
 
 /// This contract manages all validator candidates on Core blockchain
 /// It also exposes the method `turnRound` for the consensus engine to execute the `turn round` workflow
 contract CandidateHub is ICandidateHub, System, IParamSubscriber {
-  using SafeMath for uint256;
 
   int256 public constant INIT_REQUIRED_MARGIN = 1e22;
   int256 public constant INIT_DUES = 1e20;

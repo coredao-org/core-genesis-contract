@@ -1,8 +1,6 @@
 pragma solidity 0.6.12;
 
-import "./interface/ISystemReward.sol";
 import "./interface/IRelayerHub.sol";
-import "./interface/ILightClient.sol";
 
 contract System {
 
