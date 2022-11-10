@@ -43,7 +43,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   }
 
   /// Receive funds from system, burn the portion which exceeds cap
-  function receiveRewards() external payable override {
+  function receiveRewards() external payable override onlyInit {
     if (msg.value > 0) {
       if (address(this).balance > incentiveBalanceCap) {
         uint256 value = address(this).balance - incentiveBalanceCap;
