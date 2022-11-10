@@ -81,9 +81,6 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   event StoreHeader(bytes32 indexed blockHash, address candidate, address indexed rewardAddr, uint32 indexed height, bytes32 bindingHash);
   event paramChange(string key, bytes value);
 
-  /* solium-disable-next-line */
-  constructor() public {}
-
   /*********************** init **************************/
   /// Initialize 
   function init() external onlyNotInit {
