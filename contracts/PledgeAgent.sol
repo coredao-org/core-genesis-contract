@@ -114,9 +114,10 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     override
     onlyValidator
   {
-    require(agentList.length == rewardList.length, "the length of agentList and rewardList should be equal");
+    uint256 agentSize = agentList.length;
+    require(agentSize == rewardList.length, "the length of agentList and rewardList should be equal");
     RoundState memory rs = stateMap[roundTag];
-    for (uint256 i = 0; i < agentList.length; ++i) {
+    for (uint256 i = 0; i < agentSize; ++i) {
       Agent storage a = agentsMap[agentList[i]];
       if (a.rewardSet.length == 0) {
         continue;
@@ -185,7 +186,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     stateMap[round] = rs;
 
     roundTag = round;
-    for (uint256 i = 0; i < validators.length; ++i) {
+    uint256 validatorSize = validators.length;
+    for (uint256 i = 0; i < validatorSize; ++i) {
       Agent storage a = agentsMap[validators[i]];
       uint256 score = a.power * rs.coin * powerFactor / 10000 + a.coin * rs.power;
       a.rewardSet.push(Reward(0, 0, score, a.coin, round));
@@ -219,7 +221,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 totalReward = reward * miners.length;
     require(r.remainReward >= totalReward, "there is not enough reward");
 
-    for (uint256 i = 0; i < miners.length; i++) {
+    uint256 minerSize = miners.length;
+    for (uint256 i = 0; i < minerSize; i++) {
       powerRewardMap[miners[i]] += reward;
     }
 
@@ -271,7 +274,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 rewardSum = 0;
     uint256 dustSum = 0;
 
-    for (uint256 i = 0; i < agentList.length; ++i) {
+    uint256 agentSize = agentList.length;
+    for (uint256 i = 0; i < agentSize; ++i) {
       Agent storage a = agentsMap[agentList[i]];
       if (a.rewardSet.length == 0) continue;
       CoinDelegator storage d = a.cDelegatorMap[delegator];

@@ -219,8 +219,9 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
     uint256 totalWeight=0;
     address payable[] memory relayers = headerRelayerAddressRecord;
-    uint256[] memory relayerWeight = new uint256[](relayers.length);
-    for (uint256 index = 0; index < relayers.length; index++) {
+    uint256 relayerSize = relayers.length;
+    uint256[] memory relayerWeight = new uint256[](relayerSize);
+    for (uint256 index = 0; index < relayerSize; index++) {
       address relayer = relayers[index];
       uint256 weight = calculateRelayerWeight(headerRelayersSubmitCount[relayer]);
       relayerWeight[index] = weight;
@@ -230,7 +231,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     uint256 callerReward = totalReward.mul(callerCompensationMolecule).div(10000);
     totalReward = totalReward.sub(callerReward);
     uint256 remainReward = totalReward;
-    for (uint256 index = 1; index < relayers.length; index++) {
+    for (uint256 index = 1; index < relayerSize; index++) {
       uint256 reward = relayerWeight[index].mul(totalReward).div(totalWeight);
       relayerRewardVault[relayers[index]] = relayerRewardVault[relayers[index]].add(reward);
       remainReward = remainReward.sub(reward);
@@ -238,7 +239,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     relayerRewardVault[relayers[0]] = relayerRewardVault[relayers[0]].add(remainReward);
 
     collectedRewardForHeaderRelayer = 0;
-    for (uint256 index = 0; index < relayers.length; index++) {
+    for (uint256 index = 0; index < relayerSize; index++) {
       delete headerRelayersSubmitCount[relayers[index]];
     }
     delete headerRelayerAddressRecord;

@@ -87,7 +87,8 @@ contract GovHub is System, IParamSubscriber {
     proposalMaxOperations = PROPOSAL_MAX_OPERATIONS;
     votingPeriod = VOTING_PERIOD;
     RLPDecode.RLPItem[] memory items = INIT_MEMBERS.toRLPItem().toList();
-    for (uint256 i = 0; i < items.length; i++) {
+    uint256 itemSize = items.length;
+    for (uint256 i = 0; i < itemSize; i++) {
       address addr = items[i].toAddress();
       memberSet.push(addr);
       members[addr] = memberSet.length;
@@ -205,7 +206,8 @@ contract GovHub is System, IParamSubscriber {
     require(state(proposalId) == ProposalState.Succeeded, "proposal can only be executed if it is succeeded");
     Proposal storage proposal = proposals[proposalId];
     proposal.executed = true;
-    for (uint256 i = 0; i < proposal.targets.length; i++) {
+    uint256 targetSize = proposal.targets.length;
+    for (uint256 i = 0; i < targetSize; i++) {
       bytes memory callData;
       if (bytes(proposal.signatures[i]).length == 0) {
         callData = proposal.calldatas[i];

@@ -145,7 +145,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     // fetch BTC miners who delegated hash power in the about to end round; 
     // and distribute rewards to them
     address[] memory lastCandidates = ILightClient(LIGHT_CLIENT_ADDR).getRoundCandidates(roundTag-7);
-    for (uint256 i = 0; i < lastCandidates.length; i++) {
+    uint256 lastCandidateSize = lastCandidates.length;
+    for (uint256 i = 0; i < lastCandidateSize; i++) {
       address[] memory miners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(roundTag-7, lastCandidates[i]);
       IPledgeAgent(PLEDGE_AGENT_ADDR).distributePowerReward(lastCandidates[i], miners);
     }
@@ -435,8 +436,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// Get list of validator candidates 
   /// @return List of operator addresses
   function getCandidates() external view returns (address[] memory) {
-    address[] memory opAddrs = new address[](candidateSet.length);
-    for (uint256 i = 0; i < candidateSet.length; i++) {
+    uint256 candidateSize = candidateSet.length;
+    address[] memory opAddrs = new address[](candidateSize);
+    for (uint256 i = 0; i < candidateSize; i++) {
       opAddrs[i] = candidateSet[i].operateAddr;
     }
     return opAddrs;

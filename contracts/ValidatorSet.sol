@@ -67,7 +67,8 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   function init() external onlyNotInit {
     (Validator[] memory validatorSet, bool valid) = decodeValidatorSet(INIT_VALIDATORSET_BYTES);
     require(valid, "failed to parse init validatorSet");
-    for (uint256 i = 0; i < validatorSet.length; i++) {
+    uint256 validatorSize = validatorSet.length;
+    for (uint256 i = 0; i < validatorSize; i++) {
       currentValidatorSet.push(validatorSet[i]);
       currentValidatorSetMap[validatorSet[i].consensusAddress] = i + 1;
     }
@@ -114,7 +115,8 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     uint256 validatorReward;
 
     uint256 incentiveSum = 0;
-    for (uint256 i = 0; i < currentValidatorSet.length; i++) {
+    uint256 validatorSize = currentValidatorSet.length;
+    for (uint256 i = 0; i < validatorSize; i++) {
       Validator storage v = currentValidatorSet[i];
       uint256 incentiveValue = (v.income * blockRewardIncentivePercent) / 100;
       incentiveSum += incentiveValue;
@@ -122,10 +124,10 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
     ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: incentiveSum }();
 
-    address[] memory operateAddressList = new address[](currentValidatorSet.length);
-    uint256[] memory rewardList = new uint256[](currentValidatorSet.length);
+    address[] memory operateAddressList = new address[](validatorSize);
+    uint256[] memory rewardList = new uint256[](validatorSize);
     uint256 rewardSum = 0;
-    for (uint256 i = 0; i < currentValidatorSet.length; i++) {
+    for (uint256 i = 0; i < validatorSize; i++) {
       Validator storage v = currentValidatorSet[i];
       operateAddressList[i] = v.operateAddress;
       if (v.income > 0) {
@@ -192,8 +194,9 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// Get list of validators in the current round
   /// @return List of validator consensus addresses
   function getValidators() external view returns (address[] memory) {
-    address[] memory consensusAddrs = new address[](currentValidatorSet.length);
-    for (uint256 i = 0; i < currentValidatorSet.length; i++) {
+    uint256 validatorSize = currentValidatorSet.length;
+    address[] memory consensusAddrs = new address[](validatorSize);
+    for (uint256 i = 0; i < validatorSize; i++) {
       consensusAddrs[i] = currentValidatorSet[i].consensusAddress;
     }
     return consensusAddrs;
@@ -324,15 +327,16 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   //rlp encode & decode function
   function decodeValidatorSet(bytes memory msgBytes) internal pure returns (Validator[] memory, bool) {
     RLPDecode.RLPItem[] memory items = msgBytes.toRLPItem().toList();
-    Validator[] memory validatorSet = new Validator[](items.length);
-    for (uint256 j = 0; j < items.length; j++) {
+    uint256 itemSize = items.length;
+    Validator[] memory validatorSet = new Validator[](itemSize);
+    for (uint256 j = 0; j < itemSize; j++) {
       (Validator memory val, bool ok) = decodeValidator(items[j]);
       if (!ok) {
         return (validatorSet, false);
       }
       validatorSet[j] = val;
     }
-    bool success = items.length > 0;
+    bool success = itemSize > 0;
     return (validatorSet, success);
   }
 
