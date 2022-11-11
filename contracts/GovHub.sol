@@ -13,7 +13,9 @@ contract GovHub is System, IParamSubscriber {
 
   uint256 public constant PROPOSAL_MAX_OPERATIONS = 1;
   uint256 public constant VOTING_PERIOD = 201600;
-  bytes public constant INIT_MEMBERS = hex"f83f9491fb7d8a73d2752830ea189737ea0e007f999b949448bfbc530e7c54c332b0fae07312fba7078b878994de60b7d0e6b758ca5dd8c61d377a2c5f1af51ec1";
+  uint256 public constant EXECUTE_PERIOD = 201600;
+  bytes public constant INIT_MEMBERS =
+    hex"f83f9491fb7d8a73d2752830ea189737ea0e007f999b949448bfbc530e7c54c332b0fae07312fba7078b878994de60b7d0e6b758ca5dd8c61d377a2c5f1af51ec1";
 
   uint256 public proposalMaxOperations;
   uint256 public votingPeriod;
@@ -24,6 +26,8 @@ contract GovHub is System, IParamSubscriber {
   mapping(uint256 => Proposal) public proposals;
   mapping(address => uint256) public latestProposalIds;
   uint256 public proposalCount;
+
+  uint256 public executePeriod;
 
   event paramChange(string key, bytes value);
   event receiveDeposit(address indexed from, uint256 amount);
@@ -75,7 +79,8 @@ contract GovHub is System, IParamSubscriber {
     Canceled,
     Defeated,
     Succeeded,
-    Executed
+    Executed,
+    Expired
   }
 
   modifier onlyMember() {
@@ -86,6 +91,7 @@ contract GovHub is System, IParamSubscriber {
   function init() external onlyNotInit {
     proposalMaxOperations = PROPOSAL_MAX_OPERATIONS;
     votingPeriod = VOTING_PERIOD;
+    executePeriod = EXECUTE_PERIOD;
     RLPDecode.RLPItem[] memory items = INIT_MEMBERS.toRLPItem().toList();
     uint256 itemSize = items.length;
     for (uint256 i = 0; i < itemSize; i++) {
@@ -215,7 +221,7 @@ contract GovHub is System, IParamSubscriber {
         callData = abi.encodePacked(bytes4(keccak256(bytes(proposal.signatures[i]))), proposal.calldatas[i]);
       }
 
-      (bool success, bytes memory returnData) = proposal.targets[i].call.value(proposal.values[i])(callData);
+      (bool success, bytes memory returnData) = proposal.targets[i].call{ value: proposal.values[i] }(callData);
       require(success, "Transaction execution reverted.");
       emit ExecuteTransaction(proposal.targets[i], proposal.values[i], proposal.signatures[i], proposal.calldatas[i]);
     }
@@ -238,6 +244,8 @@ contract GovHub is System, IParamSubscriber {
       return ProposalState.Defeated;
     } else if (proposal.executed) {
       return ProposalState.Executed;
+    } else if (block.number > proposal.endBlock + executePeriod) {
+      return ProposalState.Expired;
     } else {
       return ProposalState.Succeeded;
     }
@@ -261,6 +269,7 @@ contract GovHub is System, IParamSubscriber {
   /// Remove a member
   /// @param member The address of the member to remove
   function removeMember(address member) external onlyInit onlyGov {
+    require(memberSet.length > 1, "at least one member");
     uint256 index = members[member];
     require(index != 0, "member does not exist");
     if (index != memberSet.length) {
@@ -293,6 +302,11 @@ contract GovHub is System, IParamSubscriber {
       uint256 newVotingPeriod = BytesToTypes.bytesToUint256(32, value);
       require(newVotingPeriod >= 28800, "the votingPeriod out of range");
       votingPeriod = newVotingPeriod;
+    } else if (Memory.compareStrings(key, "executePeriod")) {
+      require(value.length == 32, "length of executePeriod mismatch");
+      uint256 newExecutePeriod = BytesToTypes.bytesToUint256(32, value);
+      require(newExecutePeriod >= 28800, "the executePeriod out of range");
+      executePeriod = newExecutePeriod;
     } else {
       require(false, "unknown param");
     }
