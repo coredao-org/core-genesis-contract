@@ -93,7 +93,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   /// This method is called by external verifiers
   /// @param header1 A block header submitted by the validator
   /// @param header2 Another block header submitted by the validator with same height and parent
-  function doubleSignSlash(bytes calldata header1,bytes calldata header2) external onlyInit {
+  function doubleSignSlash(bytes calldata header1, bytes calldata header2) external onlyInit {
     RLPDecode.RLPItem[] memory items1 = header1.toRLPItem().toList();
     RLPDecode.RLPItem[] memory items2 = header2.toRLPItem().toList();
 

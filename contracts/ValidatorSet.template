@@ -158,10 +158,10 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// @param feeAddrList List of validator fee addresses
   /// @param commissionThousandthsList List of validator commission fees in thousandth
   function updateValidatorSet(
-    address[] memory operateAddrList,
-    address[] memory consensusAddrList,
-    address payable[] memory feeAddrList,
-    uint256[] memory commissionThousandthsList
+    address[] calldata operateAddrList,
+    address[] calldata consensusAddrList,
+    address payable[] calldata feeAddrList,
+    uint256[] calldata commissionThousandthsList
   ) external override onlyCandidate {
     // do verify.
     checkValidatorSet(operateAddrList, consensusAddrList, feeAddrList, commissionThousandthsList);

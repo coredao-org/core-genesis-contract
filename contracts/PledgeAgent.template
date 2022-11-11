@@ -108,7 +108,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Receive round rewards from ValidatorSet, which is triggered at the beginning of turn round
   /// @param agentList List of validator operator addresses
   /// @param rewardList List of reward amount
-  function addRoundReward(address[] memory agentList, uint256[] memory rewardList)
+  function addRoundReward(address[] calldata agentList, uint256[] calldata rewardList)
     external
     payable
     override
@@ -145,7 +145,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @return scores List of hybrid scores of all validator candidates in this round
   /// @return totalPower Total power delegate in this round
   /// @return totalCoin Total coin delegate in this round
-  function getHybridScore(address[] memory candidates, uint256[] memory powers
+  function getHybridScore(address[] calldata candidates, uint256[] calldata powers
   ) external override onlyCandidate
       returns (uint256[] memory scores, uint256 totalPower, uint256 totalCoin) {
     uint256 candidateSize = candidates.length;
@@ -177,7 +177,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param totalPower Total power delegate in this round
   /// @param totalCoin Total coin delegate in this round
   /// @param round The new round tag
-  function setNewRound(address[] memory validators, uint256 totalPower,
+  function setNewRound(address[] calldata validators, uint256 totalPower,
       uint256 totalCoin, uint256 round) external override onlyCandidate {
     RoundState memory rs;
     rs.power = totalPower;
@@ -198,7 +198,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// This method is called at the beginning of `turn round` workflow
   /// @param candidate The operator address of the validator candidate
   /// @param miners List of BTC miners who delegated hash power to the candidate
-  function distributePowerReward(address candidate, address[] memory miners) external override onlyCandidate {
+  function distributePowerReward(address candidate, address[] calldata miners) external override onlyCandidate {
     // if no hash power is delegated in the round, return
     RoundState storage rs = stateMap[roundTag];
     if (rs.power == 1) {
