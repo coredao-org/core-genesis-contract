@@ -44,8 +44,8 @@ contract GovHub is System, IParamSubscriber {
   event ProposalExecuted(uint256 id);
   event ExecuteTransaction(address indexed target, uint256 value, string signature, bytes data);
 
-  event MemberAdded(address member);
-  event MemberDeleted(address member);
+  event MemberAdded(address indexed member);
+  event MemberDeleted(address indexed member);
 
   struct Proposal {
     uint256 id;
