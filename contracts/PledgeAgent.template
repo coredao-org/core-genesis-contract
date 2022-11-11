@@ -288,7 +288,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       // if there are rewards to be collected, leave them there
       if (roundLimit < 0) break;
     }
-    require(rewardSum > 0, "no pledge reward");
+    require(rewardSum != 0, "no pledge reward");
     distributeReward(delegator, rewardSum, dustSum);
     return (rewardSum, roundLimit >= 0);
   }
@@ -309,7 +309,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   /*********************** Internal methods ***************************/
   function distributeReward(address payable delegator, uint256 reward, uint256 dust) internal {
-    if (reward > 0) {
+    if (reward != 0) {
       if (dust <= DUST_LIMIT) {
         reward += dust;
         dust = 0;
@@ -321,7 +321,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       emit claimedReward(delegator, msg.sender, reward, success);
       if (!success) {
         totalDust += reward + dust;
-      } else if (dust > 0) {
+      } else if (dust != 0) {
         totalDust += dust;
       }
     }
@@ -357,13 +357,13 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     Agent storage a = agentsMap[agent];
     CoinDelegator storage d = a.cDelegatorMap[delegator];
     uint256 newDeposit = d.newDeposit;
-    require(newDeposit > 0, "delegator does not exist");
+    require(newDeposit != 0, "delegator does not exist");
 
     (uint256 rewardAmount, uint256 dust) = collectCoinReward(a, d, 0x7FFFFFFF);
     distributeReward(delegator, rewardAmount, dust);
 
     a.totalDeposit -= newDeposit;
-    if (a.rewardSet.length > 0) {
+    if (a.rewardSet.length != 0) {
       Reward storage r = a.rewardSet[a.rewardSet.length - 1];
       if (r.round == roundTag) {
         if (d.changeRound < roundTag) {
@@ -431,7 +431,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     if (Memory.compareStrings(key, "requiredCoinDeposit")) {
       require(value.length == 32, "length of requiredCoinDeposit mismatch");
       uint256 newRequiredCoinDeposit = BytesToTypes.bytesToUint256(32, value);
-      require(newRequiredCoinDeposit > 0, "the requiredCoinDeposit out of range");
+      require(newRequiredCoinDeposit != 0, "the requiredCoinDeposit out of range");
       requiredCoinDeposit = newRequiredCoinDeposit;
     } else if (Memory.compareStrings(key, "powerFactor")) {
       require(value.length == 32, "length of powerFactor mismatch");
@@ -446,7 +446,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   /// Collect all dusts and send to DAO treasury
   function gatherDust() external onlyInit onlyGov {
-    if (totalDust > 0) {
+    if (totalDust != 0) {
       payable(FOUNDATION_ADDR).transfer(totalDust);
       totalDust = 0;
     }

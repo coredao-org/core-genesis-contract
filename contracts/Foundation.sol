@@ -9,7 +9,7 @@ contract Foundation is System {
   event fundFailed(address indexed payee, uint256 amount, uint256 balance);
 
   receive() external payable {
-    if (msg.value > 0) {
+    if (msg.value != 0) {
       emit received(msg.sender, msg.value);
     }
   }

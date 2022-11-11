@@ -79,7 +79,7 @@ contract GovHub is System, IParamSubscriber {
   }
 
   modifier onlyMember() {
-    require(members[msg.sender] > 0, "only member is allowed to call the method");
+    require(members[msg.sender] != 0, "only member is allowed to call the method");
     _;
   }
 
@@ -226,7 +226,7 @@ contract GovHub is System, IParamSubscriber {
   /// @param proposalId The proposal Id
   /// @return The state of the proposal
   function state(uint256 proposalId) public view returns (ProposalState) {
-    require(proposalCount >= proposalId && proposalId > 0, "state: invalid proposal id");
+    require(proposalCount >= proposalId && proposalId != 0, "state: invalid proposal id");
     Proposal storage proposal = proposals[proposalId];
     if (proposal.canceled) {
       return ProposalState.Canceled;
@@ -244,7 +244,7 @@ contract GovHub is System, IParamSubscriber {
   }
 
   receive() external payable {
-    if (msg.value > 0) {
+    if (msg.value != 0) {
       emit receiveDeposit(msg.sender, msg.value);
     }
   }
@@ -262,7 +262,7 @@ contract GovHub is System, IParamSubscriber {
   /// @param member The address of the member to remove
   function removeMember(address member) external onlyInit onlyGov {
     uint256 index = members[member];
-    require(index > 0, "member does not exist");
+    require(index != 0, "member does not exist");
     if (index != memberSet.length) {
       address addr = memberSet[memberSet.length - 1];
       memberSet[index - 1] = addr;
@@ -286,7 +286,7 @@ contract GovHub is System, IParamSubscriber {
     if (Memory.compareStrings(key, "proposalMaxOperations")) {
       require(value.length == 32, "length of proposalMaxOperations mismatch");
       uint256 newProposalMaxOperations = BytesToTypes.bytesToUint256(32, value);
-      require(newProposalMaxOperations > 0, "the proposalMaxOperations out of range");
+      require(newProposalMaxOperations != 0, "the proposalMaxOperations out of range");
       proposalMaxOperations = newProposalMaxOperations;
     } else if (Memory.compareStrings(key, "votingPeriod")) {
       require(value.length == 32, "length of votingPeriod mismatch");

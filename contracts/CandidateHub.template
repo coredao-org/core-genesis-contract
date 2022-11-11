@@ -71,7 +71,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   modifier exist() {
-    require(operateMap[msg.sender] > 0, "candidate does not exist");
+    require(operateMap[msg.sender] != 0, "candidate does not exist");
     _;
   }
 
@@ -228,7 +228,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     for (uint256 i = 0; i < candidateSize; i++) {
       address opAddr = candidateSet[i].operateAddr;
       uint256 jailedRound = jailMap[opAddr];
-      if (jailedRound > 0 && jailedRound <= roundTag) {
+      if (jailedRound != 0 && jailedRound <= roundTag) {
         statusList[i] = statusList[i] & DEL_JAIL;
         delete jailMap[opAddr];
       }
@@ -250,7 +250,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   {
     require(operateMap[msg.sender] == 0, "candidate already exists");
     require(int256(msg.value) >= requiredMargin, "deposit is not enough");
-    require(commissionThousandths > 0 && commissionThousandths < 1000, "commissionThousandths should in range (0, 1000)");
+    require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should in range (0, 1000)");
     require(consensusMap[consensusAddr] == 0, "consensus already exists");
     require(!isContract(consensusAddr), "contract is not allowed to be consensus address");
     require(!isContract(feeAddr), "contract is not allowed to be fee address");
@@ -284,7 +284,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     candidateSet.pop();
 
     uint256 value = uint256(c.margin - dues);
-    if (value > 0)  msg.sender.transfer(value);
+    if (value != 0)  msg.sender.transfer(value);
     payable(SYSTEM_REWARD_ADDR).transfer(uint256(dues));
     emit unregistered(msg.sender, c.consensusAddr);
   }
@@ -294,7 +294,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @param feeAddr Fee address set to collect system rewards
   /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths  
   function update(address consensusAddr, address payable feeAddr, uint32 commissionThousandths) external onlyInit exist{
-    require(commissionThousandths > 0 && commissionThousandths < 1000, "commissionThousandths should in range (0, 1000)");
+    require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should in range (0, 1000)");
     require(!isContract(consensusAddr), "contract is not allowed to be consensus address");
     require(!isContract(feeAddr), "contract is not allowed to be fee address");
     uint256 index = operateMap[msg.sender];
@@ -342,7 +342,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// Add refundable deposits
   /// @dev Candidate will not be elected if there are not enough deposits
   function addMargin() external payable onlyInit exist {
-    require(msg.value > 0, "value should be not nil");
+    require(msg.value != 0, "value should be not zero");
     uint256 index = operateMap[msg.sender];
     int256 totalMargin = candidateSet[index - 1].margin + int256(msg.value);
     candidateSet[index - 1].margin = totalMargin;
@@ -406,7 +406,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       }
     }
     uint256 d = candidateSize - count;
-    if (d > 0) {
+    if (d != 0) {
       assembly {
         mstore(candidateList, sub(mload(candidateList), d))
       }
@@ -437,7 +437,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     } else if (Memory.compareStrings(key, "maxCommissionChange")) {
       require(value.length == 32, "length of maxCommissionChange mismatch");
       uint256 newMaxCommissionChange = BytesToTypes.bytesToUint256(32, value);
-      require(newMaxCommissionChange > 0, "the newMaxCommissionChange out of range");
+      require(newMaxCommissionChange != 0, "the newMaxCommissionChange out of range");
       maxCommissionChange = newMaxCommissionChange;
     } else {
       require(false, "unknown param");
@@ -460,14 +460,14 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @param operateAddr Operator address of validator candidate
   /// @return true/false
   function isCandidateByOperate(address operateAddr) external view returns (bool) {
-    return operateMap[operateAddr] > 0;
+    return operateMap[operateAddr] != 0;
   }
 
   /// Whether the input address is consensus address a validator candidate
   /// @param consensusAddr Consensus address of validator candidate
   /// @return true/false
   function isCandidateByConsensus(address consensusAddr) external view returns (bool) {
-    return consensusMap[consensusAddr] > 0;
+    return consensusMap[consensusAddr] != 0;
   }
 
   /// Whether the validator is jailed

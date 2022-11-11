@@ -82,7 +82,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// @param addr The address to check
   /// @return true/false
   function isValidator(address addr) public override returns (bool) {
-    return currentValidatorSetMap[addr] > 0;
+    return currentValidatorSetMap[addr] != 0;
   }
 
   /// Add block reward on a validator 
@@ -97,7 +97,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       value += blockReward;
     }
     uint256 index = currentValidatorSetMap[valAddr];
-    if (index > 0) {
+    if (index != 0) {
       Validator storage validator = currentValidatorSet[index - 1];
       totalInCome = totalInCome + value;
       validator.income = validator.income + value;
@@ -130,7 +130,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     for (uint256 i = 0; i < validatorSize; i++) {
       Validator storage v = currentValidatorSet[i];
       operateAddressList[i] = v.operateAddress;
-      if (v.income > 0) {
+      if (v.income != 0) {
         feeAddress = v.feeAddress;
         validatorReward = (v.income * v.commissionThousandths) / 1000;
         if (v.income > validatorReward) {
@@ -336,7 +336,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       }
       validatorSet[j] = val;
     }
-    bool success = itemSize > 0;
+    bool success = itemSize != 0;
     return (validatorSet, success);
   }
 

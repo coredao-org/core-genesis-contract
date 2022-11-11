@@ -35,7 +35,7 @@ contract Burn is System, IBurn, IParamSubscriber {
       }
       msg.sender.transfer(remain);
     }
-    if (v > 0) emit burned(msg.sender, v);
+    if (v != 0) emit burned(msg.sender, v);
   }
 
   /*********************** Param update ********************************/

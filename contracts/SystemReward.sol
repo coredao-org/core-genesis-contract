@@ -37,14 +37,14 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   event paramChange(string key, bytes value);
 
   receive() external payable {
-    if (msg.value > 0) {
+    if (msg.value != 0) {
       emit receiveDeposit(msg.sender, msg.value);
     }
   }
 
   /// Receive funds from system, burn the portion which exceeds cap
   function receiveRewards() external payable override onlyInit {
-    if (msg.value > 0) {
+    if (msg.value != 0) {
       if (address(this).balance > incentiveBalanceCap) {
         uint256 value = address(this).balance - incentiveBalanceCap;
         if (isBurn) {
@@ -68,7 +68,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     returns (uint256)
   {
     uint256 actualAmount = amount < address(this).balance ? amount : address(this).balance;
-    if (actualAmount > 0) {
+    if (actualAmount != 0) {
       to.transfer(actualAmount);
       emit rewardTo(to, actualAmount);
     } else {
@@ -92,7 +92,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     if (Memory.compareStrings(key, "incentiveBalanceCap")) {
       require(value.length == 32, "length of incentiveBalanceCap mismatch");
       uint256 newIncentiveBalanceCap = BytesToTypes.bytesToUint256(32, value);
-      require(newIncentiveBalanceCap > 0, "the incentiveBalanceCap out of range");
+      require(newIncentiveBalanceCap != 0, "the incentiveBalanceCap out of range");
       incentiveBalanceCap = newIncentiveBalanceCap;
     } else if (Memory.compareStrings(key, "isBurn")) {
       require(value.length == 32, "length of isBurn mismatch");

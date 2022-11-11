@@ -204,7 +204,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /// @param relayerAddr The relayer address
   function claimRelayerReward(address relayerAddr) external {
      uint256 reward = relayerRewardVault[relayerAddr];
-     require(reward > 0, "no relayer reward");
+     require(reward != 0, "no relayer reward");
      relayerRewardVault[relayerAddr] = 0;
      address payable recipient = address(uint160(relayerAddr));
      ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(recipient, reward);
@@ -511,7 +511,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     if (Memory.compareStrings(key,"rewardForSyncHeader")) {
       require(value.length == 32, "length of rewardForSyncHeader mismatch");
       uint256 newRewardForSyncHeader = BytesToTypes.bytesToUint256(32, value);
-      require(newRewardForSyncHeader > 0, "the newRewardForSyncHeader out of range");
+      require(newRewardForSyncHeader != 0, "the newRewardForSyncHeader out of range");
       rewardForSyncHeader = newRewardForSyncHeader;
     } else if (Memory.compareStrings(key,"callerCompensationMolecule")) {
       require(value.length == 32, "length of callerCompensationMolecule mismatch");
