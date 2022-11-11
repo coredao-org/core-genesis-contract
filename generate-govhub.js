@@ -48,6 +48,7 @@ if (initMembersBytes == ""){
 const data = {
     initMembersBytes: initMembersBytes,
     votingPeriod: program.votingPeriod,
+    executePeriod: program.executePeriod,
     mock: program.mock,
 };
 

@@ -14,8 +14,7 @@ contract GovHub is System, IParamSubscriber {
   uint256 public constant PROPOSAL_MAX_OPERATIONS = 1;
   uint256 public constant VOTING_PERIOD = 201600;
   uint256 public constant EXECUTE_PERIOD = 201600;
-  bytes public constant INIT_MEMBERS =
-    hex"f83f9491fb7d8a73d2752830ea189737ea0e007f999b949448bfbc530e7c54c332b0fae07312fba7078b878994de60b7d0e6b758ca5dd8c61d377a2c5f1af51ec1";
+  bytes public constant INIT_MEMBERS = hex"f83f9491fb7d8a73d2752830ea189737ea0e007f999b949448bfbc530e7c54c332b0fae07312fba7078b878994de60b7d0e6b758ca5dd8c61d377a2c5f1af51ec1";
 
   uint256 public proposalMaxOperations;
   uint256 public votingPeriod;

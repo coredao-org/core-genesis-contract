@@ -70,6 +70,9 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   /// This method is called by other validators from golang consensus engine.
   /// @param validator The consensus address of validator
   function slash(address validator) external onlyCoinbase onlyInit oncePerBlock onlyZeroGasPrice{
+    if (!IValidatorSet(VALIDATOR_CONTRACT_ADDR).isValidator(validator)) {
+      return;
+    }
     Indicator memory indicator = indicators[validator];
     if (indicator.exist) {
       indicator.count++;
