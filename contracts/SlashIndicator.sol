@@ -19,7 +19,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   uint256 public constant FELONY_THRESHOLD = 150;
   uint256 public constant DECREASE_RATE = 4;
   uint256 public constant INIT_REWARD_FOR_REPORT_DOUBLE_SIGN = 5e20;
-  uint32 public constant CHAINID = 1112;
+  uint32 public constant CHAINID = 1115;
   int256 public constant INIT_FELONY_DEPOSIT = 1e21;
   uint256 public constant INIT_FELONY_ROUND = 2;
 
