@@ -240,8 +240,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     require(int256(msg.value) >= requiredMargin, "deposit is not enough");
     require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should in range (0, 1000)");
     require(consensusMap[consensusAddr] == 0, "consensus already exists");
-    require(!isContract(consensusAddr), "contract is not allowed to be consensus address");
-    require(!isContract(feeAddr), "contract is not allowed to be fee address");
+    require(consensusAddr != address(0), "consensus address is zero");
+    require(feeAddr != address(0), "fee address is zero");
     // check jail status
     require(jailMap[msg.sender] < roundTag, "it is in jail");
 
@@ -283,8 +283,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths  
   function update(address consensusAddr, address payable feeAddr, uint32 commissionThousandths) external onlyInit exist{
     require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should in range (0, 1000)");
-    require(!isContract(consensusAddr), "contract is not allowed to be consensus address");
-    require(!isContract(feeAddr), "contract is not allowed to be fee address");
+    require(consensusAddr != address(0), "consensus address is zero");
+    require(feeAddr != address(0), "fee address is zero");
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     uint256 commissionLastRoundValue = roundTag == c.commissionLastChangeRound
