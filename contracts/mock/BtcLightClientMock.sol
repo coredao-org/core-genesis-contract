@@ -5,12 +5,12 @@ import "../lib/BytesLib.sol";
 
 contract BtcLightClientMock is BtcLightClient {
     using BytesLib for bytes;
-    uint32 public _blockHeight;
-    uint256 public constant mockScore = 24371874614346;
-    uint32 public constant mockAdjustment = 11;
+    uint32 public mockBlockHeight;
+    uint256 public constant MOCK_SCORE = 24371874614346;
+    uint32 public constant MOCK_ADJUSTMENT = 11;
 
     constructor() BtcLightClient() public {
-        _blockHeight = INIT_CHAIN_HEIGHT;
+        mockBlockHeight = INIT_CHAIN_HEIGHT;
     }
 
     function developmentInit() external {
@@ -18,17 +18,16 @@ contract BtcLightClientMock is BtcLightClient {
     }
 
     function setBlock(bytes32 hash, bytes32 prevHash, address rewardAddr, address candidateAddr) public {
-        _blockHeight = _blockHeight + 1;
+        mockBlockHeight = mockBlockHeight + 1;
         bytes memory headerBytes = new bytes(4);
         headerBytes = headerBytes.concat(abi.encodePacked(prevHash));
         blockChain[hash] = encode(
-            headerBytes.concat(new bytes(44)), rewardAddr, mockScore, _blockHeight, mockAdjustment, candidateAddr);
+            headerBytes.concat(new bytes(44)), rewardAddr, MOCK_SCORE, mockBlockHeight, MOCK_ADJUSTMENT, candidateAddr);
     }
 
     function setCandidates(uint roundTimeTag, address[] memory candidates) public {
         delete roundPowerMap[roundTimeTag];
-        uint i;
-        for (i=0; i< candidates.length; i++) {
+        for (uint i=0; i< candidates.length; i++) {
             roundPowerMap[roundTimeTag].candidates.push(candidates[i]);
         }
     }
@@ -46,8 +45,7 @@ contract BtcLightClientMock is BtcLightClient {
             r.candidates.push(candidate);
         }
         delete r.powerMap[candidate];
-        uint i;
-        for (i=0; i<rewardAddrs.length; i++) {
+        for (uint i=0; i<rewardAddrs.length; i++) {
             r.powerMap[candidate].miners.push(rewardAddrs[i]);
             r.powerMap[candidate].btcBlocks.push(bytes32(0));
         }

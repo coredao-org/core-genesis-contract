@@ -70,14 +70,14 @@ def test_update_param_dues_success(relay_hub):
 def test_register_and_unregister_success(relay_hub, system_reward):
     required_deposit = relay_hub.requiredDeposit()
     tx = relay_hub.register({'value': required_deposit})
-    expect_event(tx, "relayerRegister", {"_relayer": accounts[0]})
+    expect_event(tx, "relayerRegister", {"relayer": accounts[0]})
     assert relay_hub.isRelayer(accounts[0]) is True
 
     tracker = get_tracker(accounts[0])
     system_reward_tracker = get_tracker(system_reward)
 
     tx = relay_hub.unregister()
-    expect_event(tx, "relayerUnRegister", {"_relayer": accounts[0]})
+    expect_event(tx, "relayerUnRegister", {"relayer": accounts[0]})
     assert relay_hub.isRelayer(accounts[0]) is False
 
     assert system_reward_tracker.delta() == relay_hub.dues()

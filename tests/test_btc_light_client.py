@@ -112,17 +112,17 @@ def test_get_reward_address(btc_light_client):
 
 def test_get_score(btc_light_client):
     btc_light_client.setBlock('0x1', '0x0', accounts[1].address, accounts[0].address)
-    assert btc_light_client.getScore('0x1') == btc_light_client.mockScore()
+    assert btc_light_client.getScore('0x1') == btc_light_client.MOCK_SCORE()
 
 
 def test_get_height(btc_light_client):
     btc_light_client.setBlock('0x1', '0x0', accounts[1].address, accounts[0].address)
-    assert btc_light_client.getHeight('0x1') == btc_light_client._blockHeight()
+    assert btc_light_client.getHeight('0x1') == btc_light_client.mockBlockHeight()
 
 
 def test_get_adjustment_index(btc_light_client):
     btc_light_client.setBlock('0x1', '0x0', accounts[1].address, accounts[0].address)
-    assert btc_light_client.getAdjustmentIndex('0x1') == btc_light_client.mockAdjustment()
+    assert btc_light_client.getAdjustmentIndex('0x1') == btc_light_client.MOCK_ADJUSTMENT()
 
 
 def test_get_round_powers(btc_light_client):
