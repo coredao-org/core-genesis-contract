@@ -127,24 +127,26 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     address[] memory operateAddressList = new address[](validatorSize);
     uint256[] memory rewardList = new uint256[](validatorSize);
     uint256 rewardSum = 0;
+    uint256 tempIncome;
     for (uint256 i = 0; i < validatorSize; i++) {
       Validator storage v = currentValidatorSet[i];
       operateAddressList[i] = v.operateAddress;
-      if (v.income != 0) {
+      tempIncome = v.income;
+      if (tempIncome != 0) {
         feeAddress = v.feeAddress;
-        validatorReward = (v.income * v.commissionThousandths) / 1000;
-        if (v.income > validatorReward) {
-          rewardList[i] = v.income - validatorReward;
+        validatorReward = (tempIncome * v.commissionThousandths) / 1000;
+        if (tempIncome > validatorReward) {
+          rewardList[i] = tempIncome - validatorReward;
           rewardSum += rewardList[i];
         }
 
+        v.income = 0;
         bool success = feeAddress.send(validatorReward);
         if (success) {
-          emit directTransfer(v.operateAddress, feeAddress, validatorReward, v.income);
+          emit directTransfer(v.operateAddress, feeAddress, validatorReward, tempIncome);
         } else {
-          emit directTransferFail(v.operateAddress, feeAddress, validatorReward, v.income);
+          emit directTransferFail(v.operateAddress, feeAddress, validatorReward, tempIncome);
         }
-        v.income = 0;
       }
     }
 
