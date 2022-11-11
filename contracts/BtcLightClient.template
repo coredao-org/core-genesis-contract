@@ -46,7 +46,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   uint256 public callerCompensationMolecule;
   uint256 public rewardForSyncHeader;
   uint256 public roundSize;
-  uint256 public maximumWeight;
+  uint256 public maxWeight;
   uint256 public countInRound=0;
   uint256 public collectedRewardForHeaderRelayer=0;
   uint256 public roundInterval;
@@ -101,7 +101,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     rewardForSyncHeader = INIT_REWARD_FOR_SYNC_HEADER;
     callerCompensationMolecule=CALLER_COMPENSATION_MOLECULE;
     roundSize = ROUND_SIZE;
-    maximumWeight = MAXIMUM_WEIGHT;
+    maxWeight = MAXIMUM_WEIGHT;
     roundInterval = INIT_ROUND_INTERVAL;
     alreadyInit = true;
   }
@@ -250,12 +250,12 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /// @param count The number of BTC blocks relayed by a specific validator
   /// @return The relayer weight
   function calculateRelayerWeight(uint256 count) public view returns(uint256) {
-    if (count <= maximumWeight) {
+    if (count <= maxWeight) {
       return count;
-    } else if (maximumWeight < count && count <= 2*maximumWeight) {
-      return maximumWeight;
-    } else if (2*maximumWeight < count && count <= (2*maximumWeight + 3*maximumWeight/4)) {
-      return 3*maximumWeight - count;
+    } else if (maxWeight < count && count <= 2*maxWeight) {
+      return maxWeight;
+    } else if (2*maxWeight < count && count <= (2*maxWeight + 3*maxWeight/4)) {
+      return 3*maxWeight - count;
     } else {
       return count/4;
     }
@@ -511,23 +511,23 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     if (Memory.compareStrings(key,"rewardForSyncHeader")) {
       require(value.length == 32, "length of rewardForSyncHeader mismatch");
       uint256 newRewardForSyncHeader = BytesToTypes.bytesToUint256(32, value);
-      require(newRewardForSyncHeader != 0, "the newRewardForSyncHeader out of range");
+      require(newRewardForSyncHeader != 0, "rewardForSyncHeader can't be 0");
       rewardForSyncHeader = newRewardForSyncHeader;
     } else if (Memory.compareStrings(key,"callerCompensationMolecule")) {
       require(value.length == 32, "length of callerCompensationMolecule mismatch");
       uint256 newCallerCompensationMolecule = BytesToTypes.bytesToUint256(32, value);
-      require(newCallerCompensationMolecule <= 10000, "new callerCompensationMolecule shouldn't be in range [0,10000]");
+      require(newCallerCompensationMolecule <= 10000, "callerCompensationMolecule should be in [0,10000]");
       callerCompensationMolecule = newCallerCompensationMolecule;
     } else if (Memory.compareStrings(key,"roundSize")) {
       require(value.length == 32, "length of roundSize mismatch");
       uint256 newRoundSize = BytesToTypes.bytesToUint256(32, value);
-      require(newRoundSize >= maximumWeight, "new newRoundSize shouldn't be greater than maximumWeight");
+      require(newRoundSize >= maxWeight, "roundSize requires >= maxWeight");
       roundSize = newRoundSize;
-    } else if (Memory.compareStrings(key,"maximumWeight")) {
-      require(value.length == 32, "length of maximumWeight mismatch");
-      uint256 newMaximumWeight = BytesToTypes.bytesToUint256(32, value);
-      require(newMaximumWeight != 0 && roundSize >= newMaximumWeight, "the newMaximumWeight must not be zero and no less than newRoundSize");
-      maximumWeight = newMaximumWeight;
+    } else if (Memory.compareStrings(key,"maxWeight")) {
+      require(value.length == 32, "length of maxWeight mismatch");
+      uint256 newMaxWeight = BytesToTypes.bytesToUint256(32, value);
+      require(newMaxWeight != 0 && roundSize >= newMaxWeight, "maxWeight requires (0,roundSize]");
+      maxWeight = newMaxWeight;
     } else {
       require(false, "unknown param");
     }
