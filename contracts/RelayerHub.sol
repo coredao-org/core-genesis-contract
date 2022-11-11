@@ -42,8 +42,8 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     _;
   }
 
-  event relayerRegister(address indexed _relayer);
-  event relayerUnRegister(address indexed _relayer);
+  event relayerRegister(address indexed relayer);
+  event relayerUnRegister(address indexed relayer);
   event paramChange(string key, bytes value);
 
 
