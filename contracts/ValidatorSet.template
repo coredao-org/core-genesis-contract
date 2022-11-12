@@ -250,7 +250,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// @param validator The validator to slash
   /// @param felonyRound The number of rounds to jail
   /// @param felonyDeposit The amount of deposits to slash
-  function felony(address validator, uint256 felonyRound, int256 felonyDeposit) external override onlySlash {
+  function felony(address validator, uint256 felonyRound, uint256 felonyDeposit) external override onlySlash {
     uint256 index = currentValidatorSetMap[validator];
     if (index <= 0) {
       return;

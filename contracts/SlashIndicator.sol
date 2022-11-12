@@ -20,7 +20,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   uint256 public constant DECREASE_RATE = 4;
   uint256 public constant INIT_REWARD_FOR_REPORT_DOUBLE_SIGN = 5e20;
   uint32 public constant CHAINID = 1115;
-  int256 public constant INIT_FELONY_DEPOSIT = 1e21;
+  uint256 public constant INIT_FELONY_DEPOSIT = 1e21;
   uint256 public constant INIT_FELONY_ROUND = 2;
 
   // State of the contract
@@ -32,7 +32,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
 
   uint256 public rewardForReportDoubleSign;
 
-  int256 public felonyDeposit;
+  uint256 public felonyDeposit;
   uint256 public felonyRound;
 
   struct Indicator {
@@ -187,7 +187,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
       rewardForReportDoubleSign = newRewardForReportDoubleSign;
     } else if (Memory.compareStrings(key,"felonyDeposit")) {
       require(value.length == 32, "length of felonyDeposit mismatch");
-      int256 newFelonyDeposit = BytesToTypes.bytesToInt256(32, value);
+      uint256 newFelonyDeposit = BytesToTypes.bytesToUint256(32, value);
       require(newFelonyDeposit >= 1e18, "the felonyDeposit out of range");
       felonyDeposit = newFelonyDeposit;
     } else if (Memory.compareStrings(key,"felonyRound")) {
