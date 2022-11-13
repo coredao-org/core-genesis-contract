@@ -1,4 +1,4 @@
-pragma solidity 0.6.12;
+pragma solidity 0.8.4;
 
 /**
  * Copyright (c) 2016-2019 zOS Global Limited

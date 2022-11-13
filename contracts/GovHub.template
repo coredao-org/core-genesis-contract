@@ -1,4 +1,4 @@
-pragma solidity 0.6.12;
+pragma solidity 0.8.4;
 pragma experimental ABIEncoderV2;
 import "./System.sol";
 import "./lib/BytesToTypes.sol";
@@ -122,9 +122,9 @@ contract GovHub is System, IParamSubscriber {
     require(targets.length != 0, "must provide actions");
     require(targets.length <= proposalMaxOperations, "too many actions");
 
-    uint256 latestProposalId = latestProposalIds[msg.sender];
-    if (latestProposalId != 0) {
-      ProposalState proposersLatestProposalState = state(latestProposalId);
+    uint256 proposalId = latestProposalIds[msg.sender];
+    if (proposalId != 0) {
+      ProposalState proposersLatestProposalState = getState(proposalId);
       require(
         proposersLatestProposalState != ProposalState.Active,
         "one live proposal per proposer, found an already active proposal"
@@ -139,27 +139,26 @@ contract GovHub is System, IParamSubscriber {
     uint256 endBlock = startBlock + votingPeriod;
 
     proposalCount++;
-    Proposal memory newProposal = Proposal({
-      id: proposalCount,
-      proposer: msg.sender,
-      targets: targets,
-      values: values,
-      signatures: signatures,
-      calldatas: calldatas,
-      startBlock: startBlock,
-      endBlock: endBlock,
-      forVotes: 0,
-      againstVotes: 0,
-      totalVotes: memberSet.length,
-      canceled: false,
-      executed: false
-    });
+    proposalId = proposalCount;
+    Proposal storage newProposal = proposals[proposalId];
+    newProposal.id = proposalId;
+    newProposal.proposer = msg.sender;
+    newProposal.targets = targets;
+    newProposal.values = values;
+    newProposal.signatures = signatures;
+    newProposal.calldatas = calldatas;
+    newProposal.startBlock = startBlock;
+    newProposal.endBlock = endBlock;
+    newProposal.forVotes = 0;
+    newProposal.againstVotes = 0;
+    newProposal.totalVotes = memberSet.length;
+    newProposal.canceled = false;
+    newProposal.executed = false;
 
-    proposals[newProposal.id] = newProposal;
-    latestProposalIds[newProposal.proposer] = newProposal.id;
+    latestProposalIds[newProposal.proposer] = proposalId;
 
     emit ProposalCreated(
-      newProposal.id,
+      proposalId,
       msg.sender,
       targets,
       values,
@@ -170,14 +169,14 @@ contract GovHub is System, IParamSubscriber {
       memberSet.length,
       description
     );
-    return newProposal.id;
+    return proposalId;
   }
 
   /// Cast vote on a proposal
   /// @param proposalId The proposal Id
   /// @param support Support or not
   function castVote(uint256 proposalId, bool support) public onlyInit onlyMember {
-    require(state(proposalId) == ProposalState.Active, "voting is closed");
+    require(getState(proposalId) == ProposalState.Active, "voting is closed");
     Proposal storage proposal = proposals[proposalId];
     Receipt storage receipt = proposal.receipts[msg.sender];
     require(!receipt.hasVoted, "voter already voted");
@@ -195,7 +194,7 @@ contract GovHub is System, IParamSubscriber {
   /// Cancel the proposal, can only be done by the proposer
   /// @param proposalId The proposal Id
   function cancel(uint256 proposalId) public onlyInit {
-    ProposalState state = state(proposalId);
+    ProposalState state = getState(proposalId);
     require(state == ProposalState.Pending || state == ProposalState.Active, "cannot cancel finished proposal");
 
     Proposal storage proposal = proposals[proposalId];
@@ -208,7 +207,7 @@ contract GovHub is System, IParamSubscriber {
   /// Execute the proposal
   /// @param proposalId The proposal Id
   function execute(uint256 proposalId) public payable onlyInit {
-    require(state(proposalId) == ProposalState.Succeeded, "proposal can only be executed if it is succeeded");
+    require(getState(proposalId) == ProposalState.Succeeded, "proposal can only be executed if it is succeeded");
     Proposal storage proposal = proposals[proposalId];
     proposal.executed = true;
     uint256 targetSize = proposal.targets.length;
@@ -230,7 +229,7 @@ contract GovHub is System, IParamSubscriber {
   /// Check the proposal state
   /// @param proposalId The proposal Id
   /// @return The state of the proposal
-  function state(uint256 proposalId) public view returns (ProposalState) {
+  function getState(uint256 proposalId) public view returns (ProposalState) {
     require(proposalCount >= proposalId && proposalId != 0, "state: invalid proposal id");
     Proposal storage proposal = proposals[proposalId];
     if (proposal.canceled) {

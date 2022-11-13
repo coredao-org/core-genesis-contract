@@ -1,4 +1,4 @@
-pragma solidity 0.6.12;
+pragma solidity 0.8.4;
 pragma experimental ABIEncoderV2;
 import "./interface/IPledgeAgent.sol";
 import "./interface/IParamSubscriber.sol";
@@ -247,7 +247,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param agent The operator address of validator
   function undelegateCoin(address agent) external {
     uint256 deposit = undelegateCoin(agent, msg.sender);
-    msg.sender.transfer(deposit);
+    payable(msg.sender).transfer(deposit);
     emit undelegatedCoin(agent, msg.sender, deposit);
   }
 
@@ -300,7 +300,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       return;
     }
     powerRewardMap[msg.sender] = 0;
-    bool success = msg.sender.send(reward);
+    bool success = payable(msg.sender).send(reward);
     emit claimedPowerReward(msg.sender, reward, success);
     if (!success) {
       totalDust += reward;
@@ -329,7 +329,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   function delegateCoin(
     address agent,
-    address payable delegator,
+    address delegator,
     uint256 deposit
   ) internal returns (uint256) {
     Agent storage a = agentsMap[agent];
@@ -342,7 +342,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       require(deposit != 0, "deposit value is zero");
       CoinDelegator storage d = a.cDelegatorMap[delegator];
       (uint256 rewardAmount, uint256 dust) = collectCoinReward(a, d, 0x7FFFFFFF);
-      distributeReward(delegator, rewardAmount, dust);
+      distributeReward(payable(delegator), rewardAmount, dust);
       if (d.changeRound < roundTag) {
         d.deposit = d.newDeposit;
         d.changeRound = roundTag;
@@ -353,14 +353,14 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return newDeposit;
   }
 
-  function undelegateCoin(address agent, address payable delegator) internal returns (uint256) {
+  function undelegateCoin(address agent, address delegator) internal returns (uint256) {
     Agent storage a = agentsMap[agent];
     CoinDelegator storage d = a.cDelegatorMap[delegator];
     uint256 newDeposit = d.newDeposit;
     require(newDeposit != 0, "delegator does not exist");
 
     (uint256 rewardAmount, uint256 dust) = collectCoinReward(a, d, 0x7FFFFFFF);
-    distributeReward(delegator, rewardAmount, dust);
+    distributeReward(payable(delegator), rewardAmount, dust);
 
     a.totalDeposit -= newDeposit;
     if (a.rewardSet.length != 0) {

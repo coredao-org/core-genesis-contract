@@ -1,4 +1,4 @@
-pragma solidity 0.6.12;
+pragma solidity 0.8.4;
 import "./System.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
@@ -109,7 +109,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     require(validator1 == validator2, "validators of the two blocks must be the same");
     require(IValidatorSet(VALIDATOR_CONTRACT_ADDR).isValidator(validator1), "not a validator");
     IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(validator1, type(uint256).max, felonyDeposit);
-    ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(msg.sender, rewardForReportDoubleSign);
+    ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(msg.sender), rewardForReportDoubleSign);
   }
 
   /// Clean slash record by felonyThreshold/DECREASE_RATE.
@@ -217,7 +217,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     bytes memory extra = items[12].toBytes();
     bytes memory sig = BytesLib.slice(extra, 32, 65);
     bytes[] memory rlpbytes_list = new bytes[](16);
-    rlpbytes_list[0] = CHAINID.encodeInt();
+    rlpbytes_list[0] = RLPEncode.encodeInt(int(uint(CHAINID)));
     for(uint256 i = 0;i < 15;++i){
       if(i == 12){
         rlpbytes_list[13] = BytesLib.slice(extra, 0, 32).encodeBytes();

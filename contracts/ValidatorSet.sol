@@ -1,4 +1,4 @@
-pragma solidity 0.6.12;
+pragma solidity 0.8.4;
 
 import "./System.sol";
 import "./lib/BytesToTypes.sol";
@@ -348,7 +348,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     bool success = false;
     while (iter.hasNext()) {
       validator.consensusAddress = iter.next().toAddress();
-      validator.feeAddress = address(uint160(iter.next().toAddress()));
+      validator.feeAddress = payable(iter.next().toAddress());
       validator.operateAddress = validator.feeAddress;
       validator.commissionThousandths = 1000;
       success = true;

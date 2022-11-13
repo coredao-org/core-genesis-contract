@@ -1,4 +1,4 @@
-pragma solidity 0.6.12;
+pragma solidity 0.8.4;
 import "./System.sol";
 import "./interface/ISystemReward.sol";
 import "./interface/IParamSubscriber.sol";

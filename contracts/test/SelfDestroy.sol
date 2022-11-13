@@ -1,4 +1,4 @@
-pragma solidity 0.6.12;
+pragma solidity 0.8.4;
 
 contract SelfDestroy {
     function destruct(address payable target) public{

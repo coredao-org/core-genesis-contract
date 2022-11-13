@@ -1,4 +1,4 @@
-pragma solidity 0.6.12;
+pragma solidity 0.8.4;
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./interface/IValidatorSet.sol";
@@ -285,7 +285,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
     if (margin > dues) {
       uint256 value = margin - dues;
-      msg.sender.transfer(value);
+      payable(msg.sender).transfer(value);
       payable(SYSTEM_REWARD_ADDR).transfer(uint256(dues));
     } else {
       payable(SYSTEM_REWARD_ADDR).transfer(margin);
@@ -363,7 +363,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     uint256 oldStatus = c.status;
     if (oldStatus != newStatus) {
       c.status = newStatus;
-      statusChanged(c.operateAddr, oldStatus, newStatus);
+      emit statusChanged(c.operateAddr, oldStatus, newStatus);
     }
   }
 

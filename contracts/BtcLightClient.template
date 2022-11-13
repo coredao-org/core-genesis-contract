@@ -1,4 +1,4 @@
-pragma solidity 0.6.12;
+pragma solidity 0.8.4;
 
 import "./lib/Memory.sol";
 import "./lib/BytesToTypes.sol";
@@ -147,11 +147,11 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     if (blockHeight % DIFFICULTY_ADJUSTMENT_INTERVAL == 0) {
       adjustmentHashes[adjustment] = blockHash;
     }
-    submitters[blockHash] = msg.sender;
+    submitters[blockHash] = payable(msg.sender);
 
     collectedRewardForHeaderRelayer = collectedRewardForHeaderRelayer.add(rewardForSyncHeader);
     if (headerRelayersSubmitCount[msg.sender]==0) {
-      headerRelayerAddressRecord.push(msg.sender);
+      headerRelayerAddressRecord.push(payable(msg.sender));
     }
     headerRelayersSubmitCount[msg.sender]++;
     if (++countInRound >= roundSize) {
@@ -206,7 +206,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
      uint256 reward = relayerRewardVault[relayerAddr];
      require(reward != 0, "no relayer reward");
      relayerRewardVault[relayerAddr] = 0;
-     address payable recipient = address(uint160(relayerAddr));
+     address payable recipient = payable(relayerAddr);
      ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(recipient, reward);
   }
 
@@ -457,7 +457,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   // Bitcoin-way of computing the target from the 'bits' field of a blockheader
   // based on http://www.righto.com/2014/02/bitcoin-mining-hard-way-algorithms.html#ref3
   function targetFromBits(uint32 bits) internal pure returns (uint256 target) {
-    int nSize = bits >> 24;
+    uint32 nSize = bits >> 24;
     uint32 nWord = bits & 0x00ffffff;
     if (nSize <= 3) {
         nWord >>= 8 * (3 - nSize);

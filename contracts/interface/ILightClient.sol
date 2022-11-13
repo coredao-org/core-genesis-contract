@@ -1,4 +1,4 @@
-pragma solidity 0.6.12;
+pragma solidity 0.8.4;
 
 interface ILightClient {
   function getRoundPowers(uint256 roundTimeTag, address[] calldata candidates) external view returns (uint256[] memory powers);

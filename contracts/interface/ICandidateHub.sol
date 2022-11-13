@@ -1,4 +1,4 @@
-pragma solidity 0.6.12;
+pragma solidity 0.8.4;
 
 interface ICandidateHub {
   function canDelegate(address agent) external view returns(bool);
