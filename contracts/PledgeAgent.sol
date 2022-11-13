@@ -1,5 +1,5 @@
 pragma solidity 0.8.4;
-pragma experimental ABIEncoderV2;
+
 import "./interface/IPledgeAgent.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/ICandidateHub.sol";
