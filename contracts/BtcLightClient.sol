@@ -163,9 +163,6 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     // bindingHash is left for future use
     // BTC miners who add latest Core block hash to their OP_RETURN output 
     // will be incentivized with extra rewards
-    if (bindingHash != 0) {
-      // Todo for future use
-    }
 
     // equality allows block with same score to become an (alternate) Tip, so
     // that when an (existing) Tip becomes stale, the chain can continue with
@@ -508,25 +505,32 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov{
+    if (value.length != 32) {
+      revert MismatchParamLength(key);
+    }
     if (Memory.compareStrings(key,"rewardForSyncHeader")) {
-      require(value.length == 32, "length of rewardForSyncHeader mismatch");
       uint256 newRewardForSyncHeader = BytesToTypes.bytesToUint256(32, value);
-      require(newRewardForSyncHeader != 0, "rewardForSyncHeader can't be 0");
+      if (newRewardForSyncHeader == 0) {
+        revert OutOfBounds(key, newRewardForSyncHeader, 1, type(uint256).max);
+      }
       rewardForSyncHeader = newRewardForSyncHeader;
     } else if (Memory.compareStrings(key,"callerCompensationMolecule")) {
-      require(value.length == 32, "length of callerCompensationMolecule mismatch");
       uint256 newCallerCompensationMolecule = BytesToTypes.bytesToUint256(32, value);
-      require(newCallerCompensationMolecule <= 10000, "callerCompensationMolecule should be in [0,10000]");
+      if (newCallerCompensationMolecule > 10000) {
+        revert OutOfBounds(key, newCallerCompensationMolecule, 0, 10000);
+      }
       callerCompensationMolecule = newCallerCompensationMolecule;
     } else if (Memory.compareStrings(key,"roundSize")) {
-      require(value.length == 32, "length of roundSize mismatch");
       uint256 newRoundSize = BytesToTypes.bytesToUint256(32, value);
-      require(newRoundSize >= maxWeight, "roundSize requires >= maxWeight");
+      if (newRoundSize < maxWeight) {
+        revert OutOfBounds(key, newRoundSize, maxWeight, type(uint256).max);
+      }
       roundSize = newRoundSize;
     } else if (Memory.compareStrings(key,"maxWeight")) {
-      require(value.length == 32, "length of maxWeight mismatch");
       uint256 newMaxWeight = BytesToTypes.bytesToUint256(32, value);
-      require(newMaxWeight != 0 && roundSize >= newMaxWeight, "maxWeight requires (0,roundSize]");
+      if (newMaxWeight == 0 || newMaxWeight > roundSize) {
+        revert OutOfBounds(key, newMaxWeight, 1, roundSize);
+      }
       maxWeight = newMaxWeight;
     } else {
       require(false, "unknown param");

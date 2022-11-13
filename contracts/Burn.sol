@@ -43,10 +43,14 @@ contract Burn is System, IBurn, IParamSubscriber {
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+    if (value.length != 32) {
+      revert MismatchParamLength(key);
+    }
     if (Memory.compareStrings(key, "burnCap")) {
-      require(value.length == 32, "length of burnCap mismatch");
       uint256 newBurnCap = BytesToTypes.bytesToUint256(32, value);
-      require(newBurnCap > address(this).balance, "the burnCap out of range");
+      if (newBurnCap < address(this).balance) {
+        revert OutOfBounds(key, newBurnCap, address(this).balance, type(uint256).max);
+      }
       burnCap = newBurnCap;
     } else {
       require(false, "unknown param");

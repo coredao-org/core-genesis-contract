@@ -97,6 +97,15 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   event claimedReward(address indexed delegator, address indexed operator, uint256 amount, bool success);
   event claimedPowerReward(address indexed delegator, uint256 amount, bool success);
 
+  /// Inactived agent for delegate. Needed `candidate` actived but not.
+  /// @param candidate agent for delegate.
+  error InactivedAgent(address candidate);
+
+  /// Transfer an agent to the same. Needed different agnets but same.
+  /// @param source source delegateed agent.
+  /// @param target target agent for delegate.
+  error SameAgentTransfer(address source, address target);
+
   function init() external onlyNotInit {
     requiredCoinDeposit = INIT_REQUIRED_COIN_DEPOSIT;
     powerFactor = INIT_HASH_POWER_FACTOR;
@@ -238,7 +247,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Delegate coin to a validator
   /// @param agent The operator address of validator
   function delegateCoin(address agent) external payable {
-    require(ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(agent), "agent is inactivated");
+    if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(agent)) {
+      revert InactivedAgent(agent);
+    }
     uint256 newDeposit = delegateCoin(agent, msg.sender, msg.value);
     emit delegatedCoin(agent, msg.sender, msg.value, newDeposit);
   }
@@ -255,8 +266,12 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param sourceAgent The validator to transfer coin stake from
   /// @param targetAgent The validator to transfer coin stake to
   function transferCoin(address sourceAgent, address targetAgent) external {
-    require(ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetAgent), "agent is inactivated");
-    require(sourceAgent!=targetAgent, "source agent and target agent are the same one");
+    if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetAgent)) {
+      revert InactivedAgent(targetAgent);
+    }
+    if (sourceAgent == targetAgent) {
+      revert SameAgentTransfer(sourceAgent, targetAgent);
+    }
     uint256 deposit = undelegateCoin(sourceAgent, msg.sender);
     uint256 newDeposit = delegateCoin(targetAgent, msg.sender, deposit);
     emit transferredCoin(sourceAgent, targetAgent, msg.sender, deposit, newDeposit);
@@ -428,15 +443,20 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+    if (value.length != 32) {
+      revert MismatchParamLength(key);
+    }
     if (Memory.compareStrings(key, "requiredCoinDeposit")) {
-      require(value.length == 32, "length of requiredCoinDeposit mismatch");
       uint256 newRequiredCoinDeposit = BytesToTypes.bytesToUint256(32, value);
-      require(newRequiredCoinDeposit != 0, "the requiredCoinDeposit out of range");
+      if (newRequiredCoinDeposit == 0) {
+        revert OutOfBounds(key, newRequiredCoinDeposit, 1, type(uint256).max);
+      }
       requiredCoinDeposit = newRequiredCoinDeposit;
     } else if (Memory.compareStrings(key, "powerFactor")) {
-      require(value.length == 32, "length of powerFactor mismatch");
       uint256 newHashPowerFactor = BytesToTypes.bytesToUint256(32, value);
-      require(newHashPowerFactor != 0, "the powerFactor out of range");
+      if (newHashPowerFactor == 0) {
+        revert OutOfBounds(key, newHashPowerFactor, 1, type(uint256).max);
+      }
       powerFactor = newHashPowerFactor;
     } else {
       require(false, "unknown param");

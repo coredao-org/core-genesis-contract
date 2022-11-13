@@ -290,20 +290,26 @@ contract GovHub is System, IParamSubscriber {
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+    if (value.length != 32) {
+      revert MismatchParamLength(key);
+    }
     if (Memory.compareStrings(key, "proposalMaxOperations")) {
-      require(value.length == 32, "length of proposalMaxOperations mismatch");
       uint256 newProposalMaxOperations = BytesToTypes.bytesToUint256(32, value);
-      require(newProposalMaxOperations != 0, "the proposalMaxOperations out of range");
+      if (newProposalMaxOperations == 0) {
+        revert OutOfBounds(key, newProposalMaxOperations, 1, type(uint256).max);
+      }
       proposalMaxOperations = newProposalMaxOperations;
     } else if (Memory.compareStrings(key, "votingPeriod")) {
-      require(value.length == 32, "length of votingPeriod mismatch");
       uint256 newVotingPeriod = BytesToTypes.bytesToUint256(32, value);
-      require(newVotingPeriod >= 28800, "the votingPeriod out of range");
+      if (newVotingPeriod < 28800) {
+        revert OutOfBounds(key, newVotingPeriod, 28800, type(uint256).max);
+      }
       votingPeriod = newVotingPeriod;
     } else if (Memory.compareStrings(key, "executePeriod")) {
-      require(value.length == 32, "length of executePeriod mismatch");
       uint256 newExecutePeriod = BytesToTypes.bytesToUint256(32, value);
-      require(newExecutePeriod >= 28800, "the executePeriod out of range");
+      if (newExecutePeriod < 28800) {
+        revert OutOfBounds(key, newExecutePeriod, 28800, type(uint256).max);
+      }
       executePeriod = newExecutePeriod;
     } else {
       require(false, "unknown param");

@@ -426,25 +426,32 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+    if (value.length != 32) {
+      revert MismatchParamLength(key);
+    }
     if (Memory.compareStrings(key, "requiredMargin")) {
-      require(value.length == 32, "length of requiredMargin mismatch");
       uint256 newRequiredMargin = BytesToTypes.bytesToUint256(32, value);
-      require(newRequiredMargin > dues, "the requiredMargin out of range");
+      if (newRequiredMargin <= dues) {
+        revert OutOfBounds(key, newRequiredMargin, dues+1, type(uint256).max);
+      }
       requiredMargin = newRequiredMargin;
     } else if (Memory.compareStrings(key, "dues")) {
-      require(value.length == 32, "length of dues mismatch");
       uint256 newDues = BytesToTypes.bytesToUint256(32, value);
-      require(newDues != 0 && newDues < requiredMargin, "the dues out of range");
+      if (newDues == 0 || newDues >= requiredMargin) {
+        revert OutOfBounds(key, newDues, 1, requiredMargin - 1);
+      }
       dues = newDues;
     } else if (Memory.compareStrings(key, "validatorCount")) {
-      require(value.length == 32, "length of validatorCount mismatch");
       uint256 newValidatorCount = BytesToTypes.bytesToUint256(32, value);
-      require(newValidatorCount > 5 && newValidatorCount < 42, "the newValidatorCount out of range");
+      if (newValidatorCount <= 5 || newValidatorCount >= 42) {
+        revert OutOfBounds(key, newValidatorCount, 6, 41);
+      }
       validatorCount = newValidatorCount;
     } else if (Memory.compareStrings(key, "maxCommissionChange")) {
-      require(value.length == 32, "length of maxCommissionChange mismatch");
       uint256 newMaxCommissionChange = BytesToTypes.bytesToUint256(32, value);
-      require(newMaxCommissionChange != 0, "the newMaxCommissionChange out of range");
+      if (newMaxCommissionChange == 0) {
+        revert OutOfBounds(key, newMaxCommissionChange, 1, type(uint256).max);
+      }
       maxCommissionChange = newMaxCommissionChange;
     } else {
       require(false, "unknown param");

@@ -113,4 +113,16 @@ contract System {
     assembly { size := extcodesize(addr) }
     return size > 0;
   }
+
+  /// The length of param mismatch. Default is 32 bytes.
+  /// @param name the name of param.
+  error MismatchParamLength(string name);
+
+  /// The passed param is out of bound. Needed in range [`lowerBound`,
+  /// `upperBound`] but the value is `given`.
+  /// @param name the name of param.
+  /// @param given the value of param.
+  /// @param lowerBound requested lower bound of the param.
+  /// @param upperBound requested upper bound of the param
+  error OutOfBounds(string name, uint256 given, uint256 lowerBound, uint256 upperBound);
 }

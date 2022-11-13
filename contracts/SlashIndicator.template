@@ -106,7 +106,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     (bytes32 sigHash2, address validator2) = parseHeader(items2);
     require(sigHash1 != sigHash2, "must be two different blocks");
     require(validator1 != address(0x00), "header data is illegal");
-    require(validator1 == validator2, "validators of the two blocks must be the same");
+    require(validator1 == validator2, "2 blocks' validators aren't same");
     require(IValidatorSet(VALIDATOR_CONTRACT_ADDR).isValidator(validator1), "not a validator");
     IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(validator1, type(uint256).max, felonyDeposit);
     ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(msg.sender), rewardForReportDoubleSign);
@@ -173,30 +173,38 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov{
+    if (value.length != 32) {
+      revert MismatchParamLength(key);
+    }
     if (Memory.compareStrings(key,"misdemeanorThreshold")) {
-      require(value.length == 32, "length of misdemeanorThreshold mismatch");
       uint256 newMisdemeanorThreshold = BytesToTypes.bytesToUint256(32, value);
-      require(newMisdemeanorThreshold >= 1 && newMisdemeanorThreshold < felonyThreshold, "the misdemeanorThreshold out of range");
+      if (newMisdemeanorThreshold == 0 || newMisdemeanorThreshold >= felonyThreshold) {
+        revert OutOfBounds(key, newMisdemeanorThreshold, 1, felonyThreshold - 1);
+      }
       misdemeanorThreshold = newMisdemeanorThreshold;
     } else if (Memory.compareStrings(key,"felonyThreshold")) {
-      require(value.length == 32, "length of felonyThreshold mismatch");
       uint256 newFelonyThreshold = BytesToTypes.bytesToUint256(32, value);
-      require(newFelonyThreshold > misdemeanorThreshold, "the felonyThreshold out of range");
+      if (newFelonyThreshold <= misdemeanorThreshold) {
+        revert OutOfBounds(key, newFelonyThreshold, misdemeanorThreshold + 1, type(uint256).max);
+      }
       felonyThreshold = newFelonyThreshold;
     } else if (Memory.compareStrings(key,"rewardForReportDoubleSign")) {
-      require(value.length == 32, "length of rewardForReportDoubleSign mismatch");
       uint256 newRewardForReportDoubleSign = BytesToTypes.bytesToUint256(32, value);
-      require(newRewardForReportDoubleSign != 0, "the rewardForReportDoubleSign out of range");
+      if (newRewardForReportDoubleSign == 0) {
+        revert OutOfBounds(key, newRewardForReportDoubleSign, 1, type(uint256).max);
+      }
       rewardForReportDoubleSign = newRewardForReportDoubleSign;
     } else if (Memory.compareStrings(key,"felonyDeposit")) {
-      require(value.length == 32, "length of felonyDeposit mismatch");
       uint256 newFelonyDeposit = BytesToTypes.bytesToUint256(32, value);
-      require(newFelonyDeposit >= 1e18, "the felonyDeposit out of range");
+      if (newFelonyDeposit < 1e18) {
+        revert OutOfBounds(key, newFelonyDeposit, 1e18, type(uint256).max);
+      }
       felonyDeposit = newFelonyDeposit;
     } else if (Memory.compareStrings(key,"felonyRound")) {
-      require(value.length == 32, "length of felonyRound mismatch");
       uint256 newFelonyRound = BytesToTypes.bytesToUint256(32, value);
-      require(newFelonyRound >= 1, "the felonyRound out of range");
+      if (newFelonyRound == 0) {
+        revert OutOfBounds(key, newFelonyRound, 1, type(uint256).max);
+      }
       felonyRound = newFelonyRound;
     } else {
       require(false, "unknown param");

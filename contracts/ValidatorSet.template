@@ -288,10 +288,14 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+    if (value.length != 32) {
+      revert MismatchParamLength(key);
+    }
     if (Memory.compareStrings(key, "blockRewardIncentivePercent")) {
-      require(value.length == 32, "length of blockRewardIncentivePercent mismatch");
       uint256 newBlockRewardIncentivePercent = BytesToTypes.bytesToUint256(32, value);
-      require(newBlockRewardIncentivePercent <= 100, "the blockRewardIncentivePercent out of range");
+      if (newBlockRewardIncentivePercent > 100) {
+        revert OutOfBounds(key, newBlockRewardIncentivePercent, 0, 100);
+      }
       blockRewardIncentivePercent = newBlockRewardIncentivePercent;
     } else {
       require(false, "unknown param");
