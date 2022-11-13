@@ -9,6 +9,7 @@ import "./lib/Memory.sol";
 /// This smart contract manages funds for relayers and verifiers
 contract SystemReward is System, ISystemReward, IParamSubscriber {
   uint256 public constant INCENTIVE_BALANCE_CAP = 1e25;
+  uint256 public constant MAX_REWARDS = 5e20;
 
   uint256 public incentiveBalanceCap;
   uint256 public numOperator;
@@ -68,6 +69,9 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     returns (uint256)
   {
     uint256 actualAmount = amount < address(this).balance ? amount : address(this).balance;
+    if (actualAmount > MAX_REWARDS) {
+      actualAmount = MAX_REWARDS;
+    }
     if (actualAmount != 0) {
       to.transfer(actualAmount);
       emit rewardTo(to, actualAmount);
