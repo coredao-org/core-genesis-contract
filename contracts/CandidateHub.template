@@ -126,9 +126,11 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     if (margin >= dues && margin - dues >= fine) {
       uint256 status = c.status | SET_JAIL;
       // update jailMap
-      uint256 jailRound = roundTag + round;
-      if (jailRound < roundTag) jailMap[operateAddress] = type(uint256).max;
-      else jailMap[operateAddress] = jailRound;
+      if (jailMap[operateAddress] > 0) {
+        jailMap[operateAddress] = jailMap[operateAddress] + round;
+      } else {
+        jailMap[operateAddress] = roundTag + round;
+      }
       // deduct margin
       uint256 totalMargin = margin - fine;
       c.margin = totalMargin;
