@@ -268,7 +268,7 @@ contract GovHub is System, IParamSubscriber {
   /// Remove a member
   /// @param member The address of the member to remove
   function removeMember(address member) external onlyInit onlyGov {
-    require(memberSet.length > 1, "at least one member");
+    require(memberSet.length > 5, "at least five members in DAO");
     uint256 index = members[member];
     require(index != 0, "member does not exist");
     if (index != memberSet.length) {
