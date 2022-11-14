@@ -8,8 +8,6 @@ contract CandidateHubMock is CandidateHub {
     uint256 public totalPower;
     uint256 public totalCoin;
 
-    constructor() CandidateHub() public {}
-
     function developmentInit() external {
         roundInterval = 1;
         requiredMargin = requiredMargin / 1e16;
@@ -62,7 +60,7 @@ contract CandidateHubMock is CandidateHub {
     jailMap[k] = v;
   }
 
-  function setCandidateMargin(address k, int256 v) public {
+  function setCandidateMargin(address k, uint256 v) public {
     candidateSet[operateMap[k] - 1].margin = v;
   }
 
@@ -110,7 +108,7 @@ contract CandidateHubMock is CandidateHub {
         consensusAddr,
         feeAddr,
         commissionThousandths,
-        int256(msg.value),
+        msg.value,
         status,
         roundTag,
         commissionThousandths
@@ -120,6 +118,6 @@ contract CandidateHubMock is CandidateHub {
     operateMap[operateAddr] = index;
     consensusMap[consensusAddr] = index;
 
-    emit registered(operateAddr, consensusAddr, feeAddr, commissionThousandths, int256(msg.value));
+    emit registered(operateAddr, consensusAddr, feeAddr, commissionThousandths, msg.value);
   }
 }

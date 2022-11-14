@@ -15,7 +15,9 @@ import "./lib/RLPDecode.sol";
 /// All rewards for validators on Core blockchain are minted in genesis block and stored in this contract
 contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   using SafeMath for uint256;
-  using RLPDecode for *;
+  using RLPDecode for bytes;
+  using RLPDecode for RLPDecode.Iterator;
+  using RLPDecode for RLPDecode.RLPItem;
 
   uint256 public constant BLOCK_REWARD = 3e18;
   uint256 public constant BLOCK_REWARD_INCENTIVE_PERCENT = 10;

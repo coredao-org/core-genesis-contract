@@ -9,7 +9,7 @@ contract BtcLightClientMock is BtcLightClient {
     uint256 public constant MOCK_SCORE = 24371874614346;
     uint32 public constant MOCK_ADJUSTMENT = 11;
 
-    constructor() BtcLightClient() public {
+    constructor() BtcLightClient() {
         mockBlockHeight = INIT_CHAIN_HEIGHT;
     }
 

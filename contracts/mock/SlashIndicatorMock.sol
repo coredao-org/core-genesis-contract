@@ -2,9 +2,11 @@ pragma experimental ABIEncoderV2;
 pragma solidity 0.8.4;
 
 import "../SlashIndicator.sol";
+import "../lib/RLPDecode.sol";
 
 contract SlashIndicatorMock is SlashIndicator {
-    constructor() public SlashIndicator() {}
+    using RLPDecode for bytes;
+    using RLPDecode for RLPDecode.RLPItem;
 
     function developmentInit() external {
         rewardForReportDoubleSign = rewardForReportDoubleSign / 1e16;

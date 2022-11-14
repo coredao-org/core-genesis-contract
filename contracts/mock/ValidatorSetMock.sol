@@ -3,8 +3,6 @@ pragma experimental ABIEncoderV2;
 import "../ValidatorSet.sol";
 
 contract ValidatorSetMock is ValidatorSet {
-    constructor() ValidatorSet() public {}
-
     receive() external payable{}
 
     function developmentInit() external {
@@ -28,7 +26,7 @@ contract ValidatorSetMock is ValidatorSet {
         IPledgeAgent(PLEDGE_AGENT_ADDR).addRoundReward{ value: rewardSum }(agentList, rewardList);
     }
 
-    function jailValidator(address operateAddress, uint256 round, int256 fine) external {
+    function jailValidator(address operateAddress, uint256 round, uint256 fine) external {
         ICandidateHub(CANDIDATE_HUB_ADDR).jailValidator(operateAddress, round, fine);
     }
 

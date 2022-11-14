@@ -2,9 +2,11 @@ pragma experimental ABIEncoderV2;
 pragma solidity 0.8.4;
 
 import "../GovHub.sol";
+import "../lib/RLPDecode.sol";
 
 contract GovHubMock is GovHub {
-    constructor() GovHub() public {}
+    using RLPDecode for bytes;
+    using RLPDecode for RLPDecode.RLPItem;
 
     function developmentInit() external {
         votingPeriod = 20;

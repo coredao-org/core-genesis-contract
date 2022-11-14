@@ -12,8 +12,10 @@ import "./lib/RLPEncode.sol";
 
 /// This contract manages slash/jail operations to validators on Core blockchain
 contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
-  using RLPDecode for *;
-  using RLPEncode for *;
+  using RLPDecode for bytes;
+  using RLPDecode for RLPDecode.RLPItem;
+  using RLPEncode for bytes;
+  using RLPEncode for bytes[];
 
   uint256 public constant MISDEMEANOR_THRESHOLD = 50;
   uint256 public constant FELONY_THRESHOLD = 150;
