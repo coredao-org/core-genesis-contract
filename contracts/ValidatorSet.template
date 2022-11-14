@@ -8,13 +8,11 @@ import "./interface/IValidatorSet.sol";
 import "./interface/IPledgeAgent.sol";
 import "./interface/ISystemReward.sol";
 import "./interface/ICandidateHub.sol";
-import "./lib/SafeMath.sol";
 import "./lib/RLPDecode.sol";
 
 /// This contract manages elected validators in each round
 /// All rewards for validators on Core blockchain are minted in genesis block and stored in this contract
 contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
-  using SafeMath for uint256;
   using RLPDecode for bytes;
   using RLPDecode for RLPDecode.Iterator;
   using RLPDecode for RLPDecode.RLPItem;
@@ -83,7 +81,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// Check whether the input address belongs to an active validator
   /// @param addr The address to check
   /// @return true/false
-  function isValidator(address addr) public override returns (bool) {
+  function isValidator(address addr) public override view returns (bool) {
     return currentValidatorSetMap[addr] != 0;
   }
 

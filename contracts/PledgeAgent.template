@@ -6,13 +6,10 @@ import "./interface/ICandidateHub.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./System.sol";
-import "./lib/SafeMath.sol";
 
 /// This contract manages user delegate, also known as stake
 /// Including both coin delegate and hash delegate
 contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
-  using SafeMath for uint256;
-
   uint256 public constant INIT_REQUIRED_COIN_DEPOSIT = 1e18;
   uint256 public constant INIT_HASH_POWER_FACTOR = 20000;
   uint256 public constant DUST_LIMIT = {% if mock %}0{% else %}1e13{% endif %};

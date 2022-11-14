@@ -5,14 +5,12 @@ import "./lib/BytesToTypes.sol";
 import "./interface/ILightClient.sol";
 import "./interface/ISystemReward.sol";
 import "./interface/IParamSubscriber.sol";
-import "./lib/SafeMath.sol";
 import "./System.sol";
 
 /// This contract implements a BTC light client on Core blockchain
 /// Relayers store BTC blocks to Core blockchain by calling this contract
 /// Which is used to calculate hybrid score and reward distribution
 contract BtcLightClient is ILightClient, System, IParamSubscriber{
-  using SafeMath for uint256;
 
   // error codes for storeBlockHeader
   int256 public constant ERR_DIFFICULTY = 10010; // difficulty didn't match current difficulty
@@ -149,14 +147,14 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     }
     submitters[blockHash] = payable(msg.sender);
 
-    collectedRewardForHeaderRelayer = collectedRewardForHeaderRelayer.add(rewardForSyncHeader);
+    collectedRewardForHeaderRelayer += rewardForSyncHeader;
     if (headerRelayersSubmitCount[msg.sender]==0) {
       headerRelayerAddressRecord.push(payable(msg.sender));
     }
     headerRelayersSubmitCount[msg.sender]++;
     if (++countInRound >= roundSize) {
       uint256 callerHeaderReward = distributeRelayerReward();
-      relayerRewardVault[msg.sender] = relayerRewardVault[msg.sender].add(callerHeaderReward);
+      relayerRewardVault[msg.sender] += callerHeaderReward;
       countInRound = 0;
     }
 
@@ -222,18 +220,18 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       address relayer = relayers[index];
       uint256 weight = calculateRelayerWeight(headerRelayersSubmitCount[relayer]);
       relayerWeight[index] = weight;
-      totalWeight = totalWeight.add(weight);
+      totalWeight += weight;
     }
 
-    uint256 callerReward = totalReward.mul(callerCompensationMolecule).div(10000);
-    totalReward = totalReward.sub(callerReward);
+    uint256 callerReward = totalReward * callerCompensationMolecule / 10000;
+    totalReward -= callerReward;
     uint256 remainReward = totalReward;
     for (uint256 index = 1; index < relayerSize; index++) {
-      uint256 reward = relayerWeight[index].mul(totalReward).div(totalWeight);
-      relayerRewardVault[relayers[index]] = relayerRewardVault[relayers[index]].add(reward);
-      remainReward = remainReward.sub(reward);
+      uint256 reward = relayerWeight[index] * totalReward / totalWeight;
+      relayerRewardVault[relayers[index]] += reward;
+      remainReward -= reward;
     }
-    relayerRewardVault[relayers[0]] = relayerRewardVault[relayers[0]].add(remainReward);
+    relayerRewardVault[relayers[0]] += remainReward;
 
     collectedRewardForHeaderRelayer = 0;
     for (uint256 index = 0; index < relayerSize; index++) {

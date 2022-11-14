@@ -5,12 +5,9 @@ import "./lib/Memory.sol";
 import "./interface/IRelayerHub.sol";
 import "./interface/IParamSubscriber.sol";
 import "./System.sol";
-import "./lib/SafeMath.sol";
 
 /// This contract manages BTC relayers on Core blockchain
 contract RelayerHub is IRelayerHub, System, IParamSubscriber{
-  using SafeMath for uint256;
-
   uint256 public constant INIT_REQUIRED_DEPOSIT =  1e20;
   uint256 public constant INIT_DUES =  1e18;
 
@@ -66,7 +63,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     Relayer memory r = relayers[msg.sender];
     delete relayersExistMap[msg.sender];
     delete relayers[msg.sender];
-    payable(msg.sender).transfer(r.deposit.sub(r.dues));
+    payable(msg.sender).transfer(r.deposit - r.dues);
     payable(SYSTEM_REWARD_ADDR).transfer(r.dues);
     emit relayerUnRegister(msg.sender);
   }
