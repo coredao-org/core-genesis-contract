@@ -26,10 +26,12 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   // key: candidate's operateAddr
   mapping(address => Agent) public agentsMap;
 
-  // this field is used to store rewards of delegated hash powers
-  // key: reward address set by BTC miners
+  // This field is used to store rewards of delegators. There are two cases
+  // for storing value: 1, distribute rewards of hash power when turn round,
+  // 2, transfer value failed for coin delegators.
+  // key: delegator address
   // value: amount of CORE tokens claimable
-  mapping(address => uint256) public powerRewardMap;
+  mapping(address => uint256) public rewardMap;
 
   // This field is not used in the latest implementation
   // It stays here in order to keep data compatibility for TestNet upgrade
@@ -43,11 +45,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   // the valid value should be greater than 10,000 since the chain started.
   // It is initialized to 1.
   uint256 public roundTag;
-
-  // there will be unclaimed rewards when delegators exit.
-  // the rewards for the exit day will be delivered by system
-  // but can not be claimed - we call them as dust
-  uint256 public totalDust;
 
   struct CoinDelegator {
     uint256 deposit;
@@ -92,7 +89,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   );
   event roundReward(address indexed agent, uint256 coinReward, uint256 powerReward);
   event claimedReward(address indexed delegator, address indexed operator, uint256 amount, bool success);
-  event claimedPowerReward(address indexed delegator, uint256 amount, bool success);
 
   /// Inactived agent for delegate. Needed `candidate` actived but not.
   /// @param candidate agent for delegate.
@@ -224,18 +220,27 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       return;
     }
     uint256 reward = rs.coin * POWER_BLOCK_FACTOR * rs.powerFactor / 10000 * r.totalReward / r.score;
-    uint256 totalReward = reward * miners.length;
-    require(r.remainReward >= totalReward, "there is not enough reward");
-
     uint256 minerSize = miners.length;
+
+    uint256 totalReward = reward * minerSize;
+    uint256 remainReward = r.remainReward;
+    require(remainReward >= totalReward, "there is not enough reward");
+
     for (uint256 i = 0; i < minerSize; i++) {
-      powerRewardMap[miners[i]] += reward;
+      rewardMap[miners[i]] += reward;
     }
 
     if (r.coin == 0) {
-      totalDust += (r.remainReward - totalReward);
       delete a.rewardSet[l-1];
-    } else {
+      if (minerSize == 0) {
+        payable(FOUNDATION_ADDR).transfer(remainReward);
+      } else {
+        uint256 dust = remainReward - totalReward;
+        if (dust != 0) {
+          rewardMap[miners[0]] += dust;
+        }
+      }
+    } else if (totalReward != 0) {
       r.remainReward -= totalReward;
     }
   }
@@ -274,17 +279,18 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     emit transferredCoin(sourceAgent, targetAgent, msg.sender, deposit, newDeposit);
   }
 
-  /// Claim reward for coin delegate
+  /// Claim reward for any delegator
   /// @param delegator The delegator address
-  /// @param agentList The list of validators to claim rewards on
+  /// @param agentList The list of validators to claim rewards on, it can be empty
   /// @return (Amount claimed, Are all rewards claimed)
   function claimReward(address payable delegator, address[] calldata agentList) external returns (uint256, bool) {
     // limit round count to control gas usage
     int256 roundLimit = 500;
     uint256 reward;
-    uint256 dust;
-    uint256 rewardSum = 0;
-    uint256 dustSum = 0;
+    uint256 rewardSum = rewardMap[msg.sender];
+    if (rewardSum != 0) {
+      rewardMap[msg.sender] = 0;
+    }
 
     uint256 agentSize = agentList.length;
     for (uint256 i = 0; i < agentSize; ++i) {
@@ -293,49 +299,24 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       CoinDelegator storage d = a.cDelegatorMap[delegator];
       if (d.newDeposit == 0) continue;
       int256 roundCount = int256(a.rewardSet.length - d.rewardIndex);
-      (reward, dust) = collectCoinReward(a, d, roundLimit);
+      reward = collectCoinReward(a, d, roundLimit);
       roundLimit -= roundCount;
       rewardSum += reward;
-      dustSum += dust;
       // if there are rewards to be collected, leave them there
       if (roundLimit < 0) break;
     }
-    require(rewardSum != 0, "no pledge reward");
-    distributeReward(delegator, rewardSum, dustSum);
+    if (rewardSum != 0) {
+      distributeReward(delegator, rewardSum);
+    }
     return (rewardSum, roundLimit >= 0);
   }
 
-  /// Claim reward for hash power delegate
-  function claimPowerReward() external {
-    uint256 reward = powerRewardMap[msg.sender];
-    if (reward == 0) {
-      return;
-    }
-    powerRewardMap[msg.sender] = 0;
-    bool success = payable(msg.sender).send(reward);
-    emit claimedPowerReward(msg.sender, reward, success);
-    if (!success) {
-      totalDust += reward;
-    }
-  }
-
   /*********************** Internal methods ***************************/
-  function distributeReward(address payable delegator, uint256 reward, uint256 dust) internal {
-    if (reward != 0) {
-      if (dust <= DUST_LIMIT) {
-        reward += dust;
-        dust = 0;
-      } else {
-        reward += DUST_LIMIT;
-        dust -= DUST_LIMIT;
-      }
-      bool success = delegator.send(reward);
-      emit claimedReward(delegator, msg.sender, reward, success);
-      if (!success) {
-        totalDust += reward + dust;
-      } else if (dust != 0) {
-        totalDust += dust;
-      }
+  function distributeReward(address payable delegator, uint256 reward) internal {
+    (bool success, bytes memory data) = delegator.call{value: reward, gas: 50000}("");
+    emit claimedReward(delegator, msg.sender, reward, success);
+    if (!success) {
+      rewardMap[msg.sender] = reward;
     }
   }
 
@@ -353,13 +334,15 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     } else {
       require(deposit != 0, "deposit value is zero");
       CoinDelegator storage d = a.cDelegatorMap[delegator];
-      (uint256 rewardAmount, uint256 dust) = collectCoinReward(a, d, 0x7FFFFFFF);
-      distributeReward(payable(delegator), rewardAmount, dust);
+      uint256 rewardAmount = collectCoinReward(a, d, 0x7FFFFFFF);
       if (d.changeRound < roundTag) {
         d.deposit = d.newDeposit;
         d.changeRound = roundTag;
       }
       d.newDeposit = newDeposit;
+      if (rewardAmount > 0) {
+        distributeReward(payable(delegator), rewardAmount);
+      }
     }
     a.totalDeposit += deposit;
     return newDeposit;
@@ -371,8 +354,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 newDeposit = d.newDeposit;
     require(newDeposit != 0, "delegator does not exist");
 
-    (uint256 rewardAmount, uint256 dust) = collectCoinReward(a, d, 0x7FFFFFFF);
-    distributeReward(payable(delegator), rewardAmount, dust);
+    uint256 rewardAmount = collectCoinReward(a, d, 0x7FFFFFFF);
 
     a.totalDeposit -= newDeposit;
     if (a.rewardSet.length != 0) {
@@ -386,6 +368,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       }
     }
     delete a.cDelegatorMap[delegator];
+    if (rewardAmount > 0) {
+      distributeReward(payable(delegator), rewardAmount);
+    }
     return newDeposit;
   }
 
@@ -393,13 +378,12 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     Agent storage a,
     CoinDelegator storage d,
     int256 roundLimit
-  ) internal returns (uint256 rewardAmount, uint256 dust) {
+  ) internal returns (uint256 rewardAmount) {
     uint256 rewardLength = a.rewardSet.length;
     uint256 rewardIndex = d.rewardIndex;
     rewardAmount = 0;
-    dust = 0;
     if (rewardIndex >= rewardLength) {
-      return (rewardAmount, dust);
+      return rewardAmount;
     }
     if (rewardIndex + uint256(roundLimit) < rewardLength) {
       rewardLength = rewardIndex + uint256(roundLimit);
@@ -415,24 +399,24 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         deposit = d.deposit;
         d.deposit = d.newDeposit;
       }
-      uint256 rsPower = stateMap[r.round].power;
-      curReward = (r.totalReward * deposit * rsPower) / r.score;
-      rewardAmount += curReward;
       require(r.coin >= deposit, "reward is not enough");
-      require(r.remainReward >= curReward, "there is not enough reward");
       if (r.coin == deposit) {
-        dust += (r.remainReward - curReward);
+        curReward = r.remainReward;
         delete a.rewardSet[rewardIndex];
       } else {
+        uint256 rsPower = stateMap[r.round].power;
+        curReward = (r.totalReward * deposit * rsPower) / r.score;
+        require(r.remainReward >= curReward, "there is not enough reward");
         r.coin -= deposit;
         r.remainReward -= curReward;
       }
+      rewardAmount += curReward;
       rewardIndex++;
     }
 
     // update index whenever claim happens
     d.rewardIndex = rewardIndex;
-    return (rewardAmount, dust);
+    return rewardAmount;
   }
 
   /*********************** Governance ********************************/
@@ -459,14 +443,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       require(false, "unknown param");
     }
     emit paramChange(key, value);
-  }
-
-  /// Collect all dusts and send to DAO treasury
-  function gatherDust() external onlyInit onlyGov {
-    if (totalDust != 0) {
-      payable(FOUNDATION_ADDR).transfer(totalDust);
-      totalDust = 0;
-    }
   }
 
   /*********************** Public view ********************************/
