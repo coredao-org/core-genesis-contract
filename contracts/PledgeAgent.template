@@ -26,9 +26,10 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   // key: candidate's operateAddr
   mapping(address => Agent) public agentsMap;
 
-  // This field is used to store rewards of delegators. There are two cases
-  // for storing value: 1, distribute rewards of hash power when turn round,
-  // 2, transfer value failed for coin delegators.
+  // This field is used to store `special` reward records of delegators. 
+  // There are two cases
+  //  1, distribute hash power rewards dust to one miner when turn round
+  //  2, save the amount of tokens failed to claim by coin delegators
   // key: delegator address
   // value: amount of CORE tokens claimable
   mapping(address => uint256) public rewardMap;
@@ -90,14 +91,14 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   event roundReward(address indexed agent, uint256 coinReward, uint256 powerReward);
   event claimedReward(address indexed delegator, address indexed operator, uint256 amount, bool success);
 
-  /// Inactived agent for delegate. Needed `candidate` actived but not.
-  /// @param candidate agent for delegate.
-  error InactivedAgent(address candidate);
+  /// The validator candidate is inactive, it is expected to be active
+  /// @param candidate Address of the validator candidate
+  error InactiveAgent(address candidate);
 
-  /// Transfer an agent to the same. Needed different agnets but same.
-  /// @param source source delegateed agent.
-  /// @param target target agent for delegate.
-  error SameAgentTransfer(address source, address target);
+  /// Same source/target addressed provided, it is expected to be different
+  /// @param source Address of the source candidate
+  /// @param target Address of the target candidate
+  error SameCandidate(address source, address target);
 
   function init() external onlyNotInit {
     requiredCoinDeposit = INIT_REQUIRED_COIN_DEPOSIT;
@@ -250,7 +251,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param agent The operator address of validator
   function delegateCoin(address agent) external payable {
     if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(agent)) {
-      revert InactivedAgent(agent);
+      revert InactiveAgent(agent);
     }
     uint256 newDeposit = delegateCoin(agent, msg.sender, msg.value);
     emit delegatedCoin(agent, msg.sender, msg.value, newDeposit);
@@ -269,17 +270,17 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param targetAgent The validator to transfer coin stake to
   function transferCoin(address sourceAgent, address targetAgent) external {
     if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetAgent)) {
-      revert InactivedAgent(targetAgent);
+      revert InactiveAgent(targetAgent);
     }
     if (sourceAgent == targetAgent) {
-      revert SameAgentTransfer(sourceAgent, targetAgent);
+      revert SameCandidate(sourceAgent, targetAgent);
     }
     uint256 deposit = undelegateCoin(sourceAgent, msg.sender);
     uint256 newDeposit = delegateCoin(targetAgent, msg.sender, deposit);
     emit transferredCoin(sourceAgent, targetAgent, msg.sender, deposit, newDeposit);
   }
 
-  /// Claim reward for any delegator
+  /// Claim reward for delegators
   /// @param delegator The delegator address
   /// @param agentList The list of validators to claim rewards on, it can be empty
   /// @return (Amount claimed, Are all rewards claimed)

@@ -106,7 +106,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     (bytes32 sigHash2, address validator2) = parseHeader(items2);
     require(sigHash1 != sigHash2, "must be two different blocks");
     require(validator1 != address(0x00), "validator is illegal");
-    require(validator1 == validator2, "2 blocks need a same validator");
+    require(validator1 == validator2, "must be the same validator");
     require(IValidatorSet(VALIDATOR_CONTRACT_ADDR).isValidator(validator1), "not a validator");
     IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(validator1, INFINITY_ROUND, felonyDeposit);
     ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(msg.sender), rewardForReportDoubleSign);

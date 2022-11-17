@@ -14,7 +14,7 @@ contract GovHub is System, IParamSubscriber {
 
   uint256 public constant PROPOSAL_MAX_OPERATIONS = 1;
   uint256 public constant VOTING_PERIOD = 201600;
-  uint256 public constant EXECUTE_PERIOD = 201600;
+  uint256 public constant EXECUTING_PERIOD = 201600;
   bytes public constant INIT_MEMBERS = hex"f83f9491fb7d8a73d2752830ea189737ea0e007f999b949448bfbc530e7c54c332b0fae07312fba7078b878994de60b7d0e6b758ca5dd8c61d377a2c5f1af51ec1";
 
   uint256 public proposalMaxOperations;
@@ -27,7 +27,7 @@ contract GovHub is System, IParamSubscriber {
   mapping(address => uint256) public latestProposalIds;
   uint256 public proposalCount;
 
-  uint256 public executePeriod;
+  uint256 public executingPeriod;
 
   event paramChange(string key, bytes value);
   event receiveDeposit(address indexed from, uint256 amount);
@@ -91,7 +91,7 @@ contract GovHub is System, IParamSubscriber {
   function init() external onlyNotInit {
     proposalMaxOperations = PROPOSAL_MAX_OPERATIONS;
     votingPeriod = VOTING_PERIOD;
-    executePeriod = EXECUTE_PERIOD;
+    executingPeriod = EXECUTING_PERIOD;
     RLPDecode.RLPItem[] memory items = INIT_MEMBERS.toRLPItem().toList();
     uint256 itemSize = items.length;
     for (uint256 i = 0; i < itemSize; i++) {
@@ -243,7 +243,7 @@ contract GovHub is System, IParamSubscriber {
       return ProposalState.Defeated;
     } else if (proposal.executed) {
       return ProposalState.Executed;
-    } else if (block.number > proposal.endBlock + executePeriod) {
+    } else if (block.number > proposal.endBlock + executingPeriod) {
       return ProposalState.Expired;
     } else {
       return ProposalState.Succeeded;
@@ -306,12 +306,12 @@ contract GovHub is System, IParamSubscriber {
         revert OutOfBounds(key, newVotingPeriod, 28800, type(uint256).max);
       }
       votingPeriod = newVotingPeriod;
-    } else if (Memory.compareStrings(key, "executePeriod")) {
-      uint256 newExecutePeriod = BytesToTypes.bytesToUint256(32, value);
-      if (newExecutePeriod < 28800) {
-        revert OutOfBounds(key, newExecutePeriod, 28800, type(uint256).max);
+    } else if (Memory.compareStrings(key, "executingPeriod")) {
+      uint256 newExecutingPeriod = BytesToTypes.bytesToUint256(32, value);
+      if (newExecutingPeriod < 28800) {
+        revert OutOfBounds(key, newExecutingPeriod, 28800, type(uint256).max);
       }
-      executePeriod = newExecutePeriod;
+      executingPeriod = newExecutingPeriod;
     } else {
       require(false, "unknown param");
     }

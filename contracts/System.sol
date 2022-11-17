@@ -68,23 +68,11 @@ contract System {
     _;
   }
 
-  modifier notContract() {
-    require(!isContract(msg.sender), "contract is not allowed to be a relayer");
-    _;
-  }
-
-  // Not reliable, do not use when need strong verify
-  function isContract(address addr) internal view returns (bool) {
-    uint256 size;
-    assembly { size := extcodesize(addr) }
-    return size > 0;
-  }
-
   /// The length of param mismatch. Default is 32 bytes.
   /// @param name the name of param.
   error MismatchParamLength(string name);
 
-  /// The passed param is out of bound. Needed in range [`lowerBound`,
+  /// The passed in param is out of bound. Should be in range [`lowerBound`,
   /// `upperBound`] but the value is `given`.
   /// @param name the name of param.
   /// @param given the value of param.

@@ -117,7 +117,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
     Candidate storage c = candidateSet[index - 1];
     uint256 margin = c.margin;
-    if (margin >= dues && margin - dues >= fine) {
+    if (margin - dues >= fine) {
       uint256 status = c.status | SET_JAIL;
       // update jailMap
       if (jailMap[operateAddress] > 0) {
@@ -163,7 +163,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     // update the system round tag; new round starts
     
     uint256 roundTimestamp = block.timestamp / roundInterval;
-    require(roundTimestamp > roundTag, "one round can only turn once");
+    require(roundTimestamp > roundTag, "not allowed to turn round, wait for more time");
     roundTag = roundTimestamp;
     
 
@@ -245,13 +245,13 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     external payable
     onlyInit
   {
-    require(candidateSet.length <= CANDIDATE_COUNT_LIMIT, "candidateSet is full");
+    require(candidateSet.length <= CANDIDATE_COUNT_LIMIT, "maximum candidate size reached");
     require(operateMap[msg.sender] == 0, "candidate already exists");
     require(msg.value >= requiredMargin, "deposit is not enough");
     require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should be in (0, 1000)");
     require(consensusMap[consensusAddr] == 0, "consensus already exists");
-    require(consensusAddr != address(0), "consensus address is zero");
-    require(feeAddr != address(0), "fee address is zero");
+    require(consensusAddr != address(0), "consensus address should not be zero");
+    require(feeAddr != address(0), "fee address should not be zero");
     // check jail status
     require(jailMap[msg.sender] < roundTag, "it is in jail");
 
@@ -288,8 +288,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths  
   function update(address consensusAddr, address payable feeAddr, uint32 commissionThousandths) external onlyInit exist{
     require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should in range (0, 1000)");
-    require(consensusAddr != address(0), "consensus address is zero");
-    require(feeAddr != address(0), "fee address is zero");
+    require(consensusAddr != address(0), "consensus address should not be zero");
+    require(feeAddr != address(0), "fee address should not be zero");
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     uint256 commissionLastRoundValue = roundTag == c.commissionLastChangeRound
@@ -335,7 +335,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// Add refundable deposits
   /// @dev Candidate will not be elected if there are not enough deposits
   function addMargin() external payable onlyInit exist {
-    require(msg.value != 0, "value should be not zero");
+    require(msg.value != 0, "value should not be zero");
     uint256 index = operateMap[msg.sender];
     uint256 totalMargin = candidateSet[index - 1].margin + msg.value;
     candidateSet[index - 1].margin = totalMargin;

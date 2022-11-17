@@ -27,8 +27,8 @@ program.option(
 )
 
 program.option(
-    "--executePeriod <executePeriod>",
-    "executePeriod",
+    "--executingPeriod <executingPeriod>",
+    "executingPeriod",
     201600
 )
 
@@ -48,7 +48,7 @@ if (initMembersBytes == ""){
 const data = {
     initMembersBytes: initMembersBytes,
     votingPeriod: program.votingPeriod,
-    executePeriod: program.executePeriod,
+    executingPeriod: program.executingPeriod,
     mock: program.mock,
 };
 
