@@ -15,9 +15,9 @@ contract SlashIndicatorMock is SlashIndicator {
         felonyThreshold = 4;
     }
 
-    function parseHeader(bytes calldata header1) public pure returns (bytes32, address) {
-        RLPDecode.RLPItem[] memory items1 = header1.toRLPItem().toList();
-        return parseHeader(items1);
+    function parseHeader(bytes calldata header) public pure returns (bytes32, address) {
+        RLPDecode.RLPItem[] memory items = header.toRLPItem().toList();
+        return parseHeader(items);
     }
 
   function setIndicators(address[] calldata newValidators, uint256[] calldata counts) public {

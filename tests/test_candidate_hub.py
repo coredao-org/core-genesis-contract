@@ -6,7 +6,7 @@ from eth_account import Account
 from brownie import accounts
 from brownie.test import given, strategy
 from brownie.network.transaction import Status, TransactionReceipt
-from .utils import random_address, expect_event
+from .utils import random_address, expect_event, encode_args_with_signature
 from .common import register_candidate, turn_round, get_candidate
 
 
@@ -222,11 +222,9 @@ def test_register_candidate(candidate_hub, required_margin):
     fee_address = random_address()
 
     tests = [
-        (accounts[1], consensus_address, fee_address, 0, required_margin, False, "commissionThousandths should in range (0, 1000)"),
-        (accounts[1], consensus_address, fee_address, 1000, required_margin, False, "commissionThousandths should in range (0, 1000)"),
+        (accounts[1], consensus_address, fee_address, 0, required_margin, False, "commissionThousandths should be in (0, 1000)"),
+        (accounts[1], consensus_address, fee_address, 1000, required_margin, False, "commissionThousandths should be in (0, 1000)"),
         (accounts[1], consensus_address, fee_address, 1, required_margin - 1, False, "deposit is not enough"),
-        (accounts[1], candidate_hub.address, fee_address, 1, required_margin, False, "contract is not allowed to be consensus address"),
-        (accounts[1], consensus_address, candidate_hub.address, 1, required_margin, False, "contract is not allowed to be fee address"),
         (accounts[3], consensus_address, fee_address, 1, required_margin, False, "it is in jail"),
         (accounts[1], consensus_address, fee_address, 100, required_margin, True, ""),
         (accounts[1], random_address(), fee_address, 100, required_margin, False, "candidate already exists"),
@@ -258,22 +256,22 @@ def test_unregister_candidate(candidate_hub, required_margin):
     candidate_hub.register(consensus_address, fee_address, 10, {'from': accounts[3], 'value': required_margin})
 
     tests = [
-        (accounts[1], None, False, "candidate does not exist", None, None, None, None),
-        (accounts[3], 4, False, "candidate status is not cleared", None, None, None, None),
-        (accounts[3], 5, False, "candidate status is not cleared", None, None, None, None),
-        (accounts[3], 6, False, "candidate status is not cleared", None, None, None, None),
-        (accounts[3], 7, False, "candidate status is not cleared", None, None, None, None),
-        (accounts[3], 13, False, "candidate status is not cleared", None, None, None, None),
-        (accounts[3], 14, False, "candidate status is not cleared", None, None, None, None),
-        (accounts[3], 15, False, "candidate status is not cleared", None, None, None, None),
-        (accounts[3], 16, False, "candidate status is not cleared", None, None, None, None),
-        (accounts[3], 17, False, "candidate status is not cleared", None, None, None, None),
-        (accounts[3], 1, False, "margin is not enough to cover dues", 0, None, None, None),
-        (accounts[3], None, True, "", candidate_hub.dues(), None, None, None),
-        (accounts[2], None, True, "", None, True, consensus_address, required_margin - candidate_hub.dues()),
+        (accounts[1], None, False, "candidate does not exist", None, None, None),
+        (accounts[3], 4, False, "candidate status is not cleared", None, None, None),
+        (accounts[3], 5, False, "candidate status is not cleared", None, None, None),
+        (accounts[3], 6, False, "candidate status is not cleared", None, None, None),
+        (accounts[3], 7, False, "candidate status is not cleared", None, None, None),
+        (accounts[3], 13, False, "candidate status is not cleared", None, None, None),
+        (accounts[3], 14, False, "candidate status is not cleared", None, None, None),
+        (accounts[3], 15, False, "candidate status is not cleared", None, None, None),
+        (accounts[3], 16, False, "candidate status is not cleared", None, None, None),
+        (accounts[3], 17, False, "candidate status is not cleared", None, None, None),
+        (accounts[3], 1, True, "", 0, None, None),
+        (accounts[3], None, True, "", candidate_hub.dues(), True, consensus_address),
+        (accounts[2], None, True, "", None, True, consensus_address),
     ]
 
-    for operate_addr, set_status, ret, err, set_margin, register, consensus_addr, inc_balance in tests:
+    for operate_addr, set_status, ret, err, set_margin, register, consensus_addr in tests:
         if register is True:
             if consensus_addr is None:
                 consensus_addr = random_address()
@@ -416,7 +414,6 @@ def test_jail_validator(candidate_hub, validator_set, required_margin):
 
     tests = [
         (accounts[1], None, 1, None, None, None, 1, False, True, ""),
-        (accounts[1], True, 1, None, None, 1, -11, None, True, ""),
         (accounts[2], True, 1, required_margin, 17, 29, 1, None, True, ""),
         (accounts[3], True, 1, required_margin, 19, 31, 1, True, True, ""),
         (accounts[4], True, 1, required_margin, 17, 29, required_margin, None, True, ""),
@@ -441,20 +438,27 @@ def test_jail_validator(candidate_hub, validator_set, required_margin):
             if not register:
                 assert len(tx.events.keys()) == 0
             else:
-                if fine > 0:
-                    expect_event(tx, "deductedMargin", {
-                        "operateAddr": operate_addr,
-                        "margin": fine,
-                        "totalMargin": set_margin - fine
-                    })
+                if set_margin >= candidate_hub.dues() + fine:
                     expect_event(tx, "statusChanged", {
                         "operateAddr": operate_addr,
                         "oldStatus": old_status,
                         "newStatus": status
                     })
+                    expect_event(tx, "deductedMargin", {
+                        "operateAddr": operate_addr,
+                        "margin": fine,
+                        "totalMargin": set_margin - fine
+                    })
+                    assert candidate_hub.getCandidate(operate_addr).dict()['status'] == status
                 else:
-                    assert len(tx.events.keys()) == 0
-                assert candidate_hub.getCandidate(operate_addr).dict()['status'] == status
+                    expect_event(tx, "unregistered", {
+                        "operateAddr": operate_addr
+                    })
+                    expect_event(tx, "deductedMargin", {
+                        "operateAddr": operate_addr,
+                        "margin": set_margin,
+                        "totalMargin": 0
+                    })
 
 
 def test_turn_round(candidate_hub, pledge_agent, validator_set, required_margin):

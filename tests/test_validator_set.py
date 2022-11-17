@@ -24,7 +24,7 @@ pledge_agent_tracker: AccountTracker = None
 validator_set_instance = None
 BLOCK_REWARD = 0
 felony_round = 1
-felony_deposit = 10000000
+felony_deposit = int(1e5)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -667,7 +667,7 @@ def test_felony_success_with_validator_set_which_has_income(candidate_hub):
         "newStatus": status | set_margin if total_margin < candidate_hub.requiredMargin() else status
     })
     __contract_check(deposit_value, [average_value])
-    __balance_check((deposit_value + Web3.toWei(20000, 'ether')) * -1, deposit_value, 0, 0)
+    __balance_check((deposit_value + Web3.toWei(20000, 'ether')) * -1, deposit_value, felony_deposit, 0)
 
 
 def test_subsidy_reduce():

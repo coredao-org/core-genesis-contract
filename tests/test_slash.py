@@ -22,9 +22,7 @@ def set_threshold(slash_indicator):
 def test_slash_validator(slash_indicator):
     account: LocalAccount = Account.create(str(random.random()))
     tx = slash_indicator.slash(account.address)
-    expect_event(tx, "validatorSlashed", {"validator": account.address})
-    _, count = slash_indicator.getSlashIndicator(account.address)
-    assert count == 1
+    assert len(tx.events.keys()) == 0
 
 
 def test_misdemeanor_normal_address(slash_indicator):
@@ -112,7 +110,7 @@ def test_deduct_margin(slash_indicator, candidate_hub):
     assert candidate['margin'] == candidate_hub.requiredMargin() - slash_indicator.felonyDeposit()
 
 
-def test_clean(slash_indicator):
+def test_clean(slash_indicator, validator_set):
     decrease_value = felonyThreshold // slash_indicator.DECREASE_RATE()
     st = strategy("uint8", max_value=felonyThreshold-1)
 
@@ -120,6 +118,7 @@ def test_clean(slash_indicator):
         slash_accounts = [Account.create(str(random.random())) for _ in range(random.randint(1, 10))]
         counts = [st.example() for _ in slash_accounts]
         for account, count in zip(slash_accounts, counts):
+            validator_set.setValidatorSetMap(account.address)
             for _ in range(count):
                 slash_indicator.slash(account.address)
         turn_round()

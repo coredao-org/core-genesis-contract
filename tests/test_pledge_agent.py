@@ -1,11 +1,10 @@
-import secrets
 import pytest
 from web3 import Web3
 import brownie
 from brownie import accounts
 from eth_abi import encode_abi
-from .utils import random_address, expect_event, get_public_key_by_idx, public_key2PKHash, padding_left, \
-    expect_event_not_emitted, get_tracker
+from .utils import random_address, expect_event, padding_left, expect_event_not_emitted, get_tracker, \
+    encode_args_with_signature
 from .common import register_candidate, turn_round, execute_proposal
 
 
@@ -55,8 +54,10 @@ def deposit_for_reward(validator_set):
 
 class TestDelegateCoin:
     def test_delegate2unregistered_agent(self, pledge_agent):
-        with brownie.reverts("agent is inactivated"):
-            pledge_agent.delegateCoin(random_address())
+        random_agent_addr = random_address()
+        error_msg = encode_args_with_signature("InactivedAgent(address)", [random_agent_addr])
+        with brownie.reverts(f"typed error: {error_msg}"):
+            pledge_agent.delegateCoin(random_agent_addr)
 
     def test_delegate2registered_agent(self, pledge_agent):
         operator = accounts[1]
@@ -90,7 +91,8 @@ class TestDelegateCoin:
         operator = accounts[1]
         register_candidate(operator=operator)
         candidate_hub.refuseDelegate({'from': operator})
-        with brownie.reverts("agent is inactivated"):
+        error_msg = encode_args_with_signature("InactivedAgent(address)", [operator.address])
+        with brownie.reverts(f"typed error: {error_msg}"):
             pledge_agent.delegateCoin(operator)
 
     def test_delegate2validator(self, pledge_agent, candidate_hub, validator_set):
@@ -121,7 +123,8 @@ class TestDelegateCoin:
             slash_indicator.slash(consensus_address)
 
         assert candidate_hub.isJailed(operator) is True
-        with brownie.reverts("agent is inactivated"):
+        error_msg = encode_args_with_signature("InactivedAgent(address)", [operator.address])
+        with brownie.reverts(f"typed error: {error_msg}"):
             pledge_agent.delegateCoin(operator)
 
     def test_delegate2under_margin(self, pledge_agent, slash_indicator, candidate_hub, validator_set):
@@ -141,7 +144,8 @@ class TestDelegateCoin:
         turn_round(round_count=felony_round)
         assert candidate_hub.isJailed(operator) is False
 
-        with brownie.reverts("agent is inactivated"):
+        error_msg = encode_args_with_signature("InactivedAgent(address)", [operator.address])
+        with brownie.reverts(f"typed error: {error_msg}"):
             pledge_agent.delegateCoin(operator)
 
 
@@ -369,7 +373,9 @@ def test_delegate_coin_failed_with_insufficient_deposit(pledge_agent):
 def test_delegate_coin_failed_with_invalid_candidate(pledge_agent):
     agent = accounts[1]
     delegator = accounts[2]
-    with brownie.reverts("agent is inactivated"):
+
+    error_msg = encode_args_with_signature("InactivedAgent(address)", [agent.address])
+    with brownie.reverts(f"typed error: {error_msg}"):
         pledge_agent.delegateCoin(agent, {'from': delegator, 'value': required_coin_deposit - 1})
 
 
@@ -445,7 +451,8 @@ def test_transfer_coin_failed_with_inactive_target_agent(pledge_agent):
     round_tag = pledge_agent.roundTag()
     __check_coin_delegator(pledge_agent.getDelegator(agent_source, delegator).dict(), 0, required_coin_deposit, round_tag, 0)
 
-    with brownie.reverts("agent is inactivated"):
+    error_msg = encode_args_with_signature("InactivedAgent(address)", [agent_target.address])
+    with brownie.reverts(f"typed error: {error_msg}"):
         pledge_agent.transferCoin(agent_source, agent_target, {'from': delegator})
 
 
@@ -456,7 +463,9 @@ def test_transfer_coin_failed_with_same_agent(pledge_agent):
     delegator = accounts[2]
 
     __delegate_coin_success(agent_source, delegator, 0, required_coin_deposit)
-    with brownie.reverts("source agent and target agent are the same one"):
+
+    error_msg = encode_args_with_signature("SameAgentTransfer(address,address)", [agent_source.address, agent_target.address])
+    with brownie.reverts(f"typed error: {error_msg}"):
         pledge_agent.transferCoin(agent_source, agent_target, {'from': delegator})
 
 

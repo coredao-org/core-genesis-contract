@@ -10,6 +10,7 @@ from brownie.network.transaction import TransactionReceipt
 from brownie.network.account import LocalAccount
 from brownie import accounts, chain, web3
 from eth_account import Account
+from eth_abi import encode
 
 
 def random_address():
@@ -118,5 +119,10 @@ def get_tracker(account: LocalAccount) -> AccountTracker:
 def padding_left(hex_str, length):
     return '0x' + hex_str[2:].zfill(length)
 
+
+def encode_args_with_signature(function_signature: str, args: list) -> str:
+    selector = Web3.keccak(text=function_signature)[:4].hex()
+    args_in_function_signature = function_signature[function_signature.index('(')+1:-1].replace(' ', '').split(',')
+    return selector + encode(args_in_function_signature, args).hex()
 
 

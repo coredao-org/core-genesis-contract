@@ -35,4 +35,8 @@ contract ValidatorSetMock is ValidatorSet {
         require(index > 0, "no match validator");
         return currentValidatorSet[index-1];
     }
+
+    function setValidatorSetMap(address validator) external {
+        currentValidatorSetMap[validator] = 1;
+    }
 }

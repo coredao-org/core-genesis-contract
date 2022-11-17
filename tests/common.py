@@ -1,7 +1,7 @@
 import secrets
 
 from brownie import *
-from .utils import random_address, get_public_key_by_idx, public_key2PKHash, get_public_key_by_address
+from .utils import random_address
 
 
 def register_candidate(consensus=None, fee_address=None, operator=None, commission=500, margin=None) -> str:

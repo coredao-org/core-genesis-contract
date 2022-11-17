@@ -1,18 +1,13 @@
-import secrets
 import pytest
 from web3 import Web3, constants
 import brownie
 from brownie import *
 from eth_abi import encode_abi
-from .utils import random_address, expect_event, get_public_key_by_idx, public_key2PKHash, padding_left, \
-    expect_event_not_emitted, get_tracker
-from .common import register_candidate, turn_round, execute_proposal
+from .utils import expect_event, padding_left, expect_event_not_emitted, encode_args_with_signature
+from .common import execute_proposal
 
 
-origin_members = [
-    "0x9fB29AAc15b9A4B7F17c3385939b007540f4d791",
-    "0x96C42C56fdb78294F96B0cFa33c92bed7D75F96a"
-]
+origin_members = ["0x9fB29AAc15b9A4B7F17c3385939b007540f4d791", "0x96C42C56fdb78294F96B0cFa33c92bed7D75F96a"]
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -58,13 +53,18 @@ def test_update_param_failed_with_unknown_key(gov_hub):
 
 def test_update_param_failed_about_key_proposalMaxOperations_with_invalid_length(gov_hub):
     fake_gov()
-    with brownie.reverts("length of proposalMaxOperations mismatch"):
+    error_msg = encode_args_with_signature('MismatchParamLength(string)', ['proposalMaxOperations'])
+    with brownie.reverts(f"typed error: {error_msg}"):
         gov_hub.updateParam("proposalMaxOperations", "0x00000000000000000000000000000000000001")
 
 
 def test_update_param_failed_about_key_proposalMaxOperations_out_of_range(gov_hub):
     fake_gov()
-    with brownie.reverts("the proposalMaxOperations out of range"):
+    error_msg = encode_args_with_signature(
+        "OutOfBounds(string,uint256,uint256,uint256)",
+        ["proposalMaxOperations", 0, 1, Web3.toInt(hexstr=constants.MAX_INT)]
+    )
+    with brownie.reverts(f"typed error: {error_msg}"):
         gov_hub.updateParam("proposalMaxOperations", "0x0000000000000000000000000000000000000000000000000000000000000000")
 
 
@@ -80,14 +80,20 @@ def test_update_param_success_about_key_proposalMaxOperations(gov_hub):
 
 def test_update_param_failed_about_key_votingPeriod_with_invalid_length(gov_hub):
     fake_gov()
-    with brownie.reverts("length of votingPeriod mismatch"):
+    error_msg = encode_args_with_signature('MismatchParamLength(string)', ['votingPeriod'])
+    with brownie.reverts(f"typed error: {error_msg}"):
         gov_hub.updateParam("votingPeriod", "0x00000000000000000000000000000000000001")
 
 
 def test_update_param_failed_about_key_votingPeriod_out_of_range(gov_hub):
     fake_gov()
-    with brownie.reverts("the votingPeriod out of range"):
-        gov_hub.updateParam('votingPeriod', "0x0000000000000000000000000000000000000000000000000000000000007079")
+    value = "0x0000000000000000000000000000000000000000000000000000000000007079"
+    error_msg = encode_args_with_signature(
+        "OutOfBounds(string,uint256,uint256,uint256)",
+        ["votingPeriod", Web3.toInt(hexstr=value), 28800, Web3.toInt(hexstr=constants.MAX_INT)]
+    )
+    with brownie.reverts(f"typed error: {error_msg}"):
+        gov_hub.updateParam('votingPeriod', value)
 
 
 def test_update_param_success_about_key_votingPeriod(gov_hub):
@@ -110,35 +116,23 @@ def test_remove_member_failed_with_address_which_is_not_gov(gov_hub):
 
 
 def test_remove_member_failed_with_nonexistent_member(gov_hub):
+    gov_hub.resetMembers(accounts[:6])
     fake_gov()
     with brownie.reverts("member does not exist"):
-        gov_hub.removeMember(accounts[3])
+        gov_hub.removeMember(accounts[6])
 
 
-def test_remove_member_to_empty(gov_hub):
+def test_remove_member_failed_due_to_minimum_numbers(gov_hub):
     fake_gov()
-    gov_hub.removeMember(origin_members[0])
-    gov_hub.removeMember(origin_members[1])
-
-    assert gov_hub.getMembers() == []
-
-
-def test_remove_member_to_empty_and_remove_zero_address(gov_hub):
-    fake_gov()
-    gov_hub.removeMember(origin_members[0])
-    gov_hub.removeMember(origin_members[1])
-
-    with brownie.reverts("member does not exist"):
-        gov_hub.removeMember(constants.ADDRESS_ZERO)
-
-    assert gov_hub.getMembers() == []
+    with brownie.reverts("at least five members in DAO"):
+        gov_hub.removeMember(accounts[0])
 
 
 def test_remove_member_success(gov_hub):
+    gov_hub.resetMembers(accounts[:7])
     fake_gov()
-    tx = gov_hub.removeMember(origin_members[0])
-    expect_event(tx, "MemberDeleted", {'member': origin_members[0]})
-    assert gov_hub.getMembers() == [origin_members[1]]
+    tx = gov_hub.removeMember(accounts[6])
+    expect_event(tx, "MemberDeleted", {'member': accounts[6]})
 
 
 def test_add_member_failed_with_address_which_is_not_gov(gov_hub):
@@ -192,12 +186,12 @@ def test_propose_failed_with_member_which_already_has_active_proposal(gov_hub):
 
 
 def test_remove_member_success_through_propose(gov_hub):
-    __add_member(gov_hub, accounts[2].address)
+    gov_hub.resetMembers(accounts[:7])
     gov_hub.propose(
         [gov_hub.address],
         [0],
         ["removeMember(address)"],
-        [encode_abi(['address'], [accounts[2].address])],
+        [encode_abi(['address'], [accounts[6].address])],
         "remove member"
     )
     propose_id = gov_hub.latestProposalIds(accounts[0])
@@ -205,15 +199,15 @@ def test_remove_member_success_through_propose(gov_hub):
     for member in gov_hub.getMembers():
         gov_hub.castVote(propose_id, True, {'from': member})
     chain.mine(gov_hub.votingPeriod())
-    state = gov_hub.state(propose_id)
+    state = gov_hub.getState(propose_id)
     assert state == 4
 
     # execute
     tx = gov_hub.execute(propose_id)
     expect_event(tx, "ProposalExecuted")
-    expect_event(tx, 'MemberDeleted', {'member': accounts[2]})
+    expect_event(tx, 'MemberDeleted', {'member': accounts[6]})
 
-    assert gov_hub.members(accounts[2]) == 0
+    assert gov_hub.members(accounts[6]) == 0
 
 
 def test_add_duplicate_member_through_propose(gov_hub):
@@ -230,7 +224,7 @@ def test_add_duplicate_member_through_propose(gov_hub):
     for member in gov_hub.getMembers():
         gov_hub.castVote(propose_id, True, {'from': member})
     chain.mine(gov_hub.votingPeriod())
-    state = gov_hub.state(propose_id)
+    state = gov_hub.getState(propose_id)
     assert state == 4
 
     # execute
@@ -251,7 +245,7 @@ def test_add_member_through_propose(gov_hub):
     for member in gov_hub.getMembers():
         gov_hub.castVote(propose_id, True, {'from': member})
     chain.mine(gov_hub.votingPeriod())
-    state = gov_hub.state(propose_id)
+    state = gov_hub.getState(propose_id)
     assert state == 4
 
     # execute
@@ -358,7 +352,7 @@ def test_cancel_success(gov_hub):
     proposal_id = gov_hub.latestProposalIds(accounts[0])
     tx = gov_hub.cancel(proposal_id)
     expect_event(tx, "ProposalCanceled", {'id': proposal_id})
-    assert gov_hub.state(proposal_id) == 2
+    assert gov_hub.getState(proposal_id) == 2
 
 
 def test_defeated_proposal(gov_hub):
@@ -368,7 +362,7 @@ def test_defeated_proposal(gov_hub):
     for member in gov_hub.getMembers():
         gov_hub.castVote(proposal_id, False, {'from': member})
     chain.mine(gov_hub.votingPeriod())
-    assert gov_hub.state(proposal_id) == 3
+    assert gov_hub.getState(proposal_id) == 3
 
 
 def test_execute_proposal_failed_with_invalid_proposal_id(gov_hub):
@@ -423,30 +417,30 @@ def test_execute_proposal_success(gov_hub):
 
 def test_get_proposal_state_failed_with_invalid_proposal_id(gov_hub):
     with brownie.reverts("state: invalid proposal id"):
-        gov_hub.state(0)
+        gov_hub.getState(0)
 
 
 def test_get_canceled_proposal_state(gov_hub):
     gov_hub.propose([gov_hub.address], [1], ["123"], ["0x"], "test propose one")
     gov_hub.cancel(1)
-    assert gov_hub.state(1) == 2
+    assert gov_hub.getState(1) == 2
 
 
 def test_get_pending_proposal_state(gov_hub):
     gov_hub.propose([gov_hub.address], [1], ["123"], ["0x"], "test propose one")
-    assert gov_hub.state(1) == 0
+    assert gov_hub.getState(1) == 0
 
 
 def test_get_active_proposal_state(gov_hub):
     gov_hub.propose([gov_hub.address], [1], ["123"], ["0x"], "test propose one")
     chain.mine(2)
-    assert gov_hub.state(1) == 1
+    assert gov_hub.getState(1) == 1
 
 
 def test_get_defeated_proposal_state(gov_hub):
     gov_hub.propose([gov_hub.address], [1], ["123"], ["0x"], "test propose one")
     chain.mine(2 + gov_hub.votingPeriod())
-    assert gov_hub.state(1) == 3
+    assert gov_hub.getState(1) == 3
 
 
 def test_get_success_proposal_state(gov_hub):
@@ -455,7 +449,7 @@ def test_get_success_proposal_state(gov_hub):
     for member in gov_hub.getMembers():
         gov_hub.castVote(1, True, {'from': member})
     chain.mine(gov_hub.votingPeriod())
-    assert gov_hub.state(1) == 4
+    assert gov_hub.getState(1) == 4
 
 
 def test_get_executed_proposal_state(gov_hub):
@@ -466,7 +460,7 @@ def test_get_executed_proposal_state(gov_hub):
     chain.mine(gov_hub.votingPeriod())
     with brownie.reverts():
         gov_hub.execute(1)
-    assert gov_hub.state(1) == 4
+    assert gov_hub.getState(1) == 4
 
 
 def __add_member(c, member_address):

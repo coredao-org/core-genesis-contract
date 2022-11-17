@@ -1,9 +1,9 @@
 import pytest
 import brownie
-from web3 import Web3
+from web3 import Web3, constants
 from eth_abi import encode_abi
 from brownie import accounts, SelfDestroy
-from .utils import expect_event, get_tracker, padding_left
+from .utils import expect_event, get_tracker, padding_left, encode_args_with_signature
 from .common import execute_proposal
 
 
@@ -73,27 +73,31 @@ def test_update_param_failed_with_unknown_key(burn):
 
 def test_update_param_burn_cap_with_unmatched_length(burn):
     __update_gov_address(burn)
-    with brownie.reverts("length of burnCap mismatch"):
+    error_msg = encode_args_with_signature('MismatchParamLength(string)', ['burnCap'])
+    with brownie.reverts(f"typed error: {error_msg}"):
         burn.updateParam("burnCap", "0x0000000000123")
 
 
 def test_update_param_burn_cap_with_0(burn):
     __update_gov_address(burn)
-    with brownie.reverts("the burnCap out of range"):
-        burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000000000000000000")
+    tx = burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000000000000000000")
+    expect_event(tx, 'paramChange', {
+        "key": "burnCap",
+        "value": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    })
 
 
-def test_update_param_burn_cap_with_value_which_is_bigger_than_burn_contract_balance(burn):
+def test_update_param_burn_cap_with_value_which_is_less_than_burn_contract_balance(burn):
     __update_gov_address(burn)
     __add_balance(burn.address, Web3.toWei(1, 'ether'))
-    account0_tracker = get_tracker(accounts[0])
-    burn_tracker = get_tracker(burn)
 
-    with brownie.reverts("the burnCap out of range"):
-        burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000")
-
-    assert account0_tracker.delta() == 0
-    assert burn_tracker.delta() == 0
+    new_burn_cap = "0x0000000000000000000000000000000000000000000000000de0b6b3a763fff"
+    error_msg = encode_args_with_signature(
+        "OutOfBounds(string,uint256,uint256,uint256)",
+        ["burnCap", Web3.toInt(hexstr=new_burn_cap), burn.balance(), Web3.toInt(hexstr=constants.MAX_INT)]
+    )
+    with brownie.reverts(f"typed error: {error_msg}"):
+        burn.updateParam("burnCap", new_burn_cap)
 
 
 def test_update_param_burn_cap_success(burn):
