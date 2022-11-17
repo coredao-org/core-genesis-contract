@@ -1,4 +1,3 @@
-pragma experimental ABIEncoderV2;
 pragma solidity 0.8.4;
 
 import "../SlashIndicator.sol";
