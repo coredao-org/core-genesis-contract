@@ -18,6 +18,7 @@ contract Foundation is System {
   /// @param payee The address to send funds to
   /// @param amount The amount of funds to send
   function fund(address payable payee, uint256 amount) external onlyGov {
+    require(payee != address(0), "payee address should not be zero");
     bool ret = payee.send(amount);
     if (ret) {
       emit fundSuccess(payee, amount);

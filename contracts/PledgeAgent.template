@@ -328,6 +328,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   ) internal returns (uint256) {
     Agent storage a = agentsMap[agent];
     uint256 newDeposit = a.cDelegatorMap[delegator].newDeposit + deposit;
+
+    a.totalDeposit += deposit;
     if (newDeposit == deposit) {
       require(deposit >= requiredCoinDeposit, "deposit is too small");
       uint256 rewardIndex = a.rewardSet.length;
@@ -345,7 +347,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         distributeReward(payable(delegator), rewardAmount);
       }
     }
-    a.totalDeposit += deposit;
     return newDeposit;
   }
 
