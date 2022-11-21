@@ -508,8 +508,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     }
     if (Memory.compareStrings(key,"rewardForSyncHeader")) {
       uint256 newRewardForSyncHeader = BytesToTypes.bytesToUint256(32, value);
-      if (newRewardForSyncHeader == 0) {
-        revert OutOfBounds(key, newRewardForSyncHeader, 1, type(uint256).max);
+      if (newRewardForSyncHeader == 0 || newRewardForSyncHeader > 1e20) {
+        revert OutOfBounds(key, newRewardForSyncHeader, 1, 1e20);
       }
       rewardForSyncHeader = newRewardForSyncHeader;
     } else if (Memory.compareStrings(key,"callerCompensationMolecule")) {

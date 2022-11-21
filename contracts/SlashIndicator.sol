@@ -190,8 +190,8 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
       felonyThreshold = newFelonyThreshold;
     } else if (Memory.compareStrings(key,"rewardForReportDoubleSign")) {
       uint256 newRewardForReportDoubleSign = BytesToTypes.bytesToUint256(32, value);
-      if (newRewardForReportDoubleSign == 0) {
-        revert OutOfBounds(key, newRewardForReportDoubleSign, 1, type(uint256).max);
+      if (newRewardForReportDoubleSign == 0 || newRewardForReportDoubleSign > 1e21) {
+        revert OutOfBounds(key, newRewardForReportDoubleSign, 1, 1e21);
       }
       rewardForReportDoubleSign = newRewardForReportDoubleSign;
     } else if (Memory.compareStrings(key,"felonyDeposit")) {
