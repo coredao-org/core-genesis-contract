@@ -3,6 +3,7 @@ pragma solidity 0.8.4;
 import "./interface/IPledgeAgent.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/ICandidateHub.sol";
+import "./interface/ISystemReward.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./System.sol";
@@ -233,7 +234,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     if (r.coin == 0) {
       delete a.rewardSet[l-1];
       if (minerSize == 0) {
-        payable(FOUNDATION_ADDR).transfer(remainReward);
+        ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: remainReward }();
       } else {
         uint256 dust = remainReward - totalReward;
         if (dust != 0) {
