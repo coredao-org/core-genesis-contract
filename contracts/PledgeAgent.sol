@@ -279,11 +279,10 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     emit transferredCoin(sourceAgent, targetAgent, msg.sender, deposit, newDeposit);
   }
 
-  /// Claim reward for delegators
-  /// @param delegator The delegator address
+  /// Claim reward for delegator
   /// @param agentList The list of validators to claim rewards on, it can be empty
   /// @return (Amount claimed, Are all rewards claimed)
-  function claimReward(address payable delegator, address[] calldata agentList) external returns (uint256, bool) {
+  function claimReward(address[] calldata agentList) external returns (uint256, bool) {
     // limit round count to control gas usage
     int256 roundLimit = 500;
     uint256 reward;
@@ -296,7 +295,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     for (uint256 i = 0; i < agentSize; ++i) {
       Agent storage a = agentsMap[agentList[i]];
       if (a.rewardSet.length == 0) continue;
-      CoinDelegator storage d = a.cDelegatorMap[delegator];
+      CoinDelegator storage d = a.cDelegatorMap[msg.sender];
       if (d.newDeposit == 0) continue;
       int256 roundCount = int256(a.rewardSet.length - d.rewardIndex);
       reward = collectCoinReward(a, d, roundLimit);
@@ -306,7 +305,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       if (roundLimit < 0) break;
     }
     if (rewardSum != 0) {
-      distributeReward(delegator, rewardSum);
+      distributeReward(payable(msg.sender), rewardSum);
     }
     return (rewardSum, roundLimit >= 0);
   }
