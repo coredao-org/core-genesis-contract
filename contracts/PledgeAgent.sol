@@ -12,7 +12,6 @@ import "./System.sol";
 contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   uint256 public constant INIT_REQUIRED_COIN_DEPOSIT = 1e18;
   uint256 public constant INIT_HASH_POWER_FACTOR = 20000;
-  uint256 public constant DUST_LIMIT = 1e13;
   uint256 public constant POWER_BLOCK_FACTOR = 1e18;
 
   uint256 public requiredCoinDeposit;
