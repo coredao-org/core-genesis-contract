@@ -85,12 +85,12 @@ def test_distribute_power_reward_during_turn_round(pledge_agent, btc_light_clien
         "address": operators[0],
         "active": True,
         "power": [set_delegate(clients[0], 2), set_delegate(clients[1], 1)],
-        "coin": [set_delegate(clients[0], 100), set_delegate(clients[1], 400)]
+        "coin": [set_delegate(clients[0], 100), set_delegate(clients[1], 400, True)]
     }, {
         "address": operators[1],
         "active": True,
         "power": [set_delegate(clients[2], 2)],
-        "coin": [set_delegate(clients[2], 900)]
+        "coin": [set_delegate(clients[2], 900, True)]
     }], BLOCK_REWARD // 2)
 
     tracker1 = get_tracker(clients[0])
@@ -98,9 +98,7 @@ def test_distribute_power_reward_during_turn_round(pledge_agent, btc_light_clien
 
     turn_round(consensuses, tx_fee=TX_FEE)
 
-    pledge_agent.claimPowerReward({'from': clients[0]})
     pledge_agent.claimReward(clients[0], operators)
-    pledge_agent.claimPowerReward({'from': clients[1]})
     pledge_agent.claimReward(clients[1], operators)
 
     assert tracker1.delta() == delegate_reward[clients[0]]
@@ -129,7 +127,6 @@ def test_delegate2one_agent_twice_in_different_rounds(candidate_hub, pledge_agen
 
     tracker = get_tracker(accounts[0])
     turn_round([consensus], tx_fee=TX_FEE)
-    pledge_agent.claimPowerReward({'from': accounts[0]})
     pledge_agent.claimReward(accounts[0], [operator])
     assert tracker.delta() == BLOCK_REWARD / 2
 
@@ -169,7 +166,7 @@ def test_scenario1(candidate_hub, pledge_agent, btc_light_client):
 
     tracker = get_tracker(accounts[0])
     turn_round([consensus1, consensus2], tx_fee=TX_FEE)
-    pledge_agent.claimPowerReward({'from': accounts[0]})
+    pledge_agent.claimReward(accounts[0], [])
     assert tracker.delta() == power_reward
     pledge_agent.claimReward(accounts[0], accounts[1:3])
     assert tracker.delta() == coin_reward
@@ -210,7 +207,7 @@ def test_scenario2(candidate_hub, pledge_agent, btc_light_client):
 
     tracker = get_tracker(accounts[0])
     turn_round([consensus1, consensus2], tx_fee=TX_FEE)
-    pledge_agent.claimPowerReward({'from': accounts[0]})
+    pledge_agent.claimReward(accounts[0], [])
     assert tracker.delta() == power_reward
     pledge_agent.claimReward(accounts[0], accounts[1:3])
     assert tracker.delta() == coin_reward
@@ -267,7 +264,7 @@ def test_scenario3(candidate_hub, pledge_agent, btc_light_client):
 
     tracker = get_tracker(accounts[0])
     turn_round(consensuses, tx_fee=TX_FEE)
-    pledge_agent.claimPowerReward({'from': accounts[0]})
+    pledge_agent.claimReward(accounts[0], [])
     assert tracker.delta() == power_reward
     pledge_agent.transferCoin(operators[0], operators[2])
     assert tracker.delta() == BLOCK_REWARD // 2 * 2
@@ -286,7 +283,7 @@ def test_scenario3(candidate_hub, pledge_agent, btc_light_client):
     }], BLOCK_REWARD // 2)
     power_reward = delegator_reward[accounts[0]] - BLOCK_REWARD // 2
 
-    pledge_agent.claimPowerReward({'from': accounts[0]})
+    pledge_agent.claimReward(accounts[0], [])
     assert tracker.delta() == power_reward * 2
 
     pledge_agent.claimReward(accounts[0], operators)
@@ -323,12 +320,12 @@ def test_scenario4(candidate_hub, pledge_agent, validator_set, btc_light_client)
     _, delegator_reward = parse_delegation([{
         "address": operators[0],
         "active": True,
-        "coin": [set_delegate(accounts[0], MIN_INIT_DELEGATE_VALUE * 4)],
+        "coin": [set_delegate(accounts[0], MIN_INIT_DELEGATE_VALUE * 4, True)],
         "power": [set_delegate(accounts[1], 2)]
     }, {
         "address": operators[1],
         "active": True,
-        "coin": [set_delegate(accounts[1], MIN_INIT_DELEGATE_VALUE)],
+        "coin": [set_delegate(accounts[1], MIN_INIT_DELEGATE_VALUE, True)],
         "power": [set_delegate(accounts[0], 1)]
     }], BLOCK_REWARD // 2)
 
@@ -339,8 +336,6 @@ def test_scenario4(candidate_hub, pledge_agent, validator_set, btc_light_client)
     tracker1 = get_tracker(accounts[1])
     turn_round(consensuses, tx_fee=TX_FEE)
 
-    pledge_agent.claimPowerReward({'from': accounts[0]})
-    pledge_agent.claimPowerReward({'from': accounts[1]})
     pledge_agent.claimReward(accounts[0], operators)
     pledge_agent.claimReward(accounts[1], operators)
 
@@ -353,7 +348,7 @@ def test_scenario4(candidate_hub, pledge_agent, validator_set, btc_light_client)
     agent_score, delegator_reward = parse_delegation([{
         "address": operators[1],
         "active": True,
-        "coin": [set_delegate(accounts[1], MIN_INIT_DELEGATE_VALUE)],
+        "coin": [set_delegate(accounts[1], MIN_INIT_DELEGATE_VALUE, True)],
         "power": [set_delegate(accounts[0], 1)]
     }], BLOCK_REWARD // 2)
 
@@ -396,7 +391,7 @@ def test_scenario5(candidate_hub, pledge_agent, validator_set, btc_light_client)
     assert len(validator_set.getValidators()) == 2
     turn_round([consensus1, consensus2], tx_fee=TX_FEE)
 
-    pledge_agent.claimPowerReward({'from': accounts[0]})
+    pledge_agent.claimReward(accounts[0], [])
     assert tracker.delta() == 0
 
 
@@ -472,6 +467,6 @@ def test_scenario7(pledge_agent, btc_light_client, candidate_hub, set_candidate)
     turn_round([consensus], tx_fee=TX_FEE)
 
     tracker = get_tracker(accounts[0])
-    pledge_agent.claimPowerReward({'from': accounts[0]})
+    pledge_agent.claimReward(accounts[0], [])
     assert tracker.delta() == BLOCK_REWARD / 2
 

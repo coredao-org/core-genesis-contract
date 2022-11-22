@@ -192,24 +192,24 @@ def test_claim_reward_after_transfer_to_duplicated_validator(pledge_agent):
     _, delegator_reward1 = parse_delegation([{
         "address": operators[0],
         "active": True,
-        "coin": [set_delegate(clients[0], MIN_INIT_DELEGATE_VALUE), set_delegate(clients[1], MIN_INIT_DELEGATE_VALUE)],
+        "coin": [set_delegate(clients[0], MIN_INIT_DELEGATE_VALUE), set_delegate(clients[1], MIN_INIT_DELEGATE_VALUE, True)],
         "power": []
     }, {
         "address": operators[1],
         "active": True,
-        "coin": [set_delegate(clients[0], MIN_INIT_DELEGATE_VALUE), set_delegate(clients[1], MIN_INIT_DELEGATE_VALUE)],
+        "coin": [set_delegate(clients[0], MIN_INIT_DELEGATE_VALUE), set_delegate(clients[1], MIN_INIT_DELEGATE_VALUE, True)],
         "power": []
     }], BLOCK_REWARD // 2)
 
     _, delegator_reward2 = parse_delegation([{
         "address": operators[0],
         "active": True,
-        "coin": [set_delegate(clients[1], MIN_INIT_DELEGATE_VALUE)],
+        "coin": [set_delegate(clients[1], MIN_INIT_DELEGATE_VALUE, True)],
         "power": []
     }, {
         "address": operators[1],
         "active": True,
-        "coin": [set_delegate(clients[0], MIN_INIT_DELEGATE_VALUE * 2), set_delegate(clients[1], MIN_INIT_DELEGATE_VALUE)],
+        "coin": [set_delegate(clients[0], MIN_INIT_DELEGATE_VALUE * 2), set_delegate(clients[1], MIN_INIT_DELEGATE_VALUE, True)],
         "power": []
     }], BLOCK_REWARD // 2)
 
@@ -229,8 +229,9 @@ def test_undelegate_coin_next_round(pledge_agent):
     turn_round()
     pledge_agent.undelegateCoin(operator)
     turn_round([consensus])
-    with brownie.reverts("no pledge reward"):
-        pledge_agent.claimReward(accounts[0], [operator])
+
+    reward_sum, _ = pledge_agent.claimReward.call(accounts[0], [operator])
+    assert reward_sum == 0
 
 
 

@@ -55,7 +55,7 @@ def deposit_for_reward(validator_set):
 class TestDelegateCoin:
     def test_delegate2unregistered_agent(self, pledge_agent):
         random_agent_addr = random_address()
-        error_msg = encode_args_with_signature("InactivedAgent(address)", [random_agent_addr])
+        error_msg = encode_args_with_signature("InactiveAgent(address)", [random_agent_addr])
         with brownie.reverts(f"typed error: {error_msg}"):
             pledge_agent.delegateCoin(random_agent_addr)
 
@@ -91,7 +91,7 @@ class TestDelegateCoin:
         operator = accounts[1]
         register_candidate(operator=operator)
         candidate_hub.refuseDelegate({'from': operator})
-        error_msg = encode_args_with_signature("InactivedAgent(address)", [operator.address])
+        error_msg = encode_args_with_signature("InactiveAgent(address)", [operator.address])
         with brownie.reverts(f"typed error: {error_msg}"):
             pledge_agent.delegateCoin(operator)
 
@@ -123,7 +123,7 @@ class TestDelegateCoin:
             slash_indicator.slash(consensus_address)
 
         assert candidate_hub.isJailed(operator) is True
-        error_msg = encode_args_with_signature("InactivedAgent(address)", [operator.address])
+        error_msg = encode_args_with_signature("InactiveAgent(address)", [operator.address])
         with brownie.reverts(f"typed error: {error_msg}"):
             pledge_agent.delegateCoin(operator)
 
@@ -144,7 +144,7 @@ class TestDelegateCoin:
         turn_round(round_count=felony_round)
         assert candidate_hub.isJailed(operator) is False
 
-        error_msg = encode_args_with_signature("InactivedAgent(address)", [operator.address])
+        error_msg = encode_args_with_signature("InactiveAgent(address)", [operator.address])
         with brownie.reverts(f"typed error: {error_msg}"):
             pledge_agent.delegateCoin(operator)
 
@@ -304,11 +304,9 @@ def test_collect_coin_reward_success(validator_set, pledge_agent):
     round_tag = result['changeRound']
     pledge_agent.collectCoinRewardMock(agent, delegator, 10, {'from': agent})
     reward_amount_M = pledge_agent.rewardAmountM()
-    dust = pledge_agent.dust()
     result = pledge_agent.getDelegator(agent, delegator).dict()
 
     assert expect_reward == reward_amount_M
-    assert dust == 0
 
     assert delegator_tracker.delta() == 0
 
@@ -374,7 +372,7 @@ def test_delegate_coin_failed_with_invalid_candidate(pledge_agent):
     agent = accounts[1]
     delegator = accounts[2]
 
-    error_msg = encode_args_with_signature("InactivedAgent(address)", [agent.address])
+    error_msg = encode_args_with_signature("InactiveAgent(address)", [agent.address])
     with brownie.reverts(f"typed error: {error_msg}"):
         pledge_agent.delegateCoin(agent, {'from': delegator, 'value': required_coin_deposit - 1})
 
@@ -451,7 +449,7 @@ def test_transfer_coin_failed_with_inactive_target_agent(pledge_agent):
     round_tag = pledge_agent.roundTag()
     __check_coin_delegator(pledge_agent.getDelegator(agent_source, delegator).dict(), 0, required_coin_deposit, round_tag, 0)
 
-    error_msg = encode_args_with_signature("InactivedAgent(address)", [agent_target.address])
+    error_msg = encode_args_with_signature("InactiveAgent(address)", [agent_target.address])
     with brownie.reverts(f"typed error: {error_msg}"):
         pledge_agent.transferCoin(agent_source, agent_target, {'from': delegator})
 
@@ -464,7 +462,7 @@ def test_transfer_coin_failed_with_same_agent(pledge_agent):
 
     __delegate_coin_success(agent_source, delegator, 0, required_coin_deposit)
 
-    error_msg = encode_args_with_signature("SameAgentTransfer(address,address)", [agent_source.address, agent_target.address])
+    error_msg = encode_args_with_signature("SameCandidate(address,address)", [agent_source.address, agent_target.address])
     with brownie.reverts(f"typed error: {error_msg}"):
         pledge_agent.transferCoin(agent_source, agent_target, {'from': delegator})
 

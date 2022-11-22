@@ -4,7 +4,6 @@ import "../PledgeAgent.sol";
 
 contract PledgeAgentMock is PledgeAgent {
     uint256 public rewardAmountM;
-    uint256 public dust;
 
     function developmentInit() external {
         requiredCoinDeposit = requiredCoinDeposit / 1e16;
@@ -40,6 +39,6 @@ contract PledgeAgentMock is PledgeAgent {
         int256 roundLimit) external {
       Agent storage a = agentsMap[agent];
       CoinDelegator storage d = a.cDelegatorMap[delegator];
-      (rewardAmountM, dust) = collectCoinReward(a, d, roundLimit);
+      rewardAmountM = collectCoinReward(a, d, roundLimit);
     }
 }

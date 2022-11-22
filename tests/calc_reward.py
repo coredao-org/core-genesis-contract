@@ -1,8 +1,8 @@
 from collections import defaultdict
 
 
-def set_delegate(address, value):
-    return {"address": address, "value": value}
+def set_delegate(address, value, last_claim=False):
+    return {"address": address, "value": value, 'last_claim': last_claim}
 
 
 def parse_delegation(agents, block_reward):
@@ -15,7 +15,8 @@ def parse_delegation(agents, block_reward):
             "active": True,
             "coin": [{
                 "address": 0x21312321389123890,
-                "value: 3
+                "value: 3,
+                "last_claim": true
             }, {
                 "address": 0x21312321389123890,
                 "value: 4
@@ -37,6 +38,8 @@ def parse_delegation(agents, block_reward):
     delegator_reward = defaultdict(int)
 
     for agent in agents:
+        agent['totalReward'] = block_reward
+        agent['remainReward'] = block_reward
         total_power = sum([item['value'] for item in agent['power']])
         agent['total_power'] = total_power
         btc_count += total_power
@@ -50,15 +53,29 @@ def parse_delegation(agents, block_reward):
     for agent in agents:
         if not agent['active']:
             continue
-        for item in agent['coin']:
-            reward = block_reward * item['value'] * btc_count // agent_score[agent['address']]
-            delegator_reward[item['address']] += reward
-            print(f"coin reward: {agent['address']} on {item['address']} => {reward}")
-        reward_each_power = coin_count * 20000 // 10000 * block_reward // agent_score[agent['address']]
+
+        reward_each_power = coin_count * 20000 // 10000 * agent['totalReward'] // agent_score[agent['address']]
         for item in agent['power']:
             reward = item['value'] * reward_each_power
             delegator_reward[item['address']] += reward
             print(f"power reward: {agent['address']} on {item['address']} => {reward}")
+            assert agent['remainReward'] >= reward
+            agent['remainReward'] -= reward
+        if agent['remainReward'] > 0 and list(agent.get('coin', [])) == 0 and len(agent.get('power', [])) > 0:
+            delegator_reward[agent['power'][0]['address']] += agent['remainReward']
+            print(f"power dust reward: {agent['power'][0]['address']} => {agent['remainReward']}")
+
+        for item in agent['coin']:
+            if item.get('last_claim', False):
+                reward = agent['remainReward']
+            else:
+                reward = agent['totalReward'] * item['value'] * btc_count // agent_score[agent['address']]
+                assert agent['remainReward'] >= reward
+                agent['remainReward'] -= reward
+            delegator_reward[item['address']] += reward
+            print(f"coin reward: {agent['address']} on {item['address']} => {reward}")
+
+    assert sum(delegator_reward.values()) == block_reward * len(agents)
 
     return agent_score, delegator_reward
 

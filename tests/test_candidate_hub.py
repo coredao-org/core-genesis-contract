@@ -338,7 +338,7 @@ def test_add_margin(candidate_hub, required_margin):
 
     tests = [
         (accounts[1], None, None, 1, None, None, None, False, "candidate does not exist"),
-        (accounts[2], True, None, 0, None, None, None, False, "value should be not zero"),
+        (accounts[2], True, None, 0, None, None, None, False, "value should not be zero"),
         (accounts[2], None, required_margin, 1, None, 1, False, True, ""),
         (accounts[2], None, 1, 1, 9, "9", False, True, ""),
         (accounts[2], None, 1, required_margin - 1, 9, "1", True, True, ""),
