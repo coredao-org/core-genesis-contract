@@ -202,11 +202,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param candidate The operator address of the validator candidate
   /// @param miners List of BTC miners who delegated hash power to the candidate
   function distributePowerReward(address candidate, address[] calldata miners) external override onlyCandidate {
-    // if no hash power is delegated in the round, return
-    RoundState storage rs = stateMap[roundTag];
-    if (rs.power == 1) {
-      return;
-    }
     // distribute rewards to every miner
     // note that the miners are represented in the form of reward addresses
     // and they can be duplicated because everytime a miner delegates a BTC block
@@ -220,12 +215,18 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     if (r.totalReward == 0 || r.round != roundTag) {
       return;
     }
+    RoundState storage rs = stateMap[roundTag];
     uint256 reward = rs.coin * POWER_BLOCK_FACTOR * rs.powerFactor / 10000 * r.totalReward / r.score;
     uint256 minerSize = miners.length;
 
-    uint256 totalReward = reward * minerSize;
+    uint256 powerReward = reward * minerSize;
+    uint256 undelegateCoinReward;
+    if (a.coin > r.coin) {
+      // undelegatedCoin = a.coin - r.coin
+      undelegateCoinReward = r.totalReward * (a.coin - r.coin) * rs.power / r.score;
+    }
     uint256 remainReward = r.remainReward;
-    require(remainReward >= totalReward, "there is not enough reward");
+    require(remainReward >= powerReward + undelegateCoinReward, "there is not enough reward");
 
     for (uint256 i = 0; i < minerSize; i++) {
       rewardMap[miners[i]] += reward;
@@ -233,16 +234,13 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
     if (r.coin == 0) {
       delete a.rewardSet[l-1];
-      if (minerSize == 0) {
-        ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: remainReward }();
-      } else {
-        uint256 dust = remainReward - totalReward;
-        if (dust != 0) {
-          rewardMap[miners[0]] += dust;
-        }
-      }
-    } else if (totalReward != 0) {
-      r.remainReward -= totalReward;
+      undelegateCoinReward = remainReward - powerReward;
+    } else if (powerReward != 0 || undelegateCoinReward != 0) {
+      r.remainReward -= (powerReward + undelegateCoinReward);
+    }
+
+    if (undelegateCoinReward != 0) {
+      ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: undelegateCoinReward }();
     }
   }
 

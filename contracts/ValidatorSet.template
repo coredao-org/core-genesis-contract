@@ -110,7 +110,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// Distribute rewards to validators (and delegators through PledgeAgent)
   /// @dev this method is called by the CandidateHub contract at the beginning of turn round
   /// @dev this is where we deal with reward distribution logics
-  function distributeReward() external override onlyCandidate {
+  function distributeReward() external override onlyCandidate returns (address[] memory operateAddressList) {
     address payable feeAddress;
     uint256 validatorReward;
 
@@ -124,7 +124,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
     ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: incentiveSum }();
 
-    address[] memory operateAddressList = new address[](validatorSize);
+    operateAddressList = new address[](validatorSize);
     uint256[] memory rewardList = new uint256[](validatorSize);
     uint256 rewardSum = 0;
     uint256 tempIncome;
@@ -152,6 +152,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
 
     IPledgeAgent(PLEDGE_AGENT_ADDR).addRoundReward{ value: rewardSum }(operateAddressList, rewardList);
     totalInCome = 0;
+    return operateAddressList;
   } 
 
   /// Update validator set of the new round with elected validators 

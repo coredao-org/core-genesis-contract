@@ -118,7 +118,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
         return;
     }
 
-    require(blockHeight + 2160 > getHeight(heaviestBlock), "can't sync header 15 days ago");
+    require(blockHeight + 720 > getHeight(heaviestBlock), "can't sync header 5 days ago");
 
     // verify MerkleRoot & pickup candidate address, reward address and bindingHash.
     uint256 length = blockBytes.length + 32;

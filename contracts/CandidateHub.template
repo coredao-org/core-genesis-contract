@@ -155,11 +155,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @dev this method is called by Golang consensus engine at the end of a round
   function turnRound() external onlyCoinbase onlyInit onlyZeroGasPrice {
     // distribute rewards for the about to end round
-    IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward();
+    address[] memory lastCandidates = IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward();
 
     // fetch BTC miners who delegated hash power in the about to end round; 
     // and distribute rewards to them
-    address[] memory lastCandidates = ILightClient(LIGHT_CLIENT_ADDR).getRoundCandidates(roundTag-7);
     uint256 lastCandidateSize = lastCandidates.length;
     for (uint256 i = 0; i < lastCandidateSize; i++) {
       address[] memory miners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(roundTag-7, lastCandidates[i]);
