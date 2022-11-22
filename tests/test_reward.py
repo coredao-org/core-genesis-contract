@@ -285,7 +285,7 @@ class StateMachine:
         for delegator in self.delegator_unclaimed_agents_map:
             if self.delegator_unclaimed_agents_map[delegator]:
                 print(f"claim coin reward: delegator: {delegator}, agents: {self.delegator_unclaimed_agents_map[delegator]}")
-                tx: TransactionReceipt = self.pledge_agent.claimReward(delegator, list(self.delegator_unclaimed_agents_map[delegator]))
+                tx: TransactionReceipt = self.pledge_agent.claimReward(list(self.delegator_unclaimed_agents_map[delegator]), {'from': delegator})
                 self.__parse_event(tx)
         # claim power reward
         for delegator in self.unclaimed_power_rewards:
@@ -348,7 +348,7 @@ class StateMachine:
                         reward = delegators_reward * item['coin'] * self.round_state.power_score // agent.score
                         self.balance_delta[delegator] += reward
                         print(f"\t[Coin] {delegator}({item['coin']}) + {reward}")
-                        _reward, _ = self.pledge_agent.claimReward.call(delegator, [validator.operator_address])
+                        _reward, _ = self.pledge_agent.claimReward.call([validator.operator_address], {'from': delegator})
                         print(f"\t\t[Coin] call claim reward: {_reward}")
                 for delegator, power_value in agent.power_delegators.items():
                     self.unclaimed_power_rewards.add(delegator)

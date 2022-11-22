@@ -54,7 +54,7 @@ def test_delegate_once(pledge_agent, validator_set, claim_type):
     tracker = get_tracker(accounts[0])
 
     if claim_type == "claim":
-        pledge_agent.claimReward(accounts[0], [operator])
+        pledge_agent.claimReward([operator])
         assert tracker.delta() == BLOCK_REWARD / 2
     elif claim_type == "delegate":
         pledge_agent.delegateCoin(operator, {"value": 100})
@@ -85,7 +85,7 @@ def test_delegate2one_agent_twice_in_different_rounds(pledge_agent, set_candidat
     turn_round([consensus])
 
     tracker = get_tracker(accounts[0])
-    pledge_agent.claimReward(accounts[0], [operator])
+    pledge_agent.claimReward([operator])
     assert tracker.delta() == BLOCK_REWARD / 2
 
 
@@ -114,7 +114,7 @@ def test_delegate2two_agents_in_different_rounds(pledge_agent, internal):
     turn_round(consensuses)
 
     tracker = get_tracker(accounts[0])
-    pledge_agent.claimReward(accounts[0], operators)
+    pledge_agent.claimReward(operators)
     assert tracker.delta() == BLOCK_REWARD
 
 
@@ -145,7 +145,7 @@ def test_claim_reward_after_transfer_to_candidate(pledge_agent, candidate_hub, v
 
     turn_round(consensuses, round_count=2)
 
-    pledge_agent.claimReward(accounts[0], operators)
+    pledge_agent.claimReward(operators)
     assert tracker.delta() == BLOCK_REWARD * 2
 
 
@@ -169,7 +169,7 @@ def test_claim_reward_after_transfer_to_validator(pledge_agent, validator_set):
     tracker = get_tracker(accounts[0])
     pledge_agent.transferCoin(operators[1], operators[2])
     turn_round(consensuses, round_count=2)
-    pledge_agent.claimReward(accounts[0], operators)
+    pledge_agent.claimReward(operators)
     assert tracker.delta() == BLOCK_REWARD * 5 / 2
 
 
@@ -216,7 +216,7 @@ def test_claim_reward_after_transfer_to_duplicated_validator(pledge_agent):
     tracker1 = get_tracker(clients[0])
     tracker2 = get_tracker(clients[1])
     for client in clients:
-        pledge_agent.claimReward(client, operators)
+        pledge_agent.claimReward(operators, {'from': client})
 
     assert tracker1.delta() == delegator_reward1[clients[0]] // 2 + delegator_reward2[clients[0]]
     assert tracker2.delta() == delegator_reward1[clients[1]] + delegator_reward2[clients[1]]
@@ -230,7 +230,7 @@ def test_undelegate_coin_next_round(pledge_agent):
     pledge_agent.undelegateCoin(operator)
     turn_round([consensus])
 
-    reward_sum, _ = pledge_agent.claimReward.call(accounts[0], [operator])
+    reward_sum, _ = pledge_agent.claimReward.call([operator])
     assert reward_sum == 0
 
 

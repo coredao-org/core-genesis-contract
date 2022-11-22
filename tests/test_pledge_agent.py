@@ -480,7 +480,7 @@ def test_claim_reward_success_with_one_agent(pledge_agent, validator_set):
     validator_set.deposit(consensus_address, {'value': TX_FEE})
     turn_round()
 
-    pledge_agent.claimReward(delegator, [agent])
+    pledge_agent.claimReward([agent], {'from': delegator})
     assert actual_block_reward * 2 * 900 // 1000 == tracker.delta()
 
 
@@ -502,7 +502,7 @@ def test_claim_reward_with_multi_agent(pledge_agent, validator_set):
     for i in range(staked_num):
         validator_set.deposit(consensus_list[i], {'value': TX_FEE})
     turn_round()
-    pledge_agent.claimReward(delegator, agent_list[:5])
+    pledge_agent.claimReward(agent_list[:5], {'from': delegator})
     assert expect_reward == tracker.delta()
 
 
@@ -529,7 +529,7 @@ def test_claim_reward_with_transfer_coin(pledge_agent, validator_set):
 
     turn_round()
 
-    pledge_agent.claimReward(delegator, [agent1, agent2])
+    pledge_agent.claimReward([agent1, agent2], {'from': delegator})
     expect_reward1 = actual_block_reward * 900 // 1000
     expect_reward2 = actual_block_reward * 500 // 1000 * 2
     assert (expect_reward1 + expect_reward2) == tracker.delta()
