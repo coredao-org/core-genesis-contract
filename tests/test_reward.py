@@ -1,14 +1,14 @@
-import secrets
 import time
 import random
-from typing import Dict
-from copy import deepcopy
+from typing import Dict, List, Set
+from copy import deepcopy, copy
 from collections import defaultdict, Counter
 from web3 import Web3
 from brownie import accounts
+from brownie.network.account import Account
 from brownie.network.transaction import TransactionReceipt
 from .common import turn_round, register_candidate
-from .utils import get_tracker, get_public_key_by_address, public_key2PKHash, get_public_key_by_idx
+from .utils import get_tracker
 
 
 TX_FEE = int(1e4)
@@ -53,6 +53,34 @@ class Agent:
         agent.coin_delegators = {k: deepcopy(v) for k, v in self.coin_delegators.items()}
         agent.power_delegators = {k: v for k, v in self.power_delegators.items()}
         return agent
+
+
+class AgentReward:
+    def __init__(self, remain_reward, delegators: Set[str] = None):
+        self.remain_reward = remain_reward
+        if delegators:
+            self.delegators = copy(delegators)
+        else:
+            self.delegators = set()
+
+    def __repr__(self):
+        return f"remain_reward: {self.remain_reward}, delegators: {self.delegators}"
+
+    def __str__(self):
+        return self.__repr__()
+
+    def sub_remain_reward(self, value):
+        assert self.remain_reward >= value
+        self.remain_reward -= value
+
+    def add_delegator(self, delegator):
+        self.delegators.add(delegator)
+
+    def remove_delegator(self, delegator):
+        self.delegators.remove(delegator)
+
+    def is_empty(self):
+        return len(self.delegators) == 0
 
 
 class Validator:
@@ -110,10 +138,10 @@ class StateMachine:
         self.current_validators: [Validator] = []
         self.round_state = RoundState()
         self.delegator_unclaimed_agents_map = defaultdict(set)
-        self.unclaimed_power_rewards = set()
         self.miners = []
         self.slash_counter: Dict[str, int] = defaultdict(int)
         self.consensus2operator = {}
+        self.agent_reward_records: Dict[str, List[AgentReward]] = defaultdict(list)  # key is agent operator address
 
         self.candidate_hub.setControlRoundTimeTag(True)
         self.candidate_hub.setRoundTag(7)
@@ -170,7 +198,7 @@ class StateMachine:
 
         print(f"[DELEGATE COIN] >>> {delegator} delegate to {agent} {value}")
         tx: TransactionReceipt = self.pledge_agent.delegateCoin(agent, {"value": value, "from": delegator})
-        self.__delegate_coin(delegator, agent, value)
+        self.__delegate_coin(delegator.address, agent, value)
 
         self.__parse_event(tx)
 
@@ -276,22 +304,19 @@ class StateMachine:
                 )
             )
             self.consensus2operator[validator['consensusAddress']] = validator['operateAddress']
-            print(f"\t{validator['operateAddress']}")
+            print(f"\t{validator['operateAddress']}(commission: {validator['commissionThousandths']})")
         print(f"{'>' * 47} turn round {_round + 1} end {'<' * 47}")
 
     def teardown(self):
         print(f"{'@' * 51} teardown {'@' * 51}")
-        # claim coin reward
+        # claim reward
         for delegator in self.delegator_unclaimed_agents_map:
-            if self.delegator_unclaimed_agents_map[delegator]:
-                print(f"claim coin reward: delegator: {delegator}, agents: {self.delegator_unclaimed_agents_map[delegator]}")
-                tx: TransactionReceipt = self.pledge_agent.claimReward(list(self.delegator_unclaimed_agents_map[delegator]), {'from': delegator})
-                self.__parse_event(tx)
-        # claim power reward
-        for delegator in self.unclaimed_power_rewards:
-            print(f"claim power reward: delegator: {delegator}")
-            tx: TransactionReceipt = self.pledge_agent.claimPowerReward({'from': delegator})
+            print(f"claim coin reward: delegator: {delegator}, agents: {self.delegator_unclaimed_agents_map[delegator]}")
+            tx: TransactionReceipt = self.pledge_agent.claimReward(list(self.delegator_unclaimed_agents_map[delegator]), {'from': delegator})
             self.__parse_event(tx)
+            for agent in self.delegator_unclaimed_agents_map[delegator]:
+                self.__collect_coin_reward(agent, delegator)
+
         # compare balance changed
         for address in self.trackers:
             print(f"check balance: {address} -> {self.balance_delta[address]}")
@@ -334,29 +359,46 @@ class StateMachine:
             incentive_value = validator.income * self.block_reward_incentive_percent // 100
             validator.income -= incentive_value
             if validator.income > 0:
-                validator_reward = validator.income * validator.commission // 1000
-                delegators_reward = validator.income - validator_reward
-                self.balance_delta[validator.fee_address] += validator_reward
-                print(f"agent[{validator.operator_address}] get {validator_reward}")
-                # 分配delegators reward
-                print(f"distribute reward: agent({validator.operator_address}), {delegators_reward}")
                 agent = self.archive_agents[validator.operator_address]
+                commission = validator.commission
+                if agent.score == 0:
+                    commission = 1000
+                validator_reward = validator.income * commission // 1000
+                delegators_reward = validator.income - validator_reward
+                agent_reward_record = AgentReward(delegators_reward)
+                self.balance_delta[validator.fee_address] += validator_reward
+                print(f"agent[{validator.operator_address}] get {validator_reward}(commission: {commission})")
 
+                if delegators_reward == 0:
+                    continue
+                print(f"distribute reward: agent({validator.operator_address}), {delegators_reward}")
+
+                total_cancel_delegate_coin = 0
                 for delegator, item in agent.coin_delegators.items():
                     if item['valid']:
-                        self.delegator_unclaimed_agents_map[delegator].add(validator.operator_address)
                         reward = delegators_reward * item['coin'] * self.round_state.power_score // agent.score
+                        self.delegator_unclaimed_agents_map[delegator].add(validator.operator_address)
                         self.balance_delta[delegator] += reward
                         print(f"\t[Coin] {delegator}({item['coin']}) + {reward}")
                         _reward, _ = self.pledge_agent.claimReward.call([validator.operator_address], {'from': delegator})
                         print(f"\t\t[Coin] call claim reward: {_reward}")
+                        agent_reward_record.add_delegator(delegator)
+                        agent_reward_record.sub_remain_reward(reward)
+                    else:
+                        total_cancel_delegate_coin += item['coin']
+                total_cancel_delegate_coin_reward = delegators_reward * total_cancel_delegate_coin * self.round_state.power_score // agent.score
+                agent_reward_record.sub_remain_reward(total_cancel_delegate_coin_reward)
+
                 for delegator, power_value in agent.power_delegators.items():
-                    self.unclaimed_power_rewards.add(delegator)
+                    self.delegator_unclaimed_agents_map[delegator]
                     reward_each_power = self.power_factor * self.round_state.coin_score // 10000 * delegators_reward // agent.score
                     reward = reward_each_power * power_value
                     self.balance_delta[delegator] += reward
-                    print(f"\t[Power] {delegator}(power: {power_value}) + {reward} --- powerRewardMap: {self.pledge_agent.powerRewardMap(delegator)}")
+                    print(f"\t[Power] {delegator}(power: {power_value}) + {reward} --- rewardMap: {self.pledge_agent.rewardMap(delegator)}")
+                    agent_reward_record.sub_remain_reward(reward)
                 validator.income = 0
+
+                self.agent_reward_records[validator.operator_address].append(agent_reward_record)
 
         # calc round state
         self.round_state.coin_score = self.round_state.power_score = 1
@@ -414,6 +456,8 @@ class StateMachine:
             else:
                 self.coin_delegators[delegator][agent] += amount
 
+        self.__collect_coin_reward(agent, delegator)
+
     def __cancel_delegate_coin(self, delegator: str, agent: str, update_balance=True):
         delegate_info = self.agents[agent].coin_delegators.pop(delegator)
         if agent in self.archive_agents and delegator in self.archive_agents[agent].coin_delegators:
@@ -426,6 +470,8 @@ class StateMachine:
         self.coin_delegators[delegator].pop(agent)
         if not self.coin_delegators[delegator]:
             self.coin_delegators.pop(delegator)
+
+        self.__collect_coin_reward(agent, delegator)
 
     def __transfer_coin(self, delegator, source, target, amount):
         self.__cancel_delegate_coin(delegator, source, update_balance=False)
@@ -472,14 +518,27 @@ class StateMachine:
                 print(f"\t[LOCAL] {validator.operator_address} income: {validator.income}")
                 break
 
+    def __collect_coin_reward(self, agent: str, delegator: str):
+        if isinstance(agent, Account):
+            agent = agent.address
+        if isinstance(delegator, Account):
+            delegator = delegator.address
+        for agent_reward in self.agent_reward_records[agent]:
+            if delegator not in agent_reward.delegators:
+                continue
+            agent_reward.remove_delegator(delegator)
+            if agent_reward.is_empty() and agent_reward.remain_reward > 0:
+                self.balance_delta[delegator] += agent_reward.remain_reward
+                print(f"\t[Dust] Delegator({delegator}) + {agent_reward.remain_reward} from Agent({agent})")
+        self.agent_reward_records[agent] = [item for item in self.agent_reward_records[agent] if not item.is_empty()]
+
     def __add_tracker(self, address):
         if address not in self.trackers:
             self.trackers[address] = get_tracker(address)
 
     @staticmethod
     def __parse_event(tx: TransactionReceipt):
-        events = ['directTransfer', 'claimedReward', 'logCalcPowerRewardFactor', 'logCalcCoinRewardFactor',
-                  'logCalcScore', 'claimedPowerReward', 'roundReward']
+        events = ['directTransfer', 'claimedReward', 'roundReward']
 
         for event_name in events:
             if event_name in tx.events:
