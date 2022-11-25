@@ -49,7 +49,7 @@ function compileContract(key, contractFile, contractName) {
       "/=/",
       "--optimize",
       "--optimize-runs",
-      "200",
+      "10000",
       contractFile
     ])
 
