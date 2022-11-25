@@ -197,7 +197,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
   /// Claim relayer rewards
   /// @param relayerAddr The relayer address
-  function claimRelayerReward(address relayerAddr) external {
+  function claimRelayerReward(address relayerAddr) external onlyInit {
      uint256 reward = relayerRewardVault[relayerAddr];
      require(reward != 0, "no relayer reward");
      relayerRewardVault[relayerAddr] = 0;
