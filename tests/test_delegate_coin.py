@@ -1,6 +1,5 @@
 import pytest
 from web3 import Web3
-import brownie
 from brownie import accounts
 from .common import register_candidate, turn_round
 from .utils import get_tracker
@@ -232,6 +231,19 @@ def test_undelegate_coin_next_round(pledge_agent):
 
     reward_sum, _ = pledge_agent.claimReward.call([operator])
     assert reward_sum == 0
+
+
+def test_undelegate_coin_reward(pledge_agent):
+    operator = accounts[1]
+    consensus = register_candidate(operator=operator)
+    pledge_agent.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+    turn_round()
+    pledge_agent.undelegateCoin(operator)
+    tx = turn_round([consensus])
+    assert "receiveDeposit" in tx.events
+    event = tx.events['receiveDeposit'][-1]
+    assert event['from'] == pledge_agent.address
+    assert event['amount'] == BLOCK_REWARD // 2
 
 
 
