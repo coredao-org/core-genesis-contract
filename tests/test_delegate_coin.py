@@ -1,8 +1,8 @@
 import pytest
 from web3 import Web3
-from brownie import accounts
+from brownie import accounts, PledgeAgentProxy
 from .common import register_candidate, turn_round
-from .utils import get_tracker
+from .utils import get_tracker, expect_event
 from .calc_reward import parse_delegation, set_delegate
 
 
@@ -244,6 +244,32 @@ def test_undelegate_coin_reward(pledge_agent):
     event = tx.events['receiveDeposit'][-1]
     assert event['from'] == pledge_agent.address
     assert event['amount'] == BLOCK_REWARD // 2
+
+
+def test_claim_reward_failed(pledge_agent):
+    pledge_agent_proxy = PledgeAgentProxy.deploy(pledge_agent.address, {'from': accounts[0]})
+    operator = accounts[1]
+    consensus = register_candidate(operator=operator)
+    tx = pledge_agent_proxy.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+    expect_event(tx, "delegate", {"success": True})
+    turn_round()
+    turn_round([consensus])
+    assert pledge_agent.rewardMap(pledge_agent_proxy.address) == 0
+    reward = pledge_agent_proxy.claimReward.call([operator])
+    assert reward == BLOCK_REWARD // 2
+    tx = pledge_agent_proxy.claimReward([operator])
+    expect_event(tx, "claim", {
+        "reward": BLOCK_REWARD // 2,
+        "allClaimed": True,
+    })
+    expect_event(tx, "claimedReward", {
+        "delegator": pledge_agent_proxy.address,
+        "operator": pledge_agent_proxy.address,
+        "amount": BLOCK_REWARD // 2,
+        "success": False
+    })
+    assert pledge_agent.rewardMap(pledge_agent_proxy.address) == BLOCK_REWARD // 2
+
 
 
 
