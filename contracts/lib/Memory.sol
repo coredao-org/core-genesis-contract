@@ -50,11 +50,13 @@ library Memory {
         }
 
         // Copy remaining bytes
-        uint mask = 256 ** (WORD_SIZE - len) - 1;
-        assembly {
-            let srcpart := and(mload(src), not(mask))
-            let destpart := and(mload(dest), mask)
-            mstore(dest, or(destpart, srcpart))
+        unchecked { 
+            uint mask = 256 ** (WORD_SIZE - len) - 1;
+            assembly {
+                let srcpart := and(mload(src), not(mask))
+                let destpart := and(mload(dest), mask)
+                mstore(dest, or(destpart, srcpart))
+            }
         }
     }
 
