@@ -211,7 +211,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// @return The incoming reward of the validator
   function getIncoming(address validator) external view returns (uint256) {
     uint256 index = currentValidatorSetMap[validator];
-    if (index <= 0) {
+    if (index == 0) {
       return 0;
     }
     return currentValidatorSet[index - 1].income;
@@ -222,7 +222,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// @param validator The validator to slash
   function misdemeanor(address validator) external override onlySlash {
     uint256 index = currentValidatorSetMap[validator];
-    if (index <= 0) {
+    if (index == 0) {
       return;
     }
     // the actually index
@@ -254,7 +254,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// @param felonyDeposit The amount of deposits to slash
   function felony(address validator, uint256 felonyRound, uint256 felonyDeposit) external override onlySlash {
     uint256 index = currentValidatorSetMap[validator];
-    if (index <= 0) {
+    if (index == 0) {
       return;
     }
     // the actually index
