@@ -11,8 +11,7 @@
     "petersburgBlock": 0,
     "istanbulBlock": 0,
     "muirGlacierBlock": 0,
-    "ramanujanBlock": 0,
-    "nielsBlock": 0,
+    "hashPowerBlock": 0,
     "satoshi": {
       "period": {{initCycle.blockPeriod}},
       "epoch": {{initCycle.epochLength}},
