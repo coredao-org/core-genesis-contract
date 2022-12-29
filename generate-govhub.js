@@ -32,6 +32,10 @@ program.option(
     201600
 )
 
+program.option("--testnet <testnet>",
+    "use testnet params",
+    false)
+
 program.option("--mock <mock>",
     "if use mock",
     false);
@@ -40,9 +44,13 @@ program.option("--mock <mock>",
 program.parse(process.argv);
 
 const members = require("./init_members")
-let initMembersBytes = program.initValidatorSetBytes;
+let initMembersBytes = program.initMembersBytes;
 if (initMembersBytes == ""){
-    initMembersBytes = members.initMembers.slice(2);
+    if (program.testnet) {
+        initMembersBytes = members.initMembersTestnet.slice(2);
+    } else {
+        initMembersBytes = members.initMembers.slice(2);
+    }
 }
 
 const data = {
