@@ -3,7 +3,7 @@ const init_cycle = {
     blockPeriod: 3,
     epochLength: 200,
     roundInterval: 86400,
-    validatorCount: 9
+    validatorCount: 21
 };
 
 
