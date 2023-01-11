@@ -23,7 +23,11 @@ program.option("--rewardForValidatorSetChange <rewardForValidatorSetChange>",
 
 program.option("--initConsensusStateBytes <initConsensusStateBytes>",
     "init consensusState bytes, hex encoding, no prefix with 0x",
-    "000040209acaa5d26d392ace656c2428c991b0a3d3d773845a1300000000000000000000aa8e225b1f3ea6c4b7afd5aa1cecf691a8beaa7fa1e579ce240e4a62b5ac8ecc2141d9618b8c0b170d5c05bb");
+    "0000402089138e40cd8b4832beb8013bc80b1425c8bcbe10fc280400000000000000000058a06ab0edc5653a6ab78490675a954f8d8b4d4f131728dcf965cd0022a02cdde59f8e63303808176bbe3919");
+
+program.option("--initChainHeight <initChainHeight>",
+    "init btc chain height",
+    766080);
 
 program.option("--mock <mock>",
     "if use mock",
@@ -34,6 +38,7 @@ program.parse(process.argv);
 const data = {
   initRoundInterval: init_cycle.roundInterval,
   initConsensusStateBytes: program.initConsensusStateBytes,
+  initChainHeight: program.initChainHeight,
   rewardForValidatorSetChange: program.rewardForValidatorSetChange,
   mock: program.mock,
 };

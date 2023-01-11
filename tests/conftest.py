@@ -103,6 +103,14 @@ def foundation(accounts):
     c = accounts[0].deploy(Foundation)
     return c
 
+
+# test contract
+@pytest.fixture(scope="module")
+def test_lib_memory(accounts):
+    c = accounts[0].deploy(TestLibMemory)
+    return c
+
+
 @pytest.fixture(scope="module", autouse=True)
 def set_system_contract_address(
     candidate_hub,

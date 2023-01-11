@@ -14,9 +14,7 @@ program.option(
     "System.sol",
     "./contracts/System.sol"
 )
-program.option("--testnet <testnet>",
-    "if use testnet",
-    false);
+
 program.option("--mock <mock>",
     "if use mock",
     false);
