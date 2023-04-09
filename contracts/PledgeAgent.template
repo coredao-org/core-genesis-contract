@@ -8,6 +8,7 @@ import "./interface/ISystemReward.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./System.sol";
+import "./lib/Address.sol";
 
 /// This contract manages user delegate, also known as stake
 /// Including both coin delegate and hash delegate
@@ -260,7 +261,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param agent The operator address of validator
   function undelegateCoin(address agent) external {
     uint256 deposit = undelegateCoin(agent, msg.sender);
-    payable(msg.sender).transfer(deposit);
+    Address.sendValue(payable(msg.sender), deposit);
     emit undelegatedCoin(agent, msg.sender, deposit);
   }
 
