@@ -4,6 +4,7 @@ pragma solidity 0.8.4;
 import "./lib/Memory.sol";
 import "./lib/BytesToTypes.sol";
 import "./interface/ILightClient.sol";
+import "./interface/ICandidateHub.sol";
 import "./interface/ISystemReward.sol";
 import "./interface/IParamSubscriber.sol";
 import "./System.sol";
@@ -41,6 +42,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   uint256 public constant MAXIMUM_WEIGHT=20;
   uint256 public constant CONFIRM_BLOCK = 6;
   uint256 public constant INIT_ROUND_INTERVAL = 86400;
+  uint256 public constant POWER_ROUND_GAP = 7;
 
   uint256 public callerCompensationMolecule;
   uint256 public rewardForSyncHeader;
@@ -182,11 +184,16 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       if (blockHash == initBlockHash) return;
       blockHash = getPrevHash(blockHash);
     }
-    uint256 roundTimeTag = getTimestamp(blockHash) / roundInterval;
+    uint256 blockRoundTag = getTimestamp(blockHash) / roundInterval;
     address candidate = getCandidate(blockHash);
-    if (candidate != address(0)) {
+    
+    // The mining power with rounds less than or equal to frozenRoundTag has been frozen 
+    // and there is no need to continue staking, otherwise it may disrupt the reward 
+    // distribution mechanism
+    uint256 frozenRoundTag = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag() - POWER_ROUND_GAP;
+    if (candidate != address(0) && blockRoundTag > frozenRoundTag) {
       address miner = getRewardAddress(blockHash);
-      RoundPower storage r = roundPowerMap[roundTimeTag];
+      RoundPower storage r = roundPowerMap[blockRoundTag];
       uint256 power = r.powerMap[candidate].miners.length;
       if (power == 0) {
         r.candidates.push(candidate);

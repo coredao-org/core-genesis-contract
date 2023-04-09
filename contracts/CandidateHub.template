@@ -151,6 +151,11 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     }
   }
 
+  /// Simple return the round tag.
+  function getRoundTag() external override view returns(uint256) {
+    return roundTag;
+  }
+
   /********************* External methods  ****************************/
   /// The `turn round` workflow
   /// @dev this method is called by Golang consensus engine at the end of a round
