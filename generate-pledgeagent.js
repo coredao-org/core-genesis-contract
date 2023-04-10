@@ -25,8 +25,9 @@ program.option("--mock <mock>",
 program.parse(process.argv);
 
 const data = {
-  initRoundInterval: init_cycle.roundInterval,
-  initValidatorCount: init_cycle.validatorCount,
+  roundInterval: init_cycle.roundInterval,
+  blockPeriod: init_cycle.blockPeriod,
+  epochLength: init_cycle.epochLength,
   mock: program.mock,
 };
 
