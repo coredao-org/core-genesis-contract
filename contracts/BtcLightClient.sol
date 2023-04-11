@@ -41,6 +41,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   uint256 public constant MAXIMUM_WEIGHT=20;
   uint256 public constant CONFIRM_BLOCK = 6;
   uint256 public constant INIT_ROUND_INTERVAL = 86400;
+  uint256 public constant INIT_STORE_BLOCK_GAS_PRICE = 5e11;
 
   uint256 public callerCompensationMolecule;
   uint256 public rewardForSyncHeader;
@@ -49,6 +50,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   uint256 public countInRound=0;
   uint256 public collectedRewardForHeaderRelayer=0;
   uint256 public roundInterval;
+  uint256 public storeBlockGasPrice;
 
   address payable[] public headerRelayerAddressRecord;
   mapping(address => uint256) public headerRelayersSubmitCount;
@@ -102,6 +104,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     roundSize = ROUND_SIZE;
     maxWeight = MAXIMUM_WEIGHT;
     roundInterval = INIT_ROUND_INTERVAL;
+    storeBlockGasPrice = INIT_STORE_BLOCK_GAS_PRICE;
     alreadyInit = true;
   }
 
@@ -109,6 +112,9 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /// @dev This method is called by relayers
   /// @param blockBytes BTC block bytes
   function storeBlockHeader(bytes calldata blockBytes) external onlyRelayer {
+    require(
+      tx.gasprice == (storeBlockGasPrice == 0 ? INIT_STORE_BLOCK_GAS_PRICE : storeBlockGasPrice), 
+      "must use limited gasprice");
     bytes memory headerBytes = slice(blockBytes, 0, 80);
     bytes32 blockHash = doubleShaFlip(headerBytes);
     require(submitters[blockHash] == address(0x0), "can't sync duplicated header");
@@ -531,6 +537,12 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
         revert OutOfBounds(key, newMaxWeight, 1, roundSize);
       }
       maxWeight = newMaxWeight;
+    } else if (Memory.compareStrings(key,"storeBlockGasPrice")) {
+      uint256 newStoreBlockGasPrice = BytesToTypes.bytesToUint256(32, value);
+      if (newStoreBlockGasPrice < 1e9 || newStoreBlockGasPrice > 1e13) {
+        revert OutOfBounds(key, newStoreBlockGasPrice, 1e9, 1e13);
+      }
+      storeBlockGasPrice = newStoreBlockGasPrice;
     } else {
       require(false, "unknown param");
     }
