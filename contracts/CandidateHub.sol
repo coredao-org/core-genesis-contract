@@ -9,6 +9,7 @@ import "./interface/IPledgeAgent.sol";
 import "./interface/ISlashIndicator.sol";
 import "./interface/ILightClient.sol";
 import "./System.sol";
+import "./lib/Address.sol";
 
 /// This contract manages all validator candidates on Core blockchain
 /// It also exposes the method `turnRound` for the consensus engine to execute the `turn round` workflow
@@ -275,7 +276,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
     if (margin > dues) {
       uint256 value = margin - dues;
-      payable(msg.sender).transfer(value);
+      Address.sendValue(payable(msg.sender), value);
       payable(SYSTEM_REWARD_ADDR).transfer(uint256(dues));
     } else {
       payable(SYSTEM_REWARD_ADDR).transfer(margin);
