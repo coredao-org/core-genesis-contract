@@ -308,7 +308,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     );
     if (roundTag != c.commissionLastChangeRound) {
       c.commissionLastChangeRound = roundTag;
-      c.commissionLastRoundValue = commissionThousandths;
+      c.commissionLastRoundValue = c.commissionThousandths;
     }
     if (c.consensusAddr != consensusAddr) {
       require(consensusMap[consensusAddr] == 0, "the consensus already exists");
