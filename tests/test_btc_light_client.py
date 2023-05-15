@@ -2,16 +2,26 @@ import pytest
 import brownie
 from web3 import Web3
 from brownie import accounts
+from brownie.network import gas_price
 from .utils import expect_event, get_tracker
 from .common import register_relayer
 from .btc_block_data import btc_block_data
 
 
+def teardown_module():
+    gas_price(False)
+
+
 @pytest.fixture(scope="module", autouse=True)
-def set_up(system_reward):
+def set_up(system_reward, btc_light_client):
     register_relayer()
     # deposit to system reward contract
     accounts[0].transfer(system_reward.address, Web3.toWei(10, 'ether'))
+    # set store block header gas price
+    store_block_header_tx_gas_price = btc_light_client.storeBlockGasPrice()
+    if store_block_header_tx_gas_price == 0:
+        store_block_header_tx_gas_price = btc_light_client.INIT_STORE_BLOCK_GAS_PRICE()
+    gas_price(store_block_header_tx_gas_price)
 
 
 @pytest.fixture(autouse=True)
@@ -88,7 +98,7 @@ def test_distribute_relayer_reward(btc_light_client, system_reward):
     tracker = get_tracker(accounts[0])
     # claim reward
     tx = btc_light_client.claimRelayerReward(accounts[0], {'from': accounts[1]})
-    assert tracker.delta() == after_reward
+    assert tracker.delta(False) == after_reward
     expect_event(tx, "rewardTo", {"to": accounts[0], "amount": after_reward})
 
 
