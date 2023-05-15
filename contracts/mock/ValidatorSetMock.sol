@@ -2,8 +2,6 @@ pragma solidity 0.8.4;
 import "../ValidatorSet.sol";
 
 contract ValidatorSetMock is ValidatorSet {
-    receive() external payable{}
-
     function developmentInit() external {
         blockReward = blockReward / 1e14;
 
