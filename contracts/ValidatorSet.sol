@@ -63,7 +63,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   event validatorMisdemeanor(address indexed validator, uint256 amount);
   event validatorFelony(address indexed validator, uint256 amount);
   event paramChange(string key, bytes value);
-  event receiveDeposit(address indexed from, uint256 amount);
+  event received(address indexed from, uint256 amount);
 
   /*********************** init **************************/
   function init() external onlyNotInit {
@@ -89,7 +89,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
 
   receive() external payable {
     if (msg.value != 0) {
-      emit receiveDeposit(msg.sender, msg.value);
+      emit received(msg.sender, msg.value);
     }
   }
 
@@ -149,7 +149,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
         }
 
         v.income = 0;
-        (bool success,) = feeAddress.call{value:validatorReward}("");
+        bool success = feeAddress.send(validatorReward);
         if (success) {
           emit directTransfer(v.operateAddress, feeAddress, validatorReward, tempIncome);
         } else {

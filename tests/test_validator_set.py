@@ -6,7 +6,6 @@ from brownie import *
 from .utils import expect_event, get_tracker, padding_left, AccountTracker
 from .common import execute_proposal
 
-
 init_validators = [
     '0x01Bca3615D24d3c638836691517b2B9b49b054B1',
     '0xa458499604A85E90225a14946f36368Ae24df16D',
@@ -127,7 +126,7 @@ def test_deposit_to_zero_address():
         "amount": deposit_value
     })
     __contract_check(0, init_validator_incomes)
-    __balance_check(0-deposit_value, deposit_value, 0)
+    __balance_check(0 - deposit_value, deposit_value, 0)
 
 
 def test_deposit_to_deprecated_validator():
@@ -138,7 +137,7 @@ def test_deposit_to_deprecated_validator():
         "amount": deposit_value
     })
     __contract_check(0, init_validator_incomes)
-    __balance_check(0-deposit_value, deposit_value, 0)
+    __balance_check(0 - deposit_value, deposit_value, 0)
 
 
 def test_deposit_to_deprecated_validator_with_amount_0():
@@ -229,25 +228,31 @@ def test_update_failed_with_empty_validator_set():
 def test_update_failed_with_addresses_of_different_length():
     __fake_validator_set()
     with brownie.reverts("the numbers of consensusAddresses and commissionThousandthss should be equal"):
-        validator_set_instance.updateValidatorSet([accounts[0].address], [accounts[1].address], [accounts[2].address], [accounts[3].address, accounts[4].address])
+        validator_set_instance.updateValidatorSet([accounts[0].address], [accounts[1].address], [accounts[2].address],
+                                                  [accounts[3].address, accounts[4].address])
     with brownie.reverts("the numbers of consensusAddresses and feeAddresses should be equal"):
-        validator_set_instance.updateValidatorSet([accounts[0].address], [accounts[1].address], [accounts[2].address, accounts[4].address], [accounts[3].address])
+        validator_set_instance.updateValidatorSet([accounts[0].address], [accounts[1].address],
+                                                  [accounts[2].address, accounts[4].address], [accounts[3].address])
     with brownie.reverts("the numbers of consensusAddresses and operateAddresses should be equal"):
-        validator_set_instance.updateValidatorSet([accounts[0].address], [accounts[1].address, accounts[4].address], [accounts[2].address], [accounts[3].address])
+        validator_set_instance.updateValidatorSet([accounts[0].address], [accounts[1].address, accounts[4].address],
+                                                  [accounts[2].address], [accounts[3].address])
     with brownie.reverts("the numbers of consensusAddresses and operateAddresses should be equal"):
-        validator_set_instance.updateValidatorSet([accounts[0].address, accounts[4].address], [accounts[1].address], [accounts[2].address], [accounts[3].address])
+        validator_set_instance.updateValidatorSet([accounts[0].address, accounts[4].address], [accounts[1].address],
+                                                  [accounts[2].address], [accounts[3].address])
 
 
 def test_update_failed_with_duplicate_consensus_address():
     __fake_validator_set()
     with brownie.reverts("duplicate consensus address"):
-        validator_set_instance.updateValidatorSet([accounts[0], accounts[0]], [accounts[1], accounts[1]], [accounts[2], accounts[2]], [100, 100])
+        validator_set_instance.updateValidatorSet([accounts[0], accounts[0]], [accounts[1], accounts[1]],
+                                                  [accounts[2], accounts[2]], [100, 100])
 
 
 def test_update_failed_with_commissionThousandths_out_of_range():
     __fake_validator_set()
     with brownie.reverts("commissionThousandths out of bound"):
-        validator_set_instance.updateValidatorSet([accounts[0], accounts[0]], [accounts[1], accounts[3]], [accounts[2], accounts[2]], [1000, 10000])
+        validator_set_instance.updateValidatorSet([accounts[0], accounts[0]], [accounts[1], accounts[3]],
+                                                  [accounts[2], accounts[2]], [1000, 10000])
 
 
 def test_update_success():
@@ -258,15 +263,21 @@ def test_update_success():
 
 
 @pytest.mark.parametrize("fake,key,value,err", [
-    (False, "blockReward", "0x0000000000000000000000000000000000000000000000000000000000000001", "the msg sender must be governance contract"),
+    (False, "blockReward", "0x0000000000000000000000000000000000000000000000000000000000000001",
+     "the msg sender must be governance contract"),
     (True, "totalInCome", "0x0000000000000000000000000000000000000000000000000000000000000001", "unknown param"),
     (True, "blockReward", '0x' + str('2000000000000000000'), "length of blockReward mismatch"),
-    (True, "blockReward", "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "the blockReward out of range"),
-    (True, "blockReward", "0x000000000000000000000000000000000000000000000001a055690d9db80001", "the blockReward out of range"),
+    (True, "blockReward", "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+     "the blockReward out of range"),
+    (True, "blockReward", "0x000000000000000000000000000000000000000000000001a055690d9db80001",
+     "the blockReward out of range"),
     (True, "blockRewardIncentivePercent", "0x" + str(10), "length of blockRewardIncentivePercent mismatch"),
-    (True, "blockRewardIncentivePercent", "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "the blockRewardIncentivePercent out of range"),
-    (True, "blockRewardIncentivePercent", "0x0000000000000000000000000000000000000000000000000000000000000000", "the blockRewardIncentivePercent out of range"),
-    (True, "blockRewardIncentivePercent", "0x0000000000000000000000000000000000000000000000000000000000000064", "the blockRewardIncentivePercent out of range"),
+    (True, "blockRewardIncentivePercent", "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+     "the blockRewardIncentivePercent out of range"),
+    (True, "blockRewardIncentivePercent", "0x0000000000000000000000000000000000000000000000000000000000000000",
+     "the blockRewardIncentivePercent out of range"),
+    (True, "blockRewardIncentivePercent", "0x0000000000000000000000000000000000000000000000000000000000000064",
+     "the blockRewardIncentivePercent out of range"),
 ])
 def update_param_failed(fake, key, value, err):
     if fake:
@@ -299,7 +310,8 @@ def test_update_param_success_with_key_blockRewardIncentivePercent():
         Burn[0].address,
         Foundation[0].address
     )
-    validator_set_instance.updateParam('blockRewardIncentivePercent', '0x0000000000000000000000000000000000000000000000000000000000000014')
+    validator_set_instance.updateParam('blockRewardIncentivePercent',
+                                       '0x0000000000000000000000000000000000000000000000000000000000000014')
     assert validator_set_instance.blockRewardIncentivePercent() == 20
 
 
@@ -343,7 +355,7 @@ def test_distribute_reward_success_with_commissionThousandths_1000():
         'totalReward': expect_reward
     })
     __contract_check(0, init_validator_incomes)
-    __balance_check(0-value, 0, expect_incentive, 0)
+    __balance_check(0 - value, 0, expect_incentive, 0)
     assert brownie.web3.eth.get_balance(validator['feeAddress']) == expect_reward
 
 
@@ -514,7 +526,7 @@ def test_misdemeanor_success():
     )
     validator_set_instance.misdemeanor(init_validators[2])
     __contract_check(deposit_value, [average_value, average_value, 0, average_value, average_value])
-    __balance_check(0-deposit_value, deposit_value, 0, 0)
+    __balance_check(0 - deposit_value, deposit_value, 0, 0)
 
 
 def test_felony_failed_with_address_which_is_not_slash():
@@ -578,14 +590,15 @@ def test_felony_failed_with_one_validator_which_has_income():
     assert validator_set_instance.felony.call(init_validators[0], felony_round, felony_deposit) == ()
     validator_set_instance.felony(init_validators[0], felony_round, felony_deposit)
     __contract_check(deposit_value, [0])
-    __balance_check(0-deposit_value, deposit_value, 0, 0)
+    __balance_check(0 - deposit_value, deposit_value, 0, 0)
 
 
 def test_felony_success_with_validator_set_which_has_0_income(candidate_hub):
     candidate_hub.register(accounts[0], accounts[0], 100, {'from': accounts[0], 'value': Web3.toWei(20000, 'ether')})
     candidate_hub.register(accounts[1], accounts[1], 100, {'from': accounts[1], 'value': Web3.toWei(20000, 'ether')})
     __fake_validator_set()
-    validator_set_instance.updateValidatorSet([accounts[0], accounts[1]], [accounts[0], accounts[1]], [accounts[0], accounts[1]], [100, 100])
+    validator_set_instance.updateValidatorSet([accounts[0], accounts[1]], [accounts[0], accounts[1]],
+                                              [accounts[0], accounts[1]], [100, 100])
 
     validator_set_instance.updateContractAddr(
         ValidatorSetMock[0].address,
@@ -683,7 +696,6 @@ def test_subsidy_reduce_for_81_times():
     block_reward = validator_set_instance.BLOCK_REWARD()
     for _ in range(81):
         block_reward = block_reward * validator_set_instance.REDUCE_FACTOR() // 10000
-
     validator_set_instance.updateBlockReward(BLOCK_REWARD)
     validator_set_instance.updateSubsidyReduceInterval(3)
     reduce_interval = validator_set_instance.SUBSIDY_REDUCE_INTERVAL()
@@ -695,3 +707,15 @@ def test_subsidy_reduce_for_81_times():
     assert validator_set_instance.blockReward() == block_reward
 
 
+def test_validator_contract_receive_ether(validator_set):
+    transfer_amount = 1000000
+    tracker0 = get_tracker(accounts[0])
+    tx = accounts[0].transfer(validator_set.address, transfer_amount)
+    assert "received" in tx.events
+    event = tx.events['received'][-1]
+    assert event['from'] == accounts[0].address
+    assert event['amount'] == transfer_amount
+    assert tracker0.delta() == 0 - transfer_amount
+    tx1 = accounts[0].transfer(validator_set.address, 0)
+    assert "received" not in tx1.events
+    assert tracker0.delta() == 0

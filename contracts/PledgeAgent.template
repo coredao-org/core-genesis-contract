@@ -15,7 +15,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   uint256 public constant INIT_REQUIRED_COIN_DEPOSIT = 1e18;
   uint256 public constant INIT_HASH_POWER_FACTOR = 20000;
   uint256 public constant POWER_BLOCK_FACTOR = {% if mock %}1{% else %}1e18{% endif %};
-  uint256 public constant INIT_UNDELEGATE_LOCK_TURNS = 3;
+  uint256 public constant INIT_UNDELEGATE_LOCK_TURNS = 1;
 
   uint256 public requiredCoinDeposit;
 
@@ -51,7 +51,12 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   uint256 public undelegateLockTurns;
 
-  mapping(address => uint128[]) public undelegateUnlockMap;
+  mapping(address => LockInfo[]) public undelegateUnlockMap;
+
+  struct LockInfo {
+    uint256 round;
+    uint256 deposit;
+  }
 
   struct CoinDelegator {
     // the deposit amount used to collect history reward.
@@ -99,6 +104,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   );
   event roundReward(address indexed agent, uint256 coinReward, uint256 powerReward);
   event claimedReward(address indexed delegator, address indexed operator, uint256 amount, bool success);
+  event claimedUnlockedDeposit(address indexed delegator, uint256 amount, bool success);
 
   /// The validator candidate is inactive, it is expected to be active
   /// @param candidate Address of the validator candidate
@@ -276,14 +282,14 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param amount The coin amount for undelegate
   function undelegateCoin(address agent, uint256 amount) public {
     uint256 deposit = undelegateCoin(agent, msg.sender, amount);
-    uint128[] storage list = undelegateUnlockMap[msg.sender];
+    LockInfo[] storage list = undelegateUnlockMap[msg.sender];
     uint256 lockTurns = undelegateLockTurns == 0 ? INIT_UNDELEGATE_LOCK_TURNS : undelegateLockTurns;
     uint256 unlockRound = roundTag + lockTurns;
     uint256 len = list.length;
-    if (len != 0 && (list[len-1] >> 96) == unlockRound) {
-      list[len-1] += uint128(deposit);
+    if (len != 0 && list[len-1].round == unlockRound) {
+      list[len-1].deposit += deposit;
     } else {
-      list.push(uint128((unlockRound << 96) | deposit));
+      list.push(LockInfo(unlockRound, deposit));
     }
     emit undelegatedCoin(agent, msg.sender, deposit);
   }
@@ -339,19 +345,50 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       // if there are rewards to be collected, leave them there
       if (roundLimit < 0) break;
     }
-    rewardSum += collectLockDeposit(msg.sender);
     if (rewardSum != 0) {
       distributeReward(payable(msg.sender), rewardSum);
     }
     return (rewardSum, roundLimit >= 0);
   }
 
+  /// Claim unlocked deposit for delegator
+  /// @return amount The unlocked deposit claimed
+  function claimUnlockedDeposit() external returns (uint256) {
+    uint256 depositSum;
+    LockInfo[] storage list = undelegateUnlockMap[msg.sender];
+    uint256 len = list.length;
+    uint256 curRound = roundTag;
+    bool del = len > 0;
+    for (uint256 i = len; i > 0; --i) {
+      uint256 index = i - 1;
+      uint256 round = list[index].round;
+      if (round == 0) break;
+      if (round > curRound) {
+        del = false;
+      } else {
+        depositSum += list[index].deposit;
+        delete list[index];
+      }
+    }
+    if (del) {
+      delete undelegateUnlockMap[msg.sender];
+    } else {
+      for (uint256 i = len; i > 0 && list[i - 1].round == 0; --i) list.pop();
+    }
+    (bool success, ) = msg.sender.call{value: depositSum, gas: 50000}("");
+    if (!success) {
+      rewardMap[msg.sender] += depositSum;
+    }
+    emit claimedUnlockedDeposit(msg.sender, depositSum, success);
+    return depositSum;
+  }
+
   /*********************** Internal methods ***************************/
   function distributeReward(address payable delegator, uint256 reward) internal {
-    (bool success, bytes memory data) = delegator.call{value: reward, gas: 50000}("");
+    (bool success, ) = delegator.call{value: reward, gas: 50000}("");
     emit claimedReward(delegator, msg.sender, reward, success);
     if (!success) {
-      rewardMap[msg.sender] = reward;
+      rewardMap[msg.sender] += reward;
     }
   }
 
@@ -402,12 +439,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 rewardAmount = collectCoinReward(a, d, 0x7FFFFFFF);
     a.totalDeposit -= amount;
 
-    bool haveReward;
-    if (a.rewardSet.length != 0) {
-      haveReward = a.rewardSet[a.rewardSet.length - 1].round == roundTag;
-    }
-    if (!haveReward && newDeposit == amount) {
-      delete a.cDelegatorMap[delegator];
+    
+    if (newDeposit == amount && (a.rewardSet.length == 0 || a.rewardSet[a.rewardSet.length - 1].round != roundTag)) {
+        delete a.cDelegatorMap[delegator];
     } else {
       if(d.changeRound != roundTag) {
         d.changeRound = roundTag;
@@ -467,31 +501,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return rewardAmount;
   }
 
-  function collectLockDeposit(address delegator) public returns (uint256) {
-    uint256 rewardSum;
-    uint128[] storage list = undelegateUnlockMap[delegator];
-    uint256 len = list.length;
-    uint256 curRound = roundTag;
-    bool del = len > 0;
-    for (uint256 i = len; i > 0; --i) {
-      uint128 pair = list[i - 1];
-      if (pair != 0) {
-        uint256 round = pair >> 96;
-        uint256 deposit = pair & (2**96-1);
-        if (round < curRound) {
-          del = false;
-        } else {
-          rewardSum += deposit;
-          list[i - 1] = 0;
-        }
-      }
-    }
-    if (del) {
-      delete undelegateUnlockMap[msg.sender];
-    }
-    return rewardSum;
-  }
-
   /*********************** Governance ********************************/
   /// Update parameters through governance vote
   /// @param key The name of the parameter
@@ -541,5 +550,22 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     Agent storage a = agentsMap[agent];
     require(index < a.rewardSet.length, "out of up bound");
     return a.rewardSet[index];
+  }
+
+  /// Get locking deposit of the delegator
+  /// @param delegator The reward index
+  /// @return amount Total locking deposit
+  function getLockingDeposit(address delegator) external view returns (uint256) {
+    uint256 depositSum;
+    LockInfo[] memory list = undelegateUnlockMap[delegator];
+    uint256 len = list.length;
+    uint256 curRound = roundTag;
+    for (uint256 i = len; i > 0; --i) {
+      uint256 index = i - 1;
+      uint256 round = list[index].round;
+      if (round == 0) break;
+      if (round > curRound) depositSum += list[index].deposit;
+    }
+    return depositSum;
   }
 }
