@@ -106,6 +106,9 @@ class AccountTracker:
         self.height = chain.height
         return self.account.balance()
 
+    def update_height(self):
+        self.height = chain.height
+
     def delta(self, exclude_tx_fee=True):
         total_tx_fee = 0
         if exclude_tx_fee:
@@ -130,7 +133,5 @@ def padding_left(hex_str, length):
 
 def encode_args_with_signature(function_signature: str, args: list) -> str:
     selector = Web3.keccak(text=function_signature)[:4].hex()
-    args_in_function_signature = function_signature[function_signature.index('(')+1:-1].replace(' ', '').split(',')
+    args_in_function_signature = function_signature[function_signature.index('(') + 1:-1].replace(' ', '').split(',')
     return selector + encode(args_in_function_signature, args).hex()
-
-

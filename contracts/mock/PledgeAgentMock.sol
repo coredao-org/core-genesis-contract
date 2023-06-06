@@ -34,7 +34,9 @@ contract PledgeAgentMock is PledgeAgent {
     function getRewardLength(address agent) external view returns (uint) {
         return agentsMap[agent].rewardSet.length;
     }
-
+    function setUndelegateLockTurns(uint128 value) external{
+        undelegateLockTurns = value;
+    }
     function collectCoinRewardMock(address agent, address delegator,
         int256 roundLimit) external {
       Agent storage a = agentsMap[agent];
