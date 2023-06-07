@@ -2,16 +2,60 @@ import pytest
 import brownie
 from web3 import Web3
 from brownie import accounts
-from .utils import expect_event, get_tracker
+from brownie.network import gas_price
+from .utils import expect_event, get_tracker, encode_args_with_signature, padding_left
 from .common import register_relayer
 from .btc_block_data import btc_block_data
 
 
+def teardown_module():
+    gas_price(False)
+
+
+@pytest.fixture(scope="function")
+def init_gov_address(validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub,
+                     gov_hub, pledge_agent, burn, foundation):
+    VALIDATOR_CONTRACT_ADDR = validator_set.address
+    SLASH_CONTRACT_ADDR = slash_indicator.address
+    SYSTEM_REWARD_ADDR = system_reward.address
+    LIGHT_CLIENT_ADDR = btc_light_client.address
+    RELAYER_HUB_ADDR = relay_hub.address
+    CANDIDATE_HUB_ADDR = candidate_hub.address
+    GOV_HUB_ADDR = gov_hub.address
+    PLEDGE_AGENT_ADDR = pledge_agent.address
+    BURN_ADDR = burn.address
+    FOUNDATION_ADDR = foundation.address
+    btc_light_client.updateContractAddr(
+        VALIDATOR_CONTRACT_ADDR,
+        SLASH_CONTRACT_ADDR,
+        SYSTEM_REWARD_ADDR,
+        LIGHT_CLIENT_ADDR,
+        RELAYER_HUB_ADDR,
+        CANDIDATE_HUB_ADDR,
+        accounts[0],
+        PLEDGE_AGENT_ADDR,
+        BURN_ADDR,
+        FOUNDATION_ADDR,
+    )
+
+
 @pytest.fixture(scope="module", autouse=True)
-def set_up(system_reward):
+def set_up(validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub,
+           gov_hub, pledge_agent, burn, foundation):
     register_relayer()
     # deposit to system reward contract
     accounts[0].transfer(system_reward.address, Web3.toWei(10, 'ether'))
+    # set store block header gas price
+    global store_block_header_tx_gas_price
+    store_block_header_tx_gas_price = btc_light_client.storeBlockGasPrice()
+    if store_block_header_tx_gas_price == 0:
+        store_block_header_tx_gas_price = btc_light_client.INIT_STORE_BLOCK_GAS_PRICE()
+    gas_price(store_block_header_tx_gas_price)
+
+
+def update_default_block_gasprice(btc_light_client):
+    hex_value = padding_left(Web3.toHex(store_block_header_tx_gas_price), 64)
+    btc_light_client.updateParam('storeBlockGasPrice', hex_value, {'from': accounts[0]})
 
 
 @pytest.fixture(autouse=True)
@@ -43,13 +87,17 @@ def test_store_block_success(btc_light_client):
     expect_event(tx, 'StoreHeader', {'height': '717699'})
 
     assert btc_light_client.isHeaderSynced("0x00000000000000000000794d6f4f6ee1c09e69a81469d7456e67be3d724223fb") is True
-    assert btc_light_client.getSubmitter("0x00000000000000000000794d6f4f6ee1c09e69a81469d7456e67be3d724223fb") == accounts[0]
+    assert btc_light_client.getSubmitter("0x00000000000000000000794d6f4f6ee1c09e69a81469d7456e67be3d724223fb") == \
+           accounts[0]
 
 
 def test_get_submitter(btc_light_client):
-    assert btc_light_client.getSubmitter("0x00000000000000000000794d6f4f6ee1c09e69a81469d7456e67be3d724223fb") == accounts[0]
-    assert btc_light_client.getSubmitter("0x00000000000000000002c1572ed018e38f173f06dd9ab1de99ca4b8e276a65f5") == accounts[0]
-    assert btc_light_client.getSubmitter("0x000000000000000000052c338c6d40ee82a9df507dd3597675dcf6fe6a66ea46") == accounts[0]
+    assert btc_light_client.getSubmitter("0x00000000000000000000794d6f4f6ee1c09e69a81469d7456e67be3d724223fb") == \
+           accounts[0]
+    assert btc_light_client.getSubmitter("0x00000000000000000002c1572ed018e38f173f06dd9ab1de99ca4b8e276a65f5") == \
+           accounts[0]
+    assert btc_light_client.getSubmitter("0x000000000000000000052c338c6d40ee82a9df507dd3597675dcf6fe6a66ea46") == \
+           accounts[0]
 
 
 def test_store_no_previous_block(btc_light_client):
@@ -88,7 +136,7 @@ def test_distribute_relayer_reward(btc_light_client, system_reward):
     tracker = get_tracker(accounts[0])
     # claim reward
     tx = btc_light_client.claimRelayerReward(accounts[0], {'from': accounts[1]})
-    assert tracker.delta() == after_reward
+    assert tracker.delta(False) == after_reward
     expect_event(tx, "rewardTo", {"to": accounts[0], "amount": after_reward})
 
 
@@ -150,3 +198,32 @@ def test_get_round_candidates(btc_light_client):
         assert c in result
 
 
+@pytest.mark.parametrize("gasprice", [1000000000, 10000000000, 100000000010, 1000000000000, 10000000000000])
+def test_update_param_store_block_gasprice_success(btc_light_client, gasprice, init_gov_address):
+    hex_value = padding_left(Web3.toHex(gasprice), 64)
+    tx = btc_light_client.updateParam('storeBlockGasPrice', hex_value, {'from': accounts[0]})
+    expect_event(tx, 'paramChange', {'key': 'storeBlockGasPrice', 'value': hex_value})
+    assert btc_light_client.storeBlockGasPrice() == gasprice
+    update_default_block_gasprice(btc_light_client)
+
+
+@pytest.mark.parametrize("gasprice", [100000000, 999999999, 10000000000001, 10000000000002])
+def test_update_param_store_block_gasprice_failed(btc_light_client, gasprice, init_gov_address):
+    hex_value = padding_left(Web3.toHex(gasprice), 64)
+    error_msg = encode_args_with_signature(
+        "OutOfBounds(string,uint256,uint256,uint256)",
+        ["storeBlockGasPrice", gasprice, int(1e9), int(1e13)]
+    )
+    with brownie.reverts(f"typed error: {error_msg}"):
+        btc_light_client.updateParam('storeBlockGasPrice', hex_value, {'from': accounts[0]})
+    update_default_block_gasprice(btc_light_client)
+
+
+def test_store_btc_block_gasprice_limit_failed(btc_light_client):
+    gas_price(store_block_header_tx_gas_price // 2)
+    block_data = btc_block_data[-2]
+    with brownie.reverts("must use limited gasprice"):
+        btc_light_client.storeBlockHeader(block_data)
+    gas_price(store_block_header_tx_gas_price)
+    tx = btc_light_client.storeBlockHeader(block_data)
+    assert btc_light_client.storeBlockGasPrice() == store_block_header_tx_gas_price == tx.gas_price

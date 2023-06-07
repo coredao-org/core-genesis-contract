@@ -8,7 +8,7 @@ import yaml
 from web3 import Web3
 from brownie.network.transaction import TransactionReceipt
 from brownie.network.account import LocalAccount
-from brownie import accounts, chain, web3
+from brownie import accounts, chain, web3, history
 from eth_account import Account
 from eth_abi import encode
 
@@ -106,10 +106,21 @@ class AccountTracker:
         self.height = chain.height
         return self.account.balance()
 
-    def delta(self):
+    def update_height(self):
+        self.height = chain.height
+
+    def delta(self, exclude_tx_fee=True):
+        total_tx_fee = 0
+        if exclude_tx_fee:
+            tx: TransactionReceipt
+            for tx in history:
+                if tx.sender.address == self.account.address:
+                    if self.height < tx.block_number <= chain.height:
+                        total_tx_fee += tx.gas_price * tx.gas_used
         previous_balance = web3.eth.get_balance(self.account.address, self.height)
         self.height = chain.height
-        return self.account.balance() - previous_balance
+
+        return self.account.balance() - previous_balance + total_tx_fee
 
 
 def get_tracker(account: LocalAccount) -> AccountTracker:
@@ -122,7 +133,5 @@ def padding_left(hex_str, length):
 
 def encode_args_with_signature(function_signature: str, args: list) -> str:
     selector = Web3.keccak(text=function_signature)[:4].hex()
-    args_in_function_signature = function_signature[function_signature.index('(')+1:-1].replace(' ', '').split(',')
+    args_in_function_signature = function_signature[function_signature.index('(') + 1:-1].replace(' ', '').split(',')
     return selector + encode(args_in_function_signature, args).hex()
-
-
