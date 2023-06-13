@@ -8,6 +8,7 @@ import "./interface/ISlashIndicator.sol";
 import "./interface/IValidatorSet.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/ISystemReward.sol";
+import "./interface/IPledgeAgent.sol";
 import "./lib/RLPDecode.sol";
 import "./lib/RLPEncode.sol";
 
@@ -86,6 +87,10 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
       validators.push(validator);
     }
     indicator.height = block.number;
+    
+    address operator = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getOperator(validator);
+    IPledgeAgent(PLEDGE_AGENT_ADDR).onSlash(operator, indicator.count, misdemeanorThreshold, felonyThreshold);
+
     if (indicator.count % felonyThreshold == 0) {
       indicator.count = 0;
       IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(validator, felonyRound, felonyDeposit);

@@ -5,5 +5,6 @@ interface IPledgeAgent {
   function addRoundReward(address[] calldata agentList, uint256[] calldata rewardList) payable external;
   function getHybridScore(address[] calldata candidates, uint256[] calldata powers) external returns(uint256[] memory, uint256, uint256);
   function setNewRound(address[] calldata validatorList, uint256 totalPower, uint256 totalCoin, uint256 round) external;
-  function distributePowerReward(address candidate, address[] calldata miners) external;
+  function distributePowerReward(address[] memory lastCandidates) external;
+  function onSlash(address agent, uint256 count, uint256 misdemeanorThreshold, uint256 felonyThreshold) external;
 }

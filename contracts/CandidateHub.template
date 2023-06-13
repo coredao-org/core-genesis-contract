@@ -166,11 +166,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
     // fetch BTC miners who delegated hash power in the about to end round; 
     // and distribute rewards to them
-    uint256 lastCandidateSize = lastCandidates.length;
-    for (uint256 i = 0; i < lastCandidateSize; i++) {
-      address[] memory miners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(roundTag-7, lastCandidates[i]);
-      IPledgeAgent(PLEDGE_AGENT_ADDR).distributePowerReward(lastCandidates[i], miners);
-    }
+    IPledgeAgent(PLEDGE_AGENT_ADDR).distributePowerReward(lastCandidates);
 
     // update the system round tag; new round starts
     {%if mock %}

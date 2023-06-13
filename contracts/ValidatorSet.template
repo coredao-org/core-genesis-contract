@@ -87,6 +87,12 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     return currentValidatorSetMap[addr] != 0;
   }
 
+  function getOperator(address addr) external override view returns (address) {
+    uint256 index = currentValidatorSetMap[addr];
+    require(index != 0, "validator not exist");
+    return currentValidatorSet[index-1].operateAddress;
+  }
+
   receive() external payable {
     if (msg.value != 0) {
       emit received(msg.sender, msg.value);

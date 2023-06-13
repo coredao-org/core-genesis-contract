@@ -7,4 +7,5 @@ interface IValidatorSet {
   function distributeReward() external returns (address[] memory operateAddrList);
   function updateValidatorSet(address[] calldata operateAddrList, address[] calldata consensusAddrList, address payable[] calldata feeAddrList, uint256[] calldata commissionThousandthsList) external;
   function isValidator(address addr) external returns (bool);
+  function getOperator(address addr) external returns (address);
 }
