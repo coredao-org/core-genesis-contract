@@ -9,8 +9,8 @@ contract PledgeAgentMock is PledgeAgent {
         requiredCoinDeposit = requiredCoinDeposit / 1e16;
     }
 
-    function setRoundState(uint256 power, uint256 coin) external {
-        stateMap[roundTag] = RoundState(power + 1, coin + 1, powerFactor);
+    function setRoundState(uint256 power, uint256 coin, uint256 transferReward,uint256 transferDeposit,uint256 felonyDeposit) external {
+        stateMap[roundTag] = RoundState(power + 1, coin + 1, powerFactor,transferReward,transferDeposit,felonyDeposit);
     }
     function setAgentRound(address agent, uint256 power, uint256 coin) external {
     }

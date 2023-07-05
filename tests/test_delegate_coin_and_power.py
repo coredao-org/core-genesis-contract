@@ -284,7 +284,7 @@ def test_scenario3(candidate_hub, pledge_agent, btc_light_client):
     power_reward = delegator_reward[accounts[0]] - BLOCK_REWARD // 2
 
     pledge_agent.claimReward([])
-    assert tracker.delta() == power_reward * 2
+    assert tracker.delta() == power_reward * 2 + BLOCK_REWARD // 2
 
     pledge_agent.claimReward(operators)
     assert tracker.delta() == BLOCK_REWARD // 2 * 2

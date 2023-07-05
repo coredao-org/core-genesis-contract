@@ -81,11 +81,15 @@ class TestDelegateCoin:
         operator = accounts[1]
         register_candidate(operator=operator)
         pledge_agent.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE})
-        tx = pledge_agent.delegateCoin(operator, {"value": second_value})
-        expect_event(tx, "delegatedCoin", {
-            "amount": second_value,
-            "totalAmount": MIN_INIT_DELEGATE_VALUE + second_value
-        })
+        if second_value >= MIN_INIT_DELEGATE_VALUE:
+            tx = pledge_agent.delegateCoin(operator, {"value": second_value})
+            expect_event(tx, "delegatedCoin", {
+                "amount": second_value,
+                "totalAmount": MIN_INIT_DELEGATE_VALUE + second_value
+            })
+        else:
+            with brownie.reverts('deposit is too small'):
+                pledge_agent.delegateCoin(operator, {"value": second_value})
 
     def test_delegate2refused(self, pledge_agent, candidate_hub):
         operator = accounts[1]
@@ -225,7 +229,7 @@ def test_add_round_reward_success_with_normal_agent(pledge_agent, validator_set)
 
     __candidate_register(agents[0])
     __candidate_register(agents[1])
-    pledge_agent.setRoundState(total_power, total_coin)
+    pledge_agent.setRoundState(total_power, total_coin,0,0,0)
     pledge_agent.setAgentValidator(agents[0], powers[0], coins[0])
     pledge_agent.setAgentValidator(agents[1], powers[1], coins[1])
     tx = validator_set.addRoundRewardMock(agents, rewards)
@@ -245,7 +249,7 @@ def test_add_round_reward_success_with_no_agent(pledge_agent, validator_set):
     total_power = 10
     __candidate_register(agents[0])
     __candidate_register(agents[1])
-    pledge_agent.setRoundState(total_power, total_coin)
+    pledge_agent.setRoundState(total_power, total_coin,0,0,0)
     tx = validator_set.addRoundRewardMock(agents, rewards)
     expect_event_not_emitted(tx, "roundReward")
 
@@ -364,7 +368,7 @@ def test_delegate_coin_failed_with_insufficient_deposit(pledge_agent):
         pledge_agent.delegateCoin(agent, {'from': delegator})
 
     __delegate_coin_success(agent, delegator, 0, required_coin_deposit)
-    with brownie.reverts("deposit value is zero"):
+    with brownie.reverts("deposit is too small"):
         pledge_agent.delegateCoin(agent, {'from': delegator})
 
 
@@ -532,7 +536,7 @@ def test_claim_reward_with_transfer_coin(pledge_agent, validator_set):
     pledge_agent.claimReward([agent1, agent2], {'from': delegator})
     expect_reward1 = actual_block_reward * 900 // 1000
     expect_reward2 = actual_block_reward * 500 // 1000 * 2
-    assert (expect_reward1 + expect_reward2) == tracker.delta()
+    assert (expect_reward1 + expect_reward2 + expect_reward1) == tracker.delta()
 
 
 def __candidate_register(agent, percent=100):

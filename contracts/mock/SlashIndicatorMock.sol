@@ -18,7 +18,10 @@ contract SlashIndicatorMock is SlashIndicator {
         RLPDecode.RLPItem[] memory items = header.toRLPItem().toList();
         return parseHeader(items);
     }
-
+    function setThreshold(uint256 misdemeanor ,uint256  felony ) public  {
+        misdemeanorThreshold = misdemeanor;
+        felonyThreshold = felony;
+    }
   function setIndicators(address[] calldata newValidators, uint256[] calldata counts) public {
     for (uint256 i = validators.length; i > 0; i--) {
       delete indicators[validators[i - 1]];
