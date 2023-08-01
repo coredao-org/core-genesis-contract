@@ -2,10 +2,10 @@ pragma solidity 0.8.4;
 
 contract PledgeAgentProxy {
     address pledgeAgent;
+    bool public  receiveState;
 
     event delegate(bool success);
     event claim(uint256 reward, bool allClaimed);
-
     constructor(address pledgeAgentAddress) public {
         pledgeAgent = pledgeAgentAddress;
     }
@@ -26,7 +26,12 @@ contract PledgeAgentProxy {
         return rewardSum;
     }
 
+    function setReceiveState(bool state) external {
+        receiveState = state;
+    }
     receive() external payable {
-        revert("refused");
+        if (receiveState == false){
+            revert("refused");
+        }
     }
 }
