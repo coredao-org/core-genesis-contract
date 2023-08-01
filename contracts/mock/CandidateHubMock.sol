@@ -18,7 +18,9 @@ contract CandidateHubMock is CandidateHub {
     function setRoundTag(uint value) external {
         roundTag = value;
     }
-
+    function setValidatorCount(uint256 value) external {
+        validatorCount = value;
+    }
     function getCanDelegateCandidates() external view returns(address[] memory) {
         uint count;
         for (uint256 i = 0; i < candidateSet.length; i++) {
