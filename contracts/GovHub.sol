@@ -244,7 +244,7 @@ contract GovHub is System, IParamSubscriber {
       return ProposalState.Defeated;
     } else if (proposal.executed) {
       return ProposalState.Executed;
-    } else if (block.number > proposal.endBlock + executingPeriod) {
+    } else if (block.number > proposal.endBlock + (executingPeriod == 0 ? EXECUTING_PERIOD : executingPeriod)) {
       return ProposalState.Expired;
     } else {
       return ProposalState.Succeeded;
