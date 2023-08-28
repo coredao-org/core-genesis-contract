@@ -290,6 +290,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       }
     }
     ICandidateHub(CANDIDATE_HUB_ADDR).jailValidator(operateAddress, felonyRound, felonyDeposit);
+    IPledgeAgent(PLEDGE_AGENT_ADDR).onFelony(operateAddress);
   }
 
   /*********************** Param update ********************************/

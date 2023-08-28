@@ -547,8 +547,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       maxWeight = newMaxWeight;
     } else if (Memory.compareStrings(key,"storeBlockGasPrice")) {
       uint256 newStoreBlockGasPrice = BytesToTypes.bytesToUint256(32, value);
-      if (newStoreBlockGasPrice < 1e9 || newStoreBlockGasPrice > 1e13) {
-        revert OutOfBounds(key, newStoreBlockGasPrice, 1e9, 1e13);
+      if (newStoreBlockGasPrice < 1e9) {
+        revert OutOfBounds(key, newStoreBlockGasPrice, 1e9, type(uint256).max);
       }
       storeBlockGasPrice = newStoreBlockGasPrice;
     } else {

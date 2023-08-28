@@ -262,6 +262,17 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
   }
 
+  function onFelony(address agent) external override onlyValidator {
+    Agent storage a = agentsMap[agent];
+    uint256 len = a.rewardSet.length;
+    if (len > 0) {
+      Reward storage r = a.rewardSet[len-1];
+      if (r.round == roundTag && r.coin == 0) {
+        delete a.rewardSet[len-1];
+      }
+    }
+  }
+
   /*********************** External methods ***************************/
   /// Delegate coin to a validator
   /// @param agent The operator address of validator
