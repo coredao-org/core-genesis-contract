@@ -52,7 +52,6 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   uint256 public countInRound=0;
   uint256 public collectedRewardForHeaderRelayer=0;
   uint256 public roundInterval;
-  uint256 public storeBlockGasPrice;
 
   address payable[] public headerRelayerAddressRecord;
   mapping(address => uint256) public headerRelayersSubmitCount;
@@ -78,6 +77,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   mapping(bytes32 => bytes) public blockChain;
   mapping(uint32 => bytes32) public adjustmentHashes;
   mapping(bytes32 => address payable) public submitters;
+
+  uint256 public storeBlockGasPrice;
 
   /*********************** events **************************/
   event StoreHeaderFailed(bytes32 indexed blockHash, int256 indexed returnCode);
