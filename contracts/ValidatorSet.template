@@ -63,6 +63,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   event validatorMisdemeanor(address indexed validator, uint256 amount);
   event validatorFelony(address indexed validator, uint256 amount);
   event paramChange(string key, bytes value);
+  event received(address indexed from, uint256 amount);
 
   /*********************** init **************************/
   function init() external onlyNotInit {
@@ -84,6 +85,12 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// @return true/false
   function isValidator(address addr) public override view returns (bool) {
     return currentValidatorSetMap[addr] != 0;
+  }
+
+  receive() external payable {
+    if (msg.value != 0) {
+      emit received(msg.sender, msg.value);
+    }
   }
 
   /// Add block reward on a validator 
@@ -283,6 +290,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       }
     }
     ICandidateHub(CANDIDATE_HUB_ADDR).jailValidator(operateAddress, felonyRound, felonyDeposit);
+    IPledgeAgent(PLEDGE_AGENT_ADDR).onFelony(operateAddress);
   }
 
   /*********************** Param update ********************************/

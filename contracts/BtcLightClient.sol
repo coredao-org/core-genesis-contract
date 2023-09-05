@@ -4,6 +4,7 @@ pragma solidity 0.8.4;
 import "./lib/Memory.sol";
 import "./lib/BytesToTypes.sol";
 import "./interface/ILightClient.sol";
+import "./interface/ICandidateHub.sol";
 import "./interface/ISystemReward.sol";
 import "./interface/IParamSubscriber.sol";
 import "./System.sol";
@@ -41,6 +42,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   uint256 public constant MAXIMUM_WEIGHT=20;
   uint256 public constant CONFIRM_BLOCK = 6;
   uint256 public constant INIT_ROUND_INTERVAL = 86400;
+  uint256 public constant POWER_ROUND_GAP = 7;
+  uint256 public constant INIT_STORE_BLOCK_GAS_PRICE = 35e9;
 
   uint256 public callerCompensationMolecule;
   uint256 public rewardForSyncHeader;
@@ -75,6 +78,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   mapping(uint32 => bytes32) public adjustmentHashes;
   mapping(bytes32 => address payable) public submitters;
 
+  uint256 public storeBlockGasPrice;
+
   /*********************** events **************************/
   event StoreHeaderFailed(bytes32 indexed blockHash, int256 indexed returnCode);
   event StoreHeader(bytes32 indexed blockHash, address candidate, address indexed rewardAddr, uint32 indexed height, bytes32 bindingHash);
@@ -102,6 +107,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     roundSize = ROUND_SIZE;
     maxWeight = MAXIMUM_WEIGHT;
     roundInterval = INIT_ROUND_INTERVAL;
+    storeBlockGasPrice = INIT_STORE_BLOCK_GAS_PRICE;
     alreadyInit = true;
   }
 
@@ -109,6 +115,9 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /// @dev This method is called by relayers
   /// @param blockBytes BTC block bytes
   function storeBlockHeader(bytes calldata blockBytes) external onlyRelayer {
+    require(
+      tx.gasprice == (storeBlockGasPrice == 0 ? INIT_STORE_BLOCK_GAS_PRICE : storeBlockGasPrice), 
+      "must use limited gasprice");
     bytes memory headerBytes = slice(blockBytes, 0, 80);
     bytes32 blockHash = doubleShaFlip(headerBytes);
     require(submitters[blockHash] == address(0x0), "can't sync duplicated header");
@@ -182,11 +191,17 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       if (blockHash == initBlockHash) return;
       blockHash = getPrevHash(blockHash);
     }
-    uint256 roundTimeTag = getTimestamp(blockHash) / roundInterval;
+
+    uint256 blockRoundTag = getTimestamp(blockHash) / roundInterval;
     address candidate = getCandidate(blockHash);
-    if (candidate != address(0)) {
+    
+    // The mining power with rounds less than or equal to frozenRoundTag has been frozen 
+    // and there is no need to continue staking, otherwise it may disrupt the reward 
+    // distribution mechanism
+    uint256 frozenRoundTag = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag() - POWER_ROUND_GAP;
+    if (candidate != address(0) && blockRoundTag > frozenRoundTag) {
       address miner = getRewardAddress(blockHash);
-      RoundPower storage r = roundPowerMap[roundTimeTag];
+      RoundPower storage r = roundPowerMap[blockRoundTag];
       uint256 power = r.powerMap[candidate].miners.length;
       if (power == 0) {
         r.candidates.push(candidate);
@@ -531,6 +546,12 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
         revert OutOfBounds(key, newMaxWeight, 1, roundSize);
       }
       maxWeight = newMaxWeight;
+    } else if (Memory.compareStrings(key,"storeBlockGasPrice")) {
+      uint256 newStoreBlockGasPrice = BytesToTypes.bytesToUint256(32, value);
+      if (newStoreBlockGasPrice < 1e9) {
+        revert OutOfBounds(key, newStoreBlockGasPrice, 1e9, type(uint256).max);
+      }
+      storeBlockGasPrice = newStoreBlockGasPrice;
     } else {
       require(false, "unknown param");
     }

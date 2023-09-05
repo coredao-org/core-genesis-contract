@@ -22,3 +22,4 @@ abi/System.abi
 # test
 .pytest_cache
 reports/
+tests/__pycache__/

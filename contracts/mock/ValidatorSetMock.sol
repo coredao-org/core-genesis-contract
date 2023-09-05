@@ -2,8 +2,6 @@ pragma solidity 0.8.4;
 import "../ValidatorSet.sol";
 
 contract ValidatorSetMock is ValidatorSet {
-    receive() external payable{}
-
     function developmentInit() external {
         blockReward = blockReward / 1e14;
 
@@ -21,15 +19,12 @@ contract ValidatorSetMock is ValidatorSet {
           currentValidatorSetMap[validatorSet[i].consensusAddress] = i + 1;
         }
     }
-
     function updateBlockReward(uint256 _blockReward) external {
         blockReward = _blockReward;
     }
-
     function updateSubsidyReduceInterval(uint256 _internal) external {
         SUBSIDY_REDUCE_INTERVAL = _internal;
     }
-
     function addRoundRewardMock(address[] memory agentList, uint256[] memory rewardList)
     external {
         uint256 rewardSum = 0;

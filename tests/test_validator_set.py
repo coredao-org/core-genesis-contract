@@ -695,3 +695,16 @@ def test_subsidy_reduce_for_81_times():
     assert validator_set_instance.blockReward() == block_reward
 
 
+
+def test_validator_contract_receive_ether(validator_set):
+    transfer_amount = 1000000
+    tracker0 = get_tracker(accounts[0])
+    tx = accounts[0].transfer(validator_set.address, transfer_amount)
+    assert "received" in tx.events
+    event = tx.events['received'][-1]
+    assert event['from'] == accounts[0].address
+    assert event['amount'] == transfer_amount
+    assert tracker0.delta() == 0 - transfer_amount
+    tx1 = accounts[0].transfer(validator_set.address, 0)
+    assert "received" not in tx1.events
+    assert tracker0.delta() == 0
