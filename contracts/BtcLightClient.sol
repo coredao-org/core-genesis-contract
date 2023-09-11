@@ -203,7 +203,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
      require(reward != 0, "no relayer reward");
      relayerRewardVault[relayerAddr] = 0;
      address payable recipient = payable(relayerAddr);
-     ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(recipient, reward); //@review
+     ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(recipient, reward);
   }
 
   /// Distribute relayer rewards
