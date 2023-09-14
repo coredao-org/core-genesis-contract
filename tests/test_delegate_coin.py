@@ -1,10 +1,10 @@
 import brownie
 import pytest
 from web3 import Web3
-from brownie import accounts, PledgeAgentProxy
+from brownie import accounts, PledgeAgentProxy, DelegateReentry, UndelegateReentry, ClaimRewardReentry
 from .common import register_candidate, turn_round
-from .utils import get_tracker, expect_event, expect_query, encode_args_with_signature, calculate_rewards
-from .calc_reward import parse_delegation, set_delegate
+from .utils import get_tracker, expect_event, expect_query, encode_args_with_signature
+from .calc_reward import parse_delegation, set_delegate, set_coin_delegator, calculate_rewards
 
 MIN_INIT_DELEGATE_VALUE = 0
 BLOCK_REWARD = 0
@@ -287,6 +287,67 @@ def test_claim_reward_failed(pledge_agent):
         pledge_agent_proxy.claimReward.call([operator])
 
 
+def test_delegate_coin_reentry(pledge_agent):
+    pledge_agent_proxy = DelegateReentry.deploy(
+        pledge_agent.address, {'from': accounts[0], 'value': MIN_INIT_DELEGATE_VALUE * 2})
+    operators = accounts[1:3]
+    consensus = []
+    for _operator in operators:
+        consensus.append(register_candidate(operator=_operator))
+    pledge_agent_proxy.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE})
+    turn_round()
+    turn_round(consensus)
+
+    pledge_agent_proxy.setAgent(operators[0])
+    tx = pledge_agent_proxy.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE})
+    expect_event(tx, "proxyDelegate", {"success": True})
+    assert pledge_agent_proxy.balance() == 0
+
+
+def test_undelegate_coin_reentry(pledge_agent):
+    pledge_agent_proxy = UndelegateReentry.deploy(pledge_agent.address, {'from': accounts[0]})
+    operator = accounts[1]
+    consensus = register_candidate(operator=operator)
+    pledge_agent_proxy.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+    turn_round()
+    turn_round([consensus])
+    pledge_agent_proxy.setAgent(operator)
+    tx = pledge_agent_proxy.undelegateCoin(operator)
+    expect_event(tx, "proxyUndelegate", {
+        "success": False
+    })
+
+
+def test_undelegate_coin_partial_reentry(pledge_agent):
+    pledge_agent_proxy = UndelegateReentry.deploy(pledge_agent.address, {'from': accounts[0]})
+    operator = accounts[1]
+    consensus = register_candidate(operator=operator)
+    pledge_agent_proxy.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE * 2})
+    turn_round()
+    turn_round([consensus])
+    pledge_agent_proxy.setAgent(operator)
+    tx = pledge_agent_proxy.undelegateCoin(operator, MIN_INIT_DELEGATE_VALUE)
+    expect_event(tx, "proxyUndelegatePartial", {
+        "success": False
+    })
+
+
+def test_claim_reward_reentry(pledge_agent):
+    pledge_agent_proxy = ClaimRewardReentry.deploy(pledge_agent.address, {'from': accounts[0]})
+    operator = accounts[1]
+    consensus = register_candidate(operator=operator)
+    pledge_agent_proxy.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+    turn_round()
+    turn_round([consensus])
+    pledge_agent_proxy.setAgents([operator])
+    tracker = get_tracker(pledge_agent_proxy)
+    tx = pledge_agent_proxy.claimReward([operator])
+    expect_event(tx, "proxyClaim", {
+        "success": True
+    })
+    assert tracker.delta() == BLOCK_REWARD // 2
+
+
 def test_undelegate_amount_small(pledge_agent, validator_set):
     undelegate_value = MIN_INIT_DELEGATE_VALUE - 1
     operator = accounts[1]
@@ -396,6 +457,19 @@ def test_claim_reward_after_undelegate_multiple_round(pledge_agent, validator_se
     expect_reward1 += 0
     assert tracker0.delta() == expect_reward0 + undelegate_amount1
     assert tracker1.delta() == expect_reward1 + remain_pledged_amount1
+
+
+def test_undelegate_all_coins_on_validator_and_claim_rewards(pledge_agent, validator_set):
+    operator = accounts[2]
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    consensus = register_candidate(operator=operator)
+    pledge_agent.delegateCoin(operator, {"value": delegate_amount, 'from': accounts[0]})
+    turn_round()
+    pledge_agent.undelegateCoin(operator, delegate_amount, {'from': accounts[0]})
+    turn_round([consensus], round_count=1)
+    tracker0 = get_tracker(accounts[0])
+    pledge_agent.claimReward([operator], {'from': accounts[0]})
+    assert tracker0.delta() == 0
 
 
 def test_claim_reward_after_undelegate_coin_partially(pledge_agent, validator_set):
@@ -638,9 +712,9 @@ def test_transfer_with_partial_undelegate_and_claimed_rewards(pledge_agent, vali
                                                               undelegate_type):
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 5
     transfer_amount = delegate_amount // 3
-    undelegate_amont = delegate_amount // 3
+    undelegate_amount = delegate_amount // 3
     if undelegate_type == 'all':
-        undelegate_amont = delegate_amount
+        undelegate_amount = delegate_amount
     operators = []
     remain_pledged_amount = delegate_amount
     total_pledged_amount = delegate_amount * 2
@@ -655,14 +729,120 @@ def test_transfer_with_partial_undelegate_and_claimed_rewards(pledge_agent, vali
     pledge_agent.delegateCoin(operators[1], {"value": delegate_amount, 'from': accounts[2]})
     turn_round()
     pledge_agent.transferCoin(operators[0], operators[2], transfer_amount, {'from': accounts[0]})
-    pledge_agent.undelegateCoin(operators[0], undelegate_amont, {'from': accounts[1]})
+    pledge_agent.undelegateCoin(operators[0], undelegate_amount, {'from': accounts[1]})
     pledge_agent.transferCoin(operators[1], operators[2], transfer_amount, {'from': accounts[2]})
     turn_round(consensuses, round_count=1)
     tracker1 = get_tracker(accounts[1])
     pledge_agent.claimReward(operators, {'from': accounts[1]})
-    remain_pledged_amount -= undelegate_amont
+    remain_pledged_amount -= undelegate_amount
     expect_reward = total_reward * remain_pledged_amount // total_pledged_amount
     assert tracker1.delta() == expect_reward
+
+
+def test_delegate_then_all_undelegate(pledge_agent, validator_set):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 2
+    additional_amount = MIN_INIT_DELEGATE_VALUE * 3
+    undelegate_amount = MIN_INIT_DELEGATE_VALUE * 4
+    total_reward = BLOCK_REWARD // 2
+    operator = accounts[2]
+    consensus = register_candidate(operator=operator)
+    pledge_agent.delegateCoin(operator, {"value": delegate_amount, 'from': accounts[0]})
+    turn_round()
+    tracker0 = get_tracker(accounts[0])
+    pledge_agent.delegateCoin(operator, {"value": additional_amount, 'from': accounts[0]})
+    pledge_agent.undelegateCoin(operator, undelegate_amount, {'from': accounts[0]})
+    tx = turn_round([consensus], round_count=1)
+    assert tx.events['receiveDeposit'][1]['amount'] == total_reward // 2
+    pledge_agent.claimReward([operator], {'from': accounts[0]})
+    assert tracker0.delta() == total_reward - total_reward // 2 + MIN_INIT_DELEGATE_VALUE
+
+
+def test_undelegate_transfer_input_and_deposit(pledge_agent, validator_set):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    transfer_amount = delegate_amount // 5
+    transfer_amount1 = delegate_amount // 4
+    operators = []
+    total_reward = BLOCK_REWARD // 2
+    consensuses = []
+    for operator in accounts[3:6]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[0]})
+    pledge_agent.delegateCoin(operators[1], {"value": delegate_amount, 'from': accounts[0]})
+    pledge_agent.delegateCoin(operators[2], {"value": delegate_amount, 'from': accounts[0]})
+    turn_round()
+    pledge_agent.transferCoin(operators[0], operators[2], transfer_amount, {'from': accounts[0]})
+    pledge_agent.transferCoin(operators[2], operators[0], transfer_amount1, {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[0], {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[2], {'from': accounts[0]})
+    tx = turn_round(consensuses, round_count=1)
+    deduct_reward0 = total_reward * (delegate_amount - transfer_amount) // delegate_amount
+    deduct_reward2 = total_reward * (delegate_amount - transfer_amount1) // delegate_amount
+    assert tx.events['receiveDeposit'][1]['amount'] == deduct_reward0
+    assert tx.events['receiveDeposit'][2]['amount'] == deduct_reward2
+    tracker0 = get_tracker(accounts[0])
+    tx1 = pledge_agent.claimReward(operators, {'from': accounts[0]})
+    assert tx1.events['receiveDeposit'][0]['amount'] == total_reward - deduct_reward0
+    assert tx1.events['receiveDeposit'][1]['amount'] == total_reward - deduct_reward2
+    assert tracker0.delta() == total_reward
+
+
+def test_claim_rewards_after_transfers_undelegations_both_validators(pledge_agent, validator_set):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    transfer_amount = delegate_amount // 5
+    undelegate_amount = MIN_INIT_DELEGATE_VALUE
+    operators = []
+    total_reward = BLOCK_REWARD // 2
+    consensuses = []
+    for operator in accounts[3:6]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[0]})
+    pledge_agent.delegateCoin(operators[1], {"value": delegate_amount, 'from': accounts[0]})
+    pledge_agent.delegateCoin(operators[2], {"value": delegate_amount, 'from': accounts[0]})
+    turn_round()
+    pledge_agent.transferCoin(operators[0], operators[2], transfer_amount, {'from': accounts[0]})
+    pledge_agent.transferCoin(operators[1], operators[2], transfer_amount, {'from': accounts[0]})
+    pledge_agent.transferCoin(operators[2], operators[0], transfer_amount, {'from': accounts[0]})
+    pledge_agent.transferCoin(operators[2], operators[1], transfer_amount, {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[0], undelegate_amount, {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[1], undelegate_amount, {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[2], undelegate_amount, {'from': accounts[0]})
+    turn_round(consensuses, round_count=1)
+    tracker0 = get_tracker(accounts[0])
+    pledge_agent.claimReward(operators, {'from': accounts[0]})
+    expect_reward = total_reward - total_reward * undelegate_amount // delegate_amount
+    assert tracker0.delta() == expect_reward * 3
+
+
+def test_all_validators_transfer_then_claim_reward(pledge_agent, validator_set):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    transfer_amount = delegate_amount // 5
+    undelegate_amount = transfer_amount + MIN_INIT_DELEGATE_VALUE
+    undelegate_amount1 = transfer_amount + MIN_INIT_DELEGATE_VALUE * 2
+    operators = []
+    total_reward = BLOCK_REWARD // 2
+    consensuses = []
+    for operator in accounts[3:6]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[0]})
+    pledge_agent.delegateCoin(operators[1], {"value": delegate_amount, 'from': accounts[0]})
+    pledge_agent.delegateCoin(operators[2], {"value": delegate_amount, 'from': accounts[0]})
+    turn_round()
+    pledge_agent.transferCoin(operators[0], operators[2], transfer_amount, {'from': accounts[0]})
+    pledge_agent.transferCoin(operators[1], operators[2], transfer_amount, {'from': accounts[0]})
+    pledge_agent.transferCoin(operators[2], operators[0], transfer_amount, {'from': accounts[0]})
+    pledge_agent.transferCoin(operators[2], operators[1], transfer_amount, {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[0], undelegate_amount, {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[1], undelegate_amount, {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[2], undelegate_amount1, {'from': accounts[0]})
+    turn_round(consensuses, round_count=1)
+    tracker0 = get_tracker(accounts[0])
+    pledge_agent.claimReward(operators, {'from': accounts[0]})
+    expect_reward = total_reward - total_reward * undelegate_amount // delegate_amount
+    expect_reward2 = total_reward - total_reward * undelegate_amount1 // delegate_amount
+    assert tracker0.delta() == expect_reward * 2 + expect_reward2
 
 
 def test_order_of_claiming_affects_reward_deduction(pledge_agent, validator_set):
@@ -690,20 +870,17 @@ def test_order_of_claiming_affects_reward_deduction(pledge_agent, validator_set)
     coin_delegator = {}
     remain_coin0 = delegate_amount - transfer_amount0
     remain_coin1 = delegate_amount - transfer_amount0
-    coin_delegator[operators[0]] = {accounts[0]: {'remain_coin': remain_coin0, 'transferOutDeposit': transfer_amount0,
-                                                  'total_pledged_amount': total_pledged_amount}}
-    coin_delegator[operators[1]] = {accounts[0]: {'remain_coin': remain_coin1, 'transferOutDeposit': transfer_amount0,
-                                                  'total_pledged_amount': total_pledged_amount + delegate_amount}}
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_amount0, total_pledged_amount)
+    set_coin_delegator(coin_delegator, operators[1], accounts[0], remain_coin1, transfer_amount0,
+                       total_pledged_amount + delegate_amount)
     rewards0 = calculate_rewards([operators[1], operators[0]], coin_delegator, actual_debt_deposit, accounts[0],
                                  total_reward)
-    coin_delegator[operators[0]] = {accounts[0]: {'remain_coin': remain_coin0, 'transferOutDeposit': transfer_amount0,
-                                                  'total_pledged_amount': total_pledged_amount}}
-    coin_delegator[operators[1]] = {accounts[0]: {'remain_coin': remain_coin1, 'transferOutDeposit': transfer_amount0,
-                                                  'total_pledged_amount': total_pledged_amount + delegate_amount}}
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_amount0, total_pledged_amount)
+    set_coin_delegator(coin_delegator, operators[1], accounts[0], remain_coin1, transfer_amount0,
+                       total_pledged_amount + delegate_amount)
     rewards1 = calculate_rewards([operators[0], operators[1]], coin_delegator, actual_debt_deposit, accounts[0],
                                  total_reward)
     turn_round(consensuses)
-
     expect_reward0 = pledge_agent.claimReward.call([operators[1], operators[0]])
     expect_reward1 = pledge_agent.claimReward.call([operators[0], operators[1]])
     assert sum(rewards0) == expect_reward0[0]
@@ -795,10 +972,9 @@ def test_claim_reward_after_transfer_coin(pledge_agent, validator_set, candidate
     tracker1 = get_tracker(accounts[1])
     pledge_agent.claimReward([operators[0]], {'from': accounts[0]})
     pledge_agent.claimReward([operators[0]], {'from': accounts[1]})
-    transfer_reward = total_reward * transfer_amount // total_pledged_amount0
-    expect_reward0 = total_reward * remain_pledged_amount0 // total_pledged_amount0
-    expect_reward1 = total_reward - expect_reward0 - transfer_reward
-    assert tracker0.delta() == expect_reward0 + transfer_reward
+    expect_reward0 = total_reward * delegate_amount // total_pledged_amount0
+    expect_reward1 = total_reward - expect_reward0
+    assert tracker0.delta() == expect_reward0
     assert tracker1.delta() == expect_reward1
     turn_round(consensuses)
     pledge_agent.claimReward([operators[2]], {'from': accounts[0]})
@@ -1044,11 +1220,10 @@ def test_transfer_to_new_validator_and_undelegate_claim_rewards(pledge_agent, va
     remain_coin1 = delegate_amount
     if remain_coin1 < 0:
         remain_coin1 = 0
-    coin_delegator[operators[0]] = {
-        accounts[0]: {'remain_coin': remain_coin0, 'transferOutDeposit': transfer_out_deposit0,
-                      'total_pledged_amount': total_pledged_amount}}
-    coin_delegator[operators[1]] = {accounts[0]: {'remain_coin': remain_coin1, 'transferOutDeposit': 0,
-                                                  'total_pledged_amount': total_pledged_amount + delegate_amount}}
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_out_deposit0,
+                       total_pledged_amount)
+    set_coin_delegator(coin_delegator, operators[1], accounts[0], remain_coin1, 0,
+                       total_pledged_amount + delegate_amount)
     rewards = calculate_rewards([operators[1], operators[0]], coin_delegator, actual_debt_deposit, accounts[0],
                                 total_reward)
     turn_round(consensuses)
@@ -1098,11 +1273,9 @@ def test_transfer_to_existing_validator_and_undelegate_claim_rewards(pledge_agen
         remain_coin1 = 0
     if remain_coin1 > delegate_amount:
         remain_coin1 = delegate_amount
-    coin_delegator[operators[0]] = {
-        accounts[0]: {'remain_coin': remain_coin0, 'transferOutDeposit': transfer_out_deposit0,
-                      'total_pledged_amount': total_pledged_amount}}
-    coin_delegator[operators[2]] = {accounts[0]: {'remain_coin': remain_coin1, 'transferOutDeposit': 0,
-                                                  'total_pledged_amount': total_pledged_amount}}
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_out_deposit0,
+                       total_pledged_amount)
+    set_coin_delegator(coin_delegator, operators[2], accounts[0], remain_coin1, 0, total_pledged_amount)
     rewards = calculate_rewards(operators, coin_delegator, actual_debt_deposit, accounts[0],
                                 total_reward)
     turn_round(consensuses)
@@ -1118,6 +1291,8 @@ def test_transfer_to_existing_validator_and_undelegate_claim_rewards(pledge_agen
 def test_transfer_to_queued_validator_and_undelegate_claim_rewards(pledge_agent, validator_set, candidate_hub):
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     transfer_amount0 = delegate_amount // 2
+    transfer_amount1 = transfer_amount0 // 2
+    undelegate_amount = transfer_amount1 - MIN_INIT_DELEGATE_VALUE
     total_pledged_amount = delegate_amount * 2
     operators = []
     total_reward = BLOCK_REWARD // 2
@@ -1131,8 +1306,6 @@ def test_transfer_to_queued_validator_and_undelegate_claim_rewards(pledge_agent,
     turn_round()
     validators = validator_set.getValidators()
     assert consensuses[1] not in validators
-    transfer_amount1 = transfer_amount0 // 2
-    undelegate_amount = transfer_amount1 - MIN_INIT_DELEGATE_VALUE
     pledge_agent.transferCoin(operators[0], operators[1], transfer_amount0, {'from': accounts[0]})
     pledge_agent.transferCoin(operators[1], operators[2], transfer_amount1, {'from': accounts[0]})
     pledge_agent.undelegateCoin(operators[2], undelegate_amount, {'from': accounts[0]})
@@ -1154,9 +1327,8 @@ def test_transfer_to_queued_validator_and_undelegate_claim_rewards(pledge_agent,
     assert debt_deposit == actual_debt_deposit
     coin_delegator = {}
     remain_coin0 = delegate_amount - transfer_amount0
-    coin_delegator[operators[0]] = {
-        accounts[0]: {'remain_coin': remain_coin0, 'transferOutDeposit': transfer_out_deposit0,
-                      'total_pledged_amount': total_pledged_amount}}
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_out_deposit0,
+                       total_pledged_amount)
     rewards = calculate_rewards(operators, coin_delegator, actual_debt_deposit, accounts[0], total_reward)
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
@@ -1165,14 +1337,14 @@ def test_transfer_to_queued_validator_and_undelegate_claim_rewards(pledge_agent,
     assert tracker0.delta() == expect_reward
 
 
-@pytest.mark.parametrize("operator_amount", [[500, 1100, 2000], [500, 900, 1100], [500, 1400, 2100],
-                                             [500, 900, 700], [500, 900, 1900], [500, 1500, 2300]])
-def test_transfer_to_already_delegate_validator_in_queue(pledge_agent, validator_set, candidate_hub, operator_amount):
-    print(operator_amount)
+@pytest.mark.parametrize("operation_amount", [[500, 1100, 2000], [500, 900, 1100], [500, 1400, 2100],
+                                              [500, 900, 700], [500, 900, 1900], [500, 1500, 2300]])
+def test_transfer_to_already_delegate_validator_in_queue(pledge_agent, validator_set, candidate_hub, operation_amount):
+    print(operation_amount)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
-    transfer_amount0 = operator_amount[0]
-    transfer_amount1 = operator_amount[1]
-    undelegate_amount = operator_amount[2]
+    transfer_amount0 = operation_amount[0]
+    transfer_amount1 = operation_amount[1]
+    undelegate_amount = operation_amount[2]
     total_pledged_amount = delegate_amount * 2
     operators = []
     total_reward = BLOCK_REWARD // 2
@@ -1227,11 +1399,9 @@ def test_transfer_to_already_delegate_validator_in_queue(pledge_agent, validator
         remain_coin2 = delegate_amount
     if remain_coin2 < 0:
         remain_coin2 = 0
-    coin_delegator[operators[0]] = {
-        accounts[0]: {'remain_coin': remain_coin0, 'transferOutDeposit': transfer_out_deposit0,
-                      'total_pledged_amount': total_pledged_amount}}
-    coin_delegator[operators[2]] = {accounts[0]: {'remain_coin': remain_coin2, 'transferOutDeposit': 0,
-                                                  'total_pledged_amount': total_pledged_amount}}
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_out_deposit0,
+                       total_pledged_amount)
+    set_coin_delegator(coin_delegator, operators[2], accounts[0], remain_coin2, 0, total_pledged_amount)
     rewards = calculate_rewards(operators, coin_delegator, actual_debt_deposit, accounts[0], total_reward)
     turn_round(consensuses, round_count=1)
     tracker0 = get_tracker(accounts[0])
@@ -1240,12 +1410,12 @@ def test_transfer_to_already_delegate_validator_in_queue(pledge_agent, validator
     assert tracker0.delta() == expect_reward
 
 
-@pytest.mark.parametrize("operator_amount", [[500, 400], [500, 500]])
-def test_single_transfer_to_queued_validator(pledge_agent, validator_set, candidate_hub, operator_amount):
-    print(operator_amount)
+@pytest.mark.parametrize("operation_amount", [[500, 400], [500, 500]])
+def test_single_transfer_to_queued_validator(pledge_agent, validator_set, candidate_hub, operation_amount):
+    print(operation_amount)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
-    transfer_amount0 = operator_amount[0]
-    undelegate_amount = operator_amount[1]
+    transfer_amount0 = operation_amount[0]
+    undelegate_amount = operation_amount[1]
     total_pledged_amount = delegate_amount * 2
     operators = []
     total_reward = BLOCK_REWARD // 2
@@ -1274,9 +1444,8 @@ def test_single_transfer_to_queued_validator(pledge_agent, validator_set, candid
     assert debt_deposit == actual_debt_deposit
     coin_delegator = {}
     remain_coin0 = delegate_amount - transfer_amount0
-    coin_delegator[operators[0]] = {
-        accounts[0]: {'remain_coin': remain_coin0, 'transferOutDeposit': transfer_out_deposit0,
-                      'total_pledged_amount': total_pledged_amount}}
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_out_deposit0,
+                       total_pledged_amount)
     rewards = calculate_rewards(operators, coin_delegator, actual_debt_deposit, accounts[0], total_reward)
     turn_round(consensuses, round_count=1)
     tracker0 = get_tracker(accounts[0])
@@ -1285,13 +1454,13 @@ def test_single_transfer_to_queued_validator(pledge_agent, validator_set, candid
     assert tracker0.delta() == expect_reward
 
 
-@pytest.mark.parametrize("operator_amount", [[500, 400], [500, 1200]])
-def test_single_transfere_to_rlready_delegate_queued_validator(pledge_agent, validator_set, candidate_hub,
-                                                               operator_amount):
-    print(operator_amount)
+@pytest.mark.parametrize("operation_amount", [[500, 400], [500, 1200]])
+def test_single_transfer_to_already_delegate_queued_validator(pledge_agent, validator_set, candidate_hub,
+                                                              operation_amount):
+    print(operation_amount)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
-    transfer_amount0 = operator_amount[0]
-    undelegate_amount = operator_amount[1]
+    transfer_amount0 = operation_amount[0]
+    undelegate_amount = operation_amount[1]
     total_pledged_amount = delegate_amount * 2
     operators = []
     total_reward = BLOCK_REWARD // 2
@@ -1327,12 +1496,9 @@ def test_single_transfere_to_rlready_delegate_queued_validator(pledge_agent, val
     coin_delegator = {}
     remain_coin0 = delegate_amount - transfer_amount0
     remain_coin2 = delegate_amount
-
-    coin_delegator[operators[0]] = {
-        accounts[0]: {'remain_coin': remain_coin0, 'transferOutDeposit': transfer_out_deposit0,
-                      'total_pledged_amount': total_pledged_amount}}
-    coin_delegator[operators[2]] = {
-        accounts[0]: {'remain_coin': remain_coin2, 'transferOutDeposit': 0, 'total_pledged_amount': delegate_amount}}
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_out_deposit0,
+                       total_pledged_amount)
+    set_coin_delegator(coin_delegator, operators[2], accounts[0], remain_coin2, 0, delegate_amount)
     rewards = calculate_rewards(operators, coin_delegator, actual_debt_deposit, accounts[0], total_reward)
     turn_round(consensuses, round_count=1)
     tracker0 = get_tracker(accounts[0])
@@ -1341,18 +1507,18 @@ def test_single_transfere_to_rlready_delegate_queued_validator(pledge_agent, val
     assert tracker0.delta() == expect_reward
 
 
-@pytest.mark.parametrize("operator_amount",
+@pytest.mark.parametrize("operation_amount",
                          [[500, 900, 900], [500, 1000, 900], [1000, 1100, 900],
                           [500, 900, 1000], [500, 1000, 1000], [500, 1100, 1000], [1000, 1100, 2100],
                           [500, 900, 1100], [500, 1000, 1100], [500, 1100, 1100], [500, 1100, 2100], [500, 900, 1800]])
-def test_multiple_transfers_and_undelegate_claim_rewards(pledge_agent, validator_set, candidate_hub, operator_amount):
+def test_multiple_transfers_and_undelegate_claim_rewards(pledge_agent, validator_set, candidate_hub, operation_amount):
     candidate_hub.setValidatorCount(21)
     coin_delegator = {}
-    print(operator_amount)
+    print(operation_amount)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
-    transfer_amount0 = operator_amount[0]
-    transfer_amount1 = operator_amount[1]
-    undelegate_amount = operator_amount[2]
+    transfer_amount0 = operation_amount[0]
+    transfer_amount1 = operation_amount[1]
+    undelegate_amount = operation_amount[2]
     total_pledged_amount = delegate_amount * 2
     operators = []
     total_reward = BLOCK_REWARD // 2
@@ -1387,12 +1553,9 @@ def test_multiple_transfers_and_undelegate_claim_rewards(pledge_agent, validator
         remain_coin1 = 0
     if remain_coin2 < 0:
         remain_coin2 = 0
-    coin_delegator[operators[0]] = {accounts[0]: {'remain_coin': remain_coin0, 'transferOutDeposit': transfer_amount0,
-                                                  'total_pledged_amount': total_pledged_amount}}
-    coin_delegator[operators[1]] = {accounts[0]: {'remain_coin': remain_coin1, 'transferOutDeposit': transfer_amount1,
-                                                  'total_pledged_amount': total_pledged_amount}}
-    coin_delegator[operators[2]] = {accounts[0]: {'remain_coin': remain_coin2, 'transferOutDeposit': 0,
-                                                  'total_pledged_amount': total_pledged_amount}}
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_amount0, total_pledged_amount)
+    set_coin_delegator(coin_delegator, operators[1], accounts[0], remain_coin1, transfer_amount1, total_pledged_amount)
+    set_coin_delegator(coin_delegator, operators[2], accounts[0], remain_coin2, 0, total_pledged_amount)
     rewards = calculate_rewards(operators, coin_delegator, actual_debt_deposit, accounts[0], total_reward)
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
@@ -1401,25 +1564,17 @@ def test_multiple_transfers_and_undelegate_claim_rewards(pledge_agent, validator
     assert tracker0.delta() == expect_reward
 
 
-@pytest.mark.parametrize("operator_amount",
-                         [
-                             [500, 300, 300],
-                             [500, 300, 400],
-                             [500, 500, 300],
-                             [500, 500, 500],
-                             [500, 500, 800],
-                             [500, 800, 100],
-                             [500, 800, 800],
-                             [500, 800, 1700],
-                             [500, 800, 1800]
-                         ])
-def test_claim_rewards_after_additional_and_transfer(pledge_agent, validator_set, candidate_hub, operator_amount):
-    print(operator_amount)
+@pytest.mark.parametrize("operation_amount",
+                         [[500, 300, 300], [500, 300, 400], [500, 500, 300], [500, 500, 500],
+                          [500, 500, 800], [500, 800, 100], [500, 800, 800], [500, 800, 1700], [500, 800, 1800]
+                          ])
+def test_claim_rewards_after_additional_and_transfer(pledge_agent, validator_set, candidate_hub, operation_amount):
+    print(operation_amount)
     candidate_hub.setValidatorCount(21)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
-    additional_amount = operator_amount[0]
-    transfer_amount1 = operator_amount[1]
-    undelegate_amount = operator_amount[2]
+    additional_amount = operation_amount[0]
+    transfer_amount1 = operation_amount[1]
+    undelegate_amount = operation_amount[2]
     total_pledged_amount = delegate_amount * 2
     operators = []
     total_reward = BLOCK_REWARD // 2
@@ -1461,11 +1616,9 @@ def test_claim_rewards_after_additional_and_transfer(pledge_agent, validator_set
         remain_coin1 = delegate_amount
     elif remain_coin1 < 0:
         remain_coin1 = 0
-    coin_delegator[operators[0]] = {
-        accounts[0]: {'remain_coin': remain_coin0, 'transferOutDeposit': transfer_out_deposit0,
-                      'total_pledged_amount': total_pledged_amount}}
-    coin_delegator[operators[1]] = {accounts[0]: {'remain_coin': remain_coin1, 'transferOutDeposit': 0,
-                                                  'total_pledged_amount': total_pledged_amount}}
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_out_deposit0,
+                       total_pledged_amount)
+    set_coin_delegator(coin_delegator, operators[1], accounts[0], remain_coin1, 0, total_pledged_amount)
     rewards = calculate_rewards([operators[0], operators[1]], coin_delegator, actual_debt_deposit, accounts[0],
                                 total_reward)
     turn_round(consensuses)
@@ -1474,18 +1627,18 @@ def test_claim_rewards_after_additional_and_transfer(pledge_agent, validator_set
     assert tracker0.delta() == sum(rewards) + total_reward // 2
 
 
-@pytest.mark.parametrize("operator_amount",
+@pytest.mark.parametrize("operation_amount",
                          [[500, 300, 300], [500, 500, 300], [500, 800, 1200], [1000, 300, 1400],
                           [500, 800, 2300],
                           [500, 800, 2100]
                           ])
-def test_transfer_and_delegate_with_reward_claim(pledge_agent, validator_set, candidate_hub, operator_amount):
-    print(operator_amount)
+def test_transfer_and_delegate_with_reward_claim(pledge_agent, validator_set, candidate_hub, operation_amount):
+    print(operation_amount)
     candidate_hub.setValidatorCount(21)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
-    transfer_amount0 = operator_amount[0]
-    additional_amount = operator_amount[1]
-    undelegate_amount = operator_amount[2]
+    transfer_amount0 = operation_amount[0]
+    additional_amount = operation_amount[1]
+    undelegate_amount = operation_amount[2]
     total_pledged_amount = delegate_amount * 2
     operators = []
     total_reward = BLOCK_REWARD // 2
@@ -1522,11 +1675,9 @@ def test_transfer_and_delegate_with_reward_claim(pledge_agent, validator_set, ca
         remain_coin1 = delegate_amount
     elif remain_coin1 < 0:
         remain_coin1 = 0
-    coin_delegator[operators[0]] = {
-        accounts[0]: {'remain_coin': remain_coin0, 'transferOutDeposit': transfer_out_deposit0,
-                      'total_pledged_amount': total_pledged_amount}}
-    coin_delegator[operators[1]] = {accounts[0]: {'remain_coin': remain_coin1, 'transferOutDeposit': 0,
-                                                  'total_pledged_amount': total_pledged_amount}}
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_out_deposit0,
+                       total_pledged_amount)
+    set_coin_delegator(coin_delegator, operators[1], accounts[0], remain_coin1, 0, total_pledged_amount)
     rewards = calculate_rewards([operators[0], operators[1]], coin_delegator, actual_debt_deposit, accounts[0],
                                 total_reward)
     turn_round(consensuses)
@@ -1535,18 +1686,15 @@ def test_transfer_and_delegate_with_reward_claim(pledge_agent, validator_set, ca
     assert tracker0.delta() == sum(rewards) + total_reward // 2
 
 
-@pytest.mark.parametrize("operator_amount", [[500, 300, 600],
-                                             [500, 1500, 400],
-                                             [600, 1000, 400],
-                                             [500, 1200, 800],
-                                             [1000, 1200, 800]])
-def test_undelegate_and_transfer_with_rewards(pledge_agent, validator_set, candidate_hub, operator_amount):
-    print(operator_amount)
+@pytest.mark.parametrize("operation_amount",
+                         [[500, 300, 600], [500, 1500, 400], [600, 1000, 400], [500, 1200, 800], [1000, 1200, 800]])
+def test_undelegate_and_transfer_with_rewards(pledge_agent, validator_set, candidate_hub, operation_amount):
+    print(operation_amount)
     candidate_hub.setValidatorCount(21)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
-    transfer_amount0 = operator_amount[0]
-    transfer_amount1 = operator_amount[2]
-    undelegate_amount = operator_amount[1]
+    transfer_amount0 = operation_amount[0]
+    transfer_amount1 = operation_amount[2]
+    undelegate_amount = operation_amount[1]
     total_pledged_amount = delegate_amount * 2
     operators = []
     total_reward = BLOCK_REWARD // 2
@@ -1588,14 +1736,11 @@ def test_undelegate_and_transfer_with_rewards(pledge_agent, validator_set, candi
         remain_coin1 = delegate_amount
     elif remain_coin1 < 0:
         remain_coin1 = 0
-    coin_delegator[operators[0]] = {
-        accounts[0]: {'remain_coin': remain_coin0, 'transferOutDeposit': transfer_out_deposit0,
-                      'total_pledged_amount': total_pledged_amount}}
-    coin_delegator[operators[1]] = {accounts[0]: {'remain_coin': remain_coin1, 'transferOutDeposit': 0,
-                                                  'total_pledged_amount': total_pledged_amount}}
-    coin_delegator[operators[2]] = {
-        accounts[0]: {'remain_coin': remain_coin2, 'transferOutDeposit': transfer_out_deposit2,
-                      'total_pledged_amount': total_pledged_amount + delegate_amount}}
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_out_deposit0,
+                       total_pledged_amount)
+    set_coin_delegator(coin_delegator, operators[1], accounts[0], remain_coin1, 0, total_pledged_amount)
+    set_coin_delegator(coin_delegator, operators[2], accounts[0], remain_coin2, transfer_out_deposit2,
+                       total_pledged_amount + delegate_amount)
     rewards = calculate_rewards(operators, coin_delegator, actual_debt_deposit, accounts[0],
                                 total_reward)
     turn_round(consensuses)
@@ -1604,16 +1749,15 @@ def test_undelegate_and_transfer_with_rewards(pledge_agent, validator_set, candi
     assert tracker0.delta() == sum(rewards)
 
 
-@pytest.mark.parametrize("operator_amount",
-                         [[500, 300, 500], [1000, 300, 800],
-                          [400, 300, 1600], [1000, 400, 2400], [400, 400, 1800]])
-def test_transfer_to_same_validator_and_undelegate(pledge_agent, validator_set, candidate_hub, operator_amount):
-    print(operator_amount)
+@pytest.mark.parametrize("operation_amount",
+                         [[500, 300, 500], [1000, 300, 800], [400, 300, 1600], [1000, 400, 2400], [400, 400, 1800]])
+def test_transfer_to_same_validator_and_undelegate(pledge_agent, validator_set, candidate_hub, operation_amount):
+    print(operation_amount)
     candidate_hub.setValidatorCount(21)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
-    transfer_amount0 = operator_amount[0]
-    transfer_amount1 = operator_amount[1]
-    undelegate_amount = operator_amount[2]
+    transfer_amount0 = operation_amount[0]
+    transfer_amount1 = operation_amount[1]
+    undelegate_amount = operation_amount[2]
     total_pledged_amount = delegate_amount * 2
     total_pledged_amount2 = delegate_amount
     operators = []
@@ -1654,14 +1798,11 @@ def test_transfer_to_same_validator_and_undelegate(pledge_agent, validator_set, 
         remain_coin1 = delegate_amount
     elif remain_coin1 < 0:
         remain_coin1 = 0
-    coin_delegator[operators[0]] = {
-        accounts[0]: {'remain_coin': remain_coin0, 'transferOutDeposit': transfer_out_deposit0,
-                      'total_pledged_amount': total_pledged_amount}}
-    coin_delegator[operators[1]] = {accounts[0]: {'remain_coin': remain_coin1, 'transferOutDeposit': 0,
-                                                  'total_pledged_amount': total_pledged_amount}}
-    coin_delegator[operators[2]] = {
-        accounts[0]: {'remain_coin': remain_coin2, 'transferOutDeposit': transfer_out_deposit1,
-                      'total_pledged_amount': total_pledged_amount2}}
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_out_deposit0,
+                       total_pledged_amount)
+    set_coin_delegator(coin_delegator, operators[1], accounts[0], remain_coin1, 0, total_pledged_amount)
+    set_coin_delegator(coin_delegator, operators[2], accounts[0], remain_coin2, transfer_out_deposit1,
+                       total_pledged_amount2)
     rewards = calculate_rewards(operators, coin_delegator, actual_debt_deposit, accounts[0],
                                 total_reward)
     turn_round(consensuses)
@@ -1670,13 +1811,13 @@ def test_transfer_to_same_validator_and_undelegate(pledge_agent, validator_set, 
     assert tracker0.delta() == sum(rewards)
 
 
-@pytest.mark.parametrize("operator_amount", [[500, 600, 1000], [500, 600, 500], [500, 600, 1800], [500, 600, 1500]])
-def test_transfer_and_delegate_and_then_transfer(pledge_agent, validator_set, candidate_hub, operator_amount):
-    print(operator_amount)
+@pytest.mark.parametrize("operation_amount", [[500, 600, 1000], [500, 600, 500], [500, 600, 1800], [500, 600, 1500]])
+def test_transfer_and_delegate_and_then_transfer(pledge_agent, validator_set, candidate_hub, operation_amount):
+    print(operation_amount)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
-    transfer_amount0 = operator_amount[0]
-    additional_amount = operator_amount[1]
-    transfer_amount1 = operator_amount[2]
+    transfer_amount0 = operation_amount[0]
+    additional_amount = operation_amount[1]
+    transfer_amount1 = operation_amount[2]
     total_pledged_amount = delegate_amount * 2
     total_pledged_amount2 = delegate_amount
     operators = []
@@ -1716,21 +1857,184 @@ def test_transfer_and_delegate_and_then_transfer(pledge_agent, validator_set, ca
         remain_coin1 = delegate_amount
     if remain_coin1 < 0:
         remain_coin1 = 0
-    coin_delegator[operators[0]] = {
-        accounts[0]: {'remain_coin': remain_coin0, 'transferOutDeposit': transfer_out_deposit0,
-                      'total_pledged_amount': total_pledged_amount2}}
-    coin_delegator[operators[1]] = {
-        accounts[0]: {'remain_coin': remain_coin1, 'transferOutDeposit': transfer_out_deposit1,
-                      'total_pledged_amount': total_pledged_amount}}
-    coin_delegator[operators[2]] = {
-        accounts[1]: {'remain_coin': remain_coin2, 'transferOutDeposit': transfer_out_deposit1,
-                      'total_pledged_amount': total_pledged_amount2}}
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_out_deposit0,
+                       total_pledged_amount2)
+    set_coin_delegator(coin_delegator, operators[1], accounts[0], remain_coin1, transfer_out_deposit1,
+                       total_pledged_amount)
+    set_coin_delegator(coin_delegator, operators[2], accounts[1], remain_coin2, transfer_out_deposit1,
+                       total_pledged_amount2)
     rewards = calculate_rewards(operators, coin_delegator, actual_debt_deposit, accounts[0],
                                 total_reward)
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     pledge_agent.claimReward(operators, {'from': accounts[0]})
     assert tracker0.delta() == sum(rewards)
+
+
+def test_claim_reward_in_no_transfer_validator(pledge_agent, validator_set, candidate_hub):
+    candidate_hub.setControlRoundTimeTag(True)
+    candidate_hub.setRoundTag(7)
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    transfer_amount0 = delegate_amount // 2
+    transfer_amount1 = transfer_amount0 // 2
+    undelegate_amount = MIN_INIT_DELEGATE_VALUE
+    operators = []
+    total_reward = BLOCK_REWARD // 2
+    consensuses = []
+    for operator in accounts[4:7]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[0]})
+    turn_round()
+    pledge_agent.transferCoin(operators[0], operators[1], transfer_amount0, {'from': accounts[0]})
+    pledge_agent.transferCoin(operators[1], operators[2], transfer_amount1, {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[2], undelegate_amount, {'from': accounts[0]})
+    round_value = pledge_agent.roundTag()
+    debt_deposit = pledge_agent.getDebtDepositMap(round_value, accounts[0])
+    assert debt_deposit == undelegate_amount
+    tracker0 = get_tracker(accounts[0])
+    turn_round(consensuses)
+    pledge_agent.claimReward([operators[2]], {'from': accounts[0]})
+    debt_deposit = pledge_agent.getDebtDepositMap(round_value, accounts[0])
+    assert debt_deposit == undelegate_amount
+    assert tracker0.delta() == 0
+    expect_reward = total_reward - total_reward * undelegate_amount // delegate_amount
+    pledge_agent.claimReward([operators[0]], {'from': accounts[0]})
+    assert tracker0.delta() == expect_reward
+    debt_deposit = pledge_agent.getDebtDepositMap(round_value, accounts[0])
+    assert debt_deposit == 0
+
+
+def test_transfer_then_validator_refuses_delegate(pledge_agent, validator_set, candidate_hub):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 5
+    transfer_amount = MIN_INIT_DELEGATE_VALUE * 2
+    undelegate_amount = MIN_INIT_DELEGATE_VALUE
+    total_reward = BLOCK_REWARD // 2
+    operators = []
+    consensuses = []
+    for operator in accounts[2:5]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[0]})
+    turn_round()
+    candidate_hub.refuseDelegate({'from': operators[0]})
+    pledge_agent.transferCoin(operators[0], operators[2], transfer_amount)
+    candidate_hub.refuseDelegate({'from': operators[2]})
+    pledge_agent.undelegateCoin(operators[2], undelegate_amount, {'from': accounts[0]})
+    debt_deposit = pledge_agent.getDebtDepositMap(pledge_agent.roundTag(), accounts[0])
+    assert debt_deposit == MIN_INIT_DELEGATE_VALUE
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    pledge_agent.claimReward(operators, {'from': accounts[0]})
+    assert tracker0.delta() == total_reward - total_reward * undelegate_amount // delegate_amount
+
+
+def test_transfer_and_delegate_to_queued_validator(pledge_agent, validator_set, candidate_hub):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    transfer_amount0 = MIN_INIT_DELEGATE_VALUE * 5
+    additional_amount = MIN_INIT_DELEGATE_VALUE * 6
+    undelegate_amount = MIN_INIT_DELEGATE_VALUE * 7
+    total_pledged_amount = delegate_amount * 2
+    operators = []
+    total_reward = BLOCK_REWARD // 2
+    consensuses = []
+    for operator in accounts[4:7]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    candidate_hub.setValidatorCount(2)
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[0]})
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[1]})
+    turn_round()
+    validators = validator_set.getValidators()
+    assert consensuses[1] not in validators
+    pledge_agent.transferCoin(operators[0], operators[1], transfer_amount0, {'from': accounts[0]})
+    pledge_agent.delegateCoin(operators[1], {"value": additional_amount, 'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[1], undelegate_amount, {'from': accounts[0]})
+    debt_deposit = pledge_agent.getDebtDepositMap(pledge_agent.roundTag(), accounts[0])
+    actual_debt_deposit = MIN_INIT_DELEGATE_VALUE
+    assert debt_deposit == actual_debt_deposit
+    turn_round(consensuses, round_count=1)
+    tracker0 = get_tracker(accounts[0])
+    pledge_agent.claimReward([operators[0]], {'from': accounts[0]})
+    expect_reward = total_reward * (delegate_amount - actual_debt_deposit) // total_pledged_amount
+    assert tracker0.delta() == expect_reward
+
+
+def test_claim_rewards_after_mutual_transfers(pledge_agent, validator_set):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 11
+    transfer_amount = MIN_INIT_DELEGATE_VALUE
+    transfer_amount2 = MIN_INIT_DELEGATE_VALUE * 4
+    operators = []
+    consensuses = []
+    for operator in accounts[3:6]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[0]})
+    pledge_agent.delegateCoin(operators[1], {"value": delegate_amount, 'from': accounts[0]})
+    pledge_agent.delegateCoin(operators[2], {"value": delegate_amount, 'from': accounts[0]})
+    turn_round()
+    pledge_agent.transferCoin(operators[0], operators[1], transfer_amount, {'from': accounts[0]})
+    pledge_agent.transferCoin(operators[1], operators[0], transfer_amount2, {'from': accounts[0]})
+    pledge_agent.transferCoin(operators[2], operators[0], transfer_amount2, {'from': accounts[0]})
+    pledge_agent.transferCoin(operators[0], operators[2], transfer_amount, {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[0], {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[1], {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[2], {'from': accounts[0]})
+    turn_round(consensuses, round_count=1)
+    tracker0 = get_tracker(accounts[0])
+    pledge_agent.claimReward(operators, {'from': accounts[0]})
+    assert tracker0.delta() == 0
+
+
+def test_additional_transfer_and_undelegate(pledge_agent, validator_set, candidate_hub):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    transfer_amount0 = delegate_amount // 2
+    additional_amount = MIN_INIT_DELEGATE_VALUE * 6
+    transfer_amount1 = delegate_amount + additional_amount + MIN_INIT_DELEGATE_VALUE
+    undelegate_amount0 = MIN_INIT_DELEGATE_VALUE * 2
+    undelegate_amount1 = MIN_INIT_DELEGATE_VALUE * 10
+    operators = []
+    total_reward = BLOCK_REWARD // 2
+    consensuses = []
+    for operator in accounts[4:7]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[0]})
+    pledge_agent.delegateCoin(operators[1], {"value": delegate_amount, 'from': accounts[0]})
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[1]})
+    pledge_agent.delegateCoin(operators[1], {"value": delegate_amount, 'from': accounts[1]})
+    turn_round()
+    pledge_agent.transferCoin(operators[0], operators[1], transfer_amount0, {'from': accounts[0]})
+    pledge_agent.delegateCoin(operators[1], {"value": additional_amount, 'from': accounts[0]})
+    pledge_agent.transferCoin(operators[1], operators[2], transfer_amount1, {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[1], undelegate_amount0, {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[2], undelegate_amount1, {'from': accounts[0]})
+    pledge_agent.transferCoin(operators[2], operators[0], MIN_INIT_DELEGATE_VALUE, {'from': accounts[0]})
+    debt_deposit = pledge_agent.getDebtDepositMap(pledge_agent.roundTag(), accounts[0])
+    actual_debt_deposit = MIN_INIT_DELEGATE_VALUE * 6
+    assert debt_deposit == actual_debt_deposit
+    delegator_info0 = pledge_agent.getDelegator(operators[0], accounts[0])
+    delegator_info1 = pledge_agent.getDelegator(operators[1], accounts[0])
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
+    expect_query(delegator_info0, {'transferOutDeposit': transfer_amount0})
+    expect_query(delegator_info1, {'transferOutDeposit': delegate_amount,
+                                   'transferInDeposit': transfer_amount0 - undelegate_amount0 - MIN_INIT_DELEGATE_VALUE})
+    expect_query(delegator_info2, {'transferOutDeposit': 0,
+                                   'transferInDeposit': transfer_amount1 - undelegate_amount1 - MIN_INIT_DELEGATE_VALUE})
+    coin_delegator = {}
+    remain_coin0 = delegate_amount - transfer_amount0
+    remain_coin1 = 0
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_amount0, delegate_amount * 2)
+    set_coin_delegator(coin_delegator, operators[1], accounts[0], remain_coin1, delegate_amount, delegate_amount * 2)
+    expect_reward = calculate_rewards(operators, coin_delegator, actual_debt_deposit, accounts[0], total_reward)
+    turn_round(consensuses)
+    reward0 = pledge_agent.claimReward.call([operators[0]], {'from': accounts[0]})[0]
+    reward1 = pledge_agent.claimReward.call([operators[0], operators[1]], {'from': accounts[0]})[0] - reward0
+    reward2 = pledge_agent.claimReward.call([operators[0], operators[1], operators[2]], {'from': accounts[0]})[
+                  0] - reward1 - reward0
+    assert expect_reward[0] == reward0
+    assert expect_reward[1] == reward1
+    assert expect_reward[2] == reward2
 
 
 def test_multiple_operations_in_current_rounds(pledge_agent, validator_set):
@@ -1862,12 +2166,9 @@ def test_multiple_transfers_and_check_transfer_info(pledge_agent, validator_set,
     remain_coin1 = delegate_amount - transfer_amount1 - transfer_amount2
     remain_coin2 = delegate_amount - undelegate_amount
     actual_debt_deposit = 0
-    coin_delegator[operators[0]] = {accounts[0]: {'remain_coin': remain_coin0, 'transferOutDeposit': transfer_amount0,
-                                                  'total_pledged_amount': total_pledged_amount2}}
-    coin_delegator[operators[1]] = {accounts[0]: {'remain_coin': remain_coin1, 'transferOutDeposit': transfer_amount0,
-                                                  'total_pledged_amount': total_pledged_amount1}}
-    coin_delegator[operators[2]] = {accounts[0]: {'remain_coin': remain_coin2, 'transferOutDeposit': 0,
-                                                  'total_pledged_amount': total_pledged_amount1}}
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_amount0, total_pledged_amount2)
+    set_coin_delegator(coin_delegator, operators[1], accounts[0], remain_coin1, transfer_amount0, total_pledged_amount1)
+    set_coin_delegator(coin_delegator, operators[2], accounts[0], remain_coin2, 0, total_pledged_amount1)
     expect_reward = calculate_rewards(operators, coin_delegator, actual_debt_deposit, accounts[0], total_reward)
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
@@ -2032,7 +2333,10 @@ def test_reward_claim_after_slash(pledge_agent, validator_set, slash_indicator, 
 
 
 @pytest.mark.parametrize("threshold_type", ['minor', 'major'])
-def test_reward_after_slash_and_transfer(pledge_agent, validator_set, slash_indicator, threshold_type):
+def test_reward_after_slash_and_transfer(pledge_agent, validator_set, slash_indicator, threshold_type, candidate_hub):
+    round_time_tag = 7
+    candidate_hub.setControlRoundTimeTag(True)
+    candidate_hub.setRoundTag(round_time_tag)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     operators = []
     total_reward = BLOCK_REWARD // 2
@@ -2057,6 +2361,8 @@ def test_reward_after_slash_and_transfer(pledge_agent, validator_set, slash_indi
         tx0 = slash_indicator.slash(consensuses[0])
     assert event_name in tx0.events
     pledge_agent.transferCoin(operators[0], operators[2], transfer_amount)
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
+    expect_query(delegator_info2, {'transferOutDeposit': 0, 'transferInDeposit': transfer_amount})
     for count in range(slash_threshold):
         tx1 = slash_indicator.slash(consensuses[2])
     assert event_name in tx1.events
@@ -2070,6 +2376,121 @@ def test_reward_after_slash_and_transfer(pledge_agent, validator_set, slash_indi
     delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
     assert delegator_info2['transferInDeposit'] == 0
     assert tracker0.delta() == expect_reward
+    required_margin = 1000001
+    candidate_hub.addMargin({'value': required_margin, 'from': operators[2]})
+    turn_round(consensuses, round_count=2)
+    pledge_agent.delegateCoin(operators[2], {"value": delegate_amount, 'from': accounts[0]})
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
+    assert delegator_info2['transferInDeposit'] == 0
+
+
+@pytest.mark.parametrize("threshold_type", ['minor', 'major'])
+def test_post_transfer_major_slash(pledge_agent, validator_set, slash_indicator, threshold_type, candidate_hub):
+    round_time_tag = 7
+    candidate_hub.setControlRoundTimeTag(True)
+    candidate_hub.setRoundTag(round_time_tag)
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    operators = []
+    undelegate_amount = MIN_INIT_DELEGATE_VALUE
+    total_reward = BLOCK_REWARD // 2
+    transfer_amount = delegate_amount // 3
+    consensuses = []
+    input_deposit = transfer_amount - undelegate_amount
+    for operator in accounts[4:7]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[0]})
+    turn_round()
+    tx0 = None
+    tx1 = None
+    if threshold_type == 'minor':
+        slash_threshold = slash_indicator.misdemeanorThreshold()
+        event_name = 'validatorMisdemeanor'
+        expect_reward = total_reward - total_reward * undelegate_amount // delegate_amount
+        expect_reward1 = total_reward * 3
+    else:
+        slash_threshold = slash_indicator.felonyThreshold()
+        event_name = 'validatorFelony'
+        expect_reward = 0
+        expect_reward1 = total_reward
+    for count in range(slash_threshold):
+        tx0 = slash_indicator.slash(consensuses[0])
+    assert event_name in tx0.events
+    pledge_agent.transferCoin(operators[0], operators[2], transfer_amount)
+    pledge_agent.undelegateCoin(operators[2], undelegate_amount, {'from': accounts[0]})
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
+    expect_query(delegator_info2, {'transferOutDeposit': 0, 'transferInDeposit': input_deposit})
+    for count in range(slash_threshold):
+        tx1 = slash_indicator.slash(consensuses[2])
+    assert event_name in tx1.events
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
+    expect_query(delegator_info2, {'transferOutDeposit': 0, 'transferInDeposit': input_deposit})
+    debt_deposit = pledge_agent.getDebtDepositMap(pledge_agent.roundTag(), accounts[0])
+    assert debt_deposit == undelegate_amount
+    turn_round(consensuses, round_count=1)
+    tracker0 = get_tracker(accounts[0])
+    pledge_agent.claimReward([operators[0], operators[2]], {'from': accounts[0]})
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
+    assert delegator_info2['transferInDeposit'] == 0
+    assert tracker0.delta() == expect_reward
+    required_margin = 100000000001
+    candidate_hub.addMargin({'value': required_margin, 'from': operators[2]})
+    turn_round(consensuses, round_count=3)
+    pledge_agent.claimReward([operators[2]], {'from': accounts[0]})
+    assert tracker0.delta() == expect_reward1
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
+    assert delegator_info2['transferInDeposit'] == 0
+
+
+@pytest.mark.parametrize("threshold_type", ['minor', 'major'])
+def test_major_violation_followed_by_reward_claim(pledge_agent, validator_set, slash_indicator, threshold_type, candidate_hub):
+    round_time_tag = 7
+    candidate_hub.setControlRoundTimeTag(True)
+    candidate_hub.setRoundTag(round_time_tag)
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    operators = []
+    undelegate_amount = MIN_INIT_DELEGATE_VALUE
+    total_reward = BLOCK_REWARD // 2
+    transfer_amount = delegate_amount // 3
+    consensuses = []
+    input_deposit = transfer_amount - undelegate_amount
+    for operator in accounts[4:7]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[0]})
+    turn_round()
+    tx0 = None
+    tx1 = None
+    if threshold_type == 'minor':
+        slash_threshold = slash_indicator.misdemeanorThreshold()
+        event_name = 'validatorMisdemeanor'
+        expect_reward = total_reward - total_reward * undelegate_amount // delegate_amount
+        expect_reward1 = total_reward * 3
+    else:
+        slash_threshold = slash_indicator.felonyThreshold()
+        event_name = 'validatorFelony'
+        expect_reward = total_reward - total_reward * undelegate_amount // delegate_amount
+        expect_reward1 = total_reward
+    pledge_agent.transferCoin(operators[0], operators[2], transfer_amount)
+    pledge_agent.undelegateCoin(operators[2], undelegate_amount, {'from': accounts[0]})
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
+    expect_query(delegator_info2, {'transferOutDeposit': 0, 'transferInDeposit': input_deposit})
+    for count in range(slash_threshold):
+        tx1 = slash_indicator.slash(consensuses[2])
+    assert event_name in tx1.events
+    debt_deposit = pledge_agent.getDebtDepositMap(pledge_agent.roundTag(), accounts[0])
+    assert debt_deposit == undelegate_amount
+    turn_round(consensuses, round_count=1)
+    tracker0 = get_tracker(accounts[0])
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
+    assert delegator_info2['transferInDeposit'] == input_deposit
+    required_margin = 100000000001
+    candidate_hub.addMargin({'value': required_margin, 'from': operators[2]})
+    turn_round(consensuses, round_count=3)
+    pledge_agent.claimReward([operators[0], operators[2]], {'from': accounts[0]})
+    assert tracker0.delta() == expect_reward1 + expect_reward + total_reward * 3
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
+    assert delegator_info2['transferInDeposit'] == 0
 
 
 def test_undelegate_then_transfer(pledge_agent, validator_set, candidate_hub):
@@ -2201,6 +2622,38 @@ def test_transfer_after_claim_reward(pledge_agent, validator_set, candidate_hub)
     assert tracker0.delta() == total_reward
 
 
+def test_reward_claim_midway_doesnt_affect_current_round(pledge_agent, validator_set):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    transfer_amount0 = delegate_amount // 2
+    undelegate_amount = MIN_INIT_DELEGATE_VALUE * 4
+    operators = []
+    total_reward = BLOCK_REWARD // 2
+    consensuses = []
+    for operator in accounts[4:7]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[0]})
+    turn_round()
+    pledge_agent.transferCoin(operators[0], operators[2], transfer_amount0, {'from': accounts[0]})
+    pledge_agent.claimReward([operators[0], operators[2]], {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[2], undelegate_amount, {'from': accounts[0]})
+    delegator_info0 = pledge_agent.getDelegator(operators[0], accounts[0])
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
+    expect_query(delegator_info0, {'transferOutDeposit': transfer_amount0})
+    expect_query(delegator_info2, {'transferInDeposit': transfer_amount0 - undelegate_amount})
+    debt_deposit = pledge_agent.getDebtDepositMap(pledge_agent.roundTag(), accounts[0])
+    assert debt_deposit == undelegate_amount
+    expect_reward = total_reward * (delegate_amount - undelegate_amount) // delegate_amount
+    tracker0 = get_tracker(accounts[0])
+    delegator_info0 = pledge_agent.getDelegator(operators[0], accounts[0])
+    reward_info = pledge_agent.getReward(operators[0], delegator_info0['rewardIndex'])
+    assert reward_info['score'] == delegate_amount
+    assert reward_info['coin'] == delegate_amount
+    turn_round(consensuses)
+    pledge_agent.claimReward([operators[0]], {'from': accounts[0]})
+    assert tracker0.delta() == expect_reward
+
+
 @pytest.mark.parametrize("undelegate_amount", [400, 800])
 def test_transfer_and_undelegate_in_different_rounds(pledge_agent, validator_set, undelegate_amount):
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
@@ -2231,7 +2684,7 @@ def test_transfer_and_undelegate_in_different_rounds(pledge_agent, validator_set
 def test_operations_in_next_round_after_transfer(pledge_agent, validator_set, operator_type):
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     transfer_amount0 = delegate_amount // 2
-    operator_amount = delegate_amount // 4
+    operation_amount = delegate_amount // 4
     operators = []
     total_reward = BLOCK_REWARD // 2
     consensuses = []
@@ -2246,12 +2699,12 @@ def test_operations_in_next_round_after_transfer(pledge_agent, validator_set, op
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     if operator_type == 'undelegate':
-        pledge_agent.undelegateCoin(operators[2], operator_amount, {'from': accounts[0]})
+        pledge_agent.undelegateCoin(operators[2], operation_amount, {'from': accounts[0]})
         expect_reward0 = total_reward
-        expect_reward2 = operator_amount
+        expect_reward2 = operation_amount
         remain_reward = total_reward - total_reward // 2
     elif operator_type == 'transfer':
-        pledge_agent.transferCoin(operators[2], operators[1], operator_amount, {'from': accounts[0]})
+        pledge_agent.transferCoin(operators[2], operators[1], operation_amount, {'from': accounts[0]})
         expect_reward0 = total_reward
         expect_reward2 = 0
         remain_reward = total_reward
@@ -2261,9 +2714,9 @@ def test_operations_in_next_round_after_transfer(pledge_agent, validator_set, op
         expect_reward2 = 0
         remain_reward = total_reward
     else:
-        pledge_agent.delegateCoin(operators[2], {"value": operator_amount, 'from': accounts[0]})
+        pledge_agent.delegateCoin(operators[2], {"value": operation_amount, 'from': accounts[0]})
         expect_reward0 = total_reward
-        expect_reward2 = -operator_amount
+        expect_reward2 = -operation_amount
         remain_reward = total_reward
     assert tracker0.delta() == expect_reward2
     debt_deposit = pledge_agent.getDebtDepositMap(pledge_agent.roundTag(), accounts[0])
@@ -2279,7 +2732,7 @@ def test_operations_in_next_round_after_transfer(pledge_agent, validator_set, op
 def test_next_round_operations_on_sender_post_transfer(pledge_agent, validator_set, operator_type):
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     transfer_amount0 = delegate_amount // 2
-    operator_amount = delegate_amount // 4
+    operation_amount = delegate_amount // 4
     operators = []
     total_reward = BLOCK_REWARD // 2
     consensuses = []
@@ -2295,15 +2748,15 @@ def test_next_round_operations_on_sender_post_transfer(pledge_agent, validator_s
     tracker0 = get_tracker(accounts[0])
     reward = 0
     if operator_type == 'undelegate':
-        pledge_agent.undelegateCoin(operators[0], operator_amount, {'from': accounts[0]})
-        reward = operator_amount
+        pledge_agent.undelegateCoin(operators[0], operation_amount, {'from': accounts[0]})
+        reward = operation_amount
     elif operator_type == 'transfer':
-        pledge_agent.transferCoin(operators[0], operators[1], operator_amount, {'from': accounts[0]})
+        pledge_agent.transferCoin(operators[0], operators[1], operation_amount, {'from': accounts[0]})
     elif operator_type == 'claim':
         pledge_agent.claimReward([operators[0]], {'from': accounts[0]})
     else:
-        pledge_agent.delegateCoin(operators[0], {"value": operator_amount, 'from': accounts[0]})
-        reward = -operator_amount
+        pledge_agent.delegateCoin(operators[0], {"value": operation_amount, 'from': accounts[0]})
+        reward = -operation_amount
     assert tracker0.delta() == total_reward + reward
 
 
@@ -2311,7 +2764,7 @@ def test_next_round_operations_on_sender_post_transfer(pledge_agent, validator_s
 def test_operations_in_current_round_after_transfer(pledge_agent, validator_set, operator_type):
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     transfer_amount0 = delegate_amount // 2
-    operator_amount = delegate_amount // 4
+    operation_amount = delegate_amount // 4
     operators = []
     total_reward = BLOCK_REWARD // 2
     consensuses = []
@@ -2325,17 +2778,17 @@ def test_operations_in_current_round_after_transfer(pledge_agent, validator_set,
     expect_query(delegator_info2, {'transferInDeposit': transfer_amount0})
     effective_amount = delegate_amount
     if operator_type == 'undelegate':
-        pledge_agent.undelegateCoin(operators[0], operator_amount, {'from': accounts[0]})
-        effective_amount = delegate_amount - operator_amount
+        pledge_agent.undelegateCoin(operators[0], operation_amount, {'from': accounts[0]})
+        effective_amount = delegate_amount - operation_amount
         expect_reward = total_reward - total_reward * (delegate_amount - effective_amount) // delegate_amount
     elif operator_type == 'transfer':
-        pledge_agent.transferCoin(operators[0], operators[1], operator_amount, {'from': accounts[0]})
+        pledge_agent.transferCoin(operators[0], operators[1], operation_amount, {'from': accounts[0]})
         expect_reward = total_reward
     elif operator_type == 'claim':
         pledge_agent.claimReward([operators[0]], {'from': accounts[0]})
         expect_reward = total_reward
     else:
-        pledge_agent.delegateCoin(operators[0], {"value": operator_amount, 'from': accounts[0]})
+        pledge_agent.delegateCoin(operators[0], {"value": operation_amount, 'from': accounts[0]})
         expect_reward = total_reward
     tracker0 = get_tracker(accounts[0])
     delegator_info0 = pledge_agent.getDelegator(operators[0], accounts[0])
@@ -2350,7 +2803,7 @@ def test_operations_in_current_round_after_transfer(pledge_agent, validator_set,
 def test_transfer_to_validator_with_existing_transfers(pledge_agent, validator_set):
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     transfer_amount0 = delegate_amount // 2
-    operator_amount = delegate_amount // 4
+    operation_amount = delegate_amount // 4
     operators = []
     total_reward = BLOCK_REWARD // 2
     consensuses = []
@@ -2363,7 +2816,7 @@ def test_transfer_to_validator_with_existing_transfers(pledge_agent, validator_s
     pledge_agent.transferCoin(operators[0], operators[2], transfer_amount0, {'from': accounts[0]})
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
-    pledge_agent.transferCoin(operators[1], operators[2], operator_amount, {'from': accounts[0]})
+    pledge_agent.transferCoin(operators[1], operators[2], operation_amount, {'from': accounts[0]})
     assert tracker0.delta() == total_reward
     turn_round(consensuses)
     pledge_agent.claimReward([operators[0]], {'from': accounts[0]})
@@ -2376,7 +2829,7 @@ def test_transfer_to_validator_with_existing_transfers(pledge_agent, validator_s
 def test_operation_on_validator_with_no_transfer(pledge_agent, validator_set, operator_type):
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     transfer_amount0 = delegate_amount // 2
-    operator_amount = delegate_amount // 4
+    operation_amount = delegate_amount // 4
     operators = []
     total_reward = BLOCK_REWARD // 2
     consensuses = []
@@ -2395,17 +2848,17 @@ def test_operation_on_validator_with_no_transfer(pledge_agent, validator_set, op
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     if operator_type == 'undelegate':
-        pledge_agent.undelegateCoin(operators[3], operator_amount, {'from': accounts[0]})
-        remain_reward = total_reward + operator_amount
+        pledge_agent.undelegateCoin(operators[3], operation_amount, {'from': accounts[0]})
+        remain_reward = total_reward + operation_amount
     elif operator_type == 'transfer':
-        pledge_agent.transferCoin(operators[3], operators[4], operator_amount, {'from': accounts[0]})
+        pledge_agent.transferCoin(operators[3], operators[4], operation_amount, {'from': accounts[0]})
         remain_reward = total_reward
     elif operator_type == 'claim':
         pledge_agent.claimReward([operators[3]], {'from': accounts[0]})
         remain_reward = total_reward
     else:
-        pledge_agent.delegateCoin(operators[3], {"value": operator_amount, 'from': accounts[0]})
-        remain_reward = total_reward - operator_amount
+        pledge_agent.delegateCoin(operators[3], {"value": operation_amount, 'from': accounts[0]})
+        remain_reward = total_reward - operation_amount
     assert tracker0.delta() == remain_reward
     delegator_info0 = pledge_agent.getDelegator(operators[0], accounts[0])
     delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
@@ -2559,3 +3012,81 @@ def test_transfer_rewards_and_claim_after_multiple_rounds(pledge_agent, validato
     reward_round = round_number - 1
     expect_reward = total_reward + total_reward * 2 * reward_round
     assert tracker0.delta() == expect_reward
+
+
+@pytest.mark.parametrize("round_number", [1, 2, 3])
+def test_claim_rewards_after_transfer_and_undelegate_in_multiple_rounds(pledge_agent, validator_set, round_number):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    transfer_amount0 = delegate_amount // 2
+    undelegate_amount = MIN_INIT_DELEGATE_VALUE * 4
+    operators = []
+    total_reward = BLOCK_REWARD // 2
+    consensuses = []
+    for operator in accounts[4:7]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[0]})
+    turn_round()
+    pledge_agent.transferCoin(operators[0], operators[2], transfer_amount0, {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[2], undelegate_amount, {'from': accounts[0]})
+    tracker0 = get_tracker(accounts[0])
+    turn_round(consensuses, round_count=round_number)
+    pledge_agent.claimReward(operators, {'from': accounts[0]})
+    reward_round = round_number - 1
+    expect_reward = total_reward - total_reward * undelegate_amount // delegate_amount + total_reward * 2 * reward_round
+    assert tracker0.delta() == expect_reward
+
+
+def test_claim_reward_after_accumulating_debt_deposit(pledge_agent, validator_set):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    transfer_amount0 = delegate_amount // 2
+    undelegate_amount0 = MIN_INIT_DELEGATE_VALUE * 2
+    undelegate_amount1 = MIN_INIT_DELEGATE_VALUE * 4
+    operators = []
+    total_reward = BLOCK_REWARD // 2
+    consensuses = []
+    for operator in accounts[4:14]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[0]})
+    pledge_agent.delegateCoin(operators[1], {"value": delegate_amount, 'from': accounts[0]})
+    pledge_agent.delegateCoin(operators[1], {"value": delegate_amount, 'from': accounts[1]})
+    turn_round()
+    coin_delegator = {}
+    pledge_agent.transferCoin(operators[0], operators[2], transfer_amount0, {'from': accounts[0]})
+    pledge_agent.undelegateCoin(operators[2], undelegate_amount0, {'from': accounts[0]})
+    debt_deposit = pledge_agent.getDebtDepositMap(pledge_agent.roundTag(), accounts[0])
+    assert debt_deposit == undelegate_amount0
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    pledge_agent.transferCoin(operators[1], operators[3], transfer_amount0, {'from': accounts[0]})
+    assert tracker0.delta() == total_reward // 2
+    pledge_agent.undelegateCoin(operators[3], undelegate_amount1, {'from': accounts[0]})
+    debt_deposit = pledge_agent.getDebtDepositMap(pledge_agent.roundTag(), accounts[0])
+    assert debt_deposit == undelegate_amount1
+    remain_coin0 = delegate_amount - transfer_amount0
+    remain_coin1 = delegate_amount - transfer_amount0
+    total_pledged_amount = delegate_amount * 2
+    actual_debt_deposit0 = undelegate_amount0
+    actual_debt_deposit1 = undelegate_amount1
+    turn_round(consensuses)
+    actual_reward0 = pledge_agent.claimReward.call([operators[0], operators[1]], {'from': accounts[0]})
+    actual_reward1 = pledge_agent.claimReward.call([operators[1], operators[0]], {'from': accounts[0]})
+    assert actual_reward0 == actual_reward1
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, transfer_amount0, delegate_amount)
+    rewards0 = calculate_rewards([operators[0]], coin_delegator, actual_debt_deposit0, accounts[0], total_reward)
+    set_coin_delegator(coin_delegator, operators[1], accounts[0], remain_coin1, transfer_amount0, total_pledged_amount)
+    rewards1 = calculate_rewards([operators[1]], coin_delegator, actual_debt_deposit1, accounts[0], total_reward)
+    expect_reward0 = total_reward + sum(rewards0) + sum(rewards1)
+    assert actual_reward0[0] == expect_reward0
+    turn_round(consensuses, round_count=3)
+    actual_reward0 = pledge_agent.claimReward.call([operators[0], operators[1]], {'from': accounts[0]})
+    actual_reward1 = pledge_agent.claimReward.call([operators[1], operators[0]], {'from': accounts[0]})
+    assert actual_reward0 == actual_reward1
+    set_coin_delegator(coin_delegator, operators[0], accounts[0], remain_coin0, 0, remain_coin0)
+    rewards0 = calculate_rewards([operators[0]], coin_delegator, actual_debt_deposit0, accounts[0], total_reward)
+    total_pledged_amount -= transfer_amount0
+    set_coin_delegator(coin_delegator, operators[1], accounts[0], remain_coin1, 0, total_pledged_amount)
+    rewards1 = calculate_rewards([operators[1]], coin_delegator, actual_debt_deposit1, accounts[0], total_reward)
+    remain_reward = sum(rewards0) * 3 + sum(rewards1) * 3
+    assert remain_reward + expect_reward0 == actual_reward0[0]
