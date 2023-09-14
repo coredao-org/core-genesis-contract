@@ -7,7 +7,6 @@ from .utils import random_address, expect_event, padding_left, expect_event_not_
     encode_args_with_signature
 from .common import register_candidate, turn_round, execute_proposal
 
-
 MIN_INIT_DELEGATE_VALUE = 0
 POWER_FACTOR = 0
 POWER_BLOCK_FACTOR = 0
@@ -173,6 +172,21 @@ class TestUndelegateCoin:
         with brownie.reverts("delegator does not exist"):
             pledge_agent.undelegateCoin(operator)
 
+    def test_fail_to_undelegate_after_transfer(self, pledge_agent):
+        delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+        operators = []
+        consensuses = []
+        transfer_amount0 = delegate_amount // 2
+        undelegate_amount = transfer_amount0 + MIN_INIT_DELEGATE_VALUE
+        for operator in accounts[4:7]:
+            operators.append(operator)
+            consensuses.append(register_candidate(operator=operator))
+        pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[0]})
+        turn_round()
+        pledge_agent.transferCoin(operators[0], operators[1], transfer_amount0, {'from': accounts[0]})
+        with brownie.reverts("remaining amount is too small"):
+            pledge_agent.undelegateCoin(operators[0], undelegate_amount)
+
     def test_undelegeate_self(self, pledge_agent):
         register_candidate()
         pledge_agent.delegateCoin(accounts[0], {"value": MIN_INIT_DELEGATE_VALUE})
@@ -284,7 +298,8 @@ def test_get_score_success(candidate_hub, validator_set):
     scores = candidate_hub.getScores()
     assert len(scores) == 5
     for i in range(5):
-        expected_score = (required_coin_deposit + i) * total_power + total_coin * powers[i] * POWER_BLOCK_FACTOR * POWER_FACTOR // 10000
+        expected_score = (required_coin_deposit + i) * total_power + total_coin * powers[
+            i] * POWER_BLOCK_FACTOR * POWER_FACTOR // 10000
         assert expected_score == scores[i]
 
 
@@ -451,7 +466,8 @@ def test_transfer_coin_failed_with_inactive_target_agent(pledge_agent):
 
     __delegate_coin_success(agent_source, delegator, 0, required_coin_deposit)
     round_tag = pledge_agent.roundTag()
-    __check_coin_delegator(pledge_agent.getDelegator(agent_source, delegator).dict(), 0, required_coin_deposit, round_tag, 0)
+    __check_coin_delegator(pledge_agent.getDelegator(agent_source, delegator).dict(), 0, required_coin_deposit,
+                           round_tag, 0)
 
     error_msg = encode_args_with_signature("InactiveAgent(address)", [agent_target.address])
     with brownie.reverts(f"typed error: {error_msg}"):
@@ -466,7 +482,8 @@ def test_transfer_coin_failed_with_same_agent(pledge_agent):
 
     __delegate_coin_success(agent_source, delegator, 0, required_coin_deposit)
 
-    error_msg = encode_args_with_signature("SameCandidate(address,address)", [agent_source.address, agent_target.address])
+    error_msg = encode_args_with_signature("SameCandidate(address,address)",
+                                           [agent_source.address, agent_target.address])
     with brownie.reverts(f"typed error: {error_msg}"):
         pledge_agent.transferCoin(agent_source, agent_target, {'from': delegator})
 
@@ -536,13 +553,14 @@ def test_claim_reward_with_transfer_coin(pledge_agent, validator_set):
     pledge_agent.claimReward([agent1, agent2], {'from': delegator})
     expect_reward1 = actual_block_reward * 900 // 1000
     expect_reward2 = actual_block_reward * 500 // 1000 * 2
-    assert (expect_reward1 + expect_reward2+expect_reward1) == tracker.delta()
+    assert (expect_reward1 + expect_reward2 + expect_reward1) == tracker.delta()
 
 
 def __candidate_register(agent, percent=100):
     consensus_addr = random_address()
     fee_addr = random_address()
-    candidate_hub_instance.register(consensus_addr, fee_addr, percent, {'from': agent, 'value': CANDIDATE_REGISTER_MARGIN})
+    candidate_hub_instance.register(consensus_addr, fee_addr, percent,
+                                    {'from': agent, 'value': CANDIDATE_REGISTER_MARGIN})
     return consensus_addr
 
 
@@ -561,7 +579,3 @@ def __check_coin_delegator(c_delegator, deposit, new_deposit, change_round, rewa
     assert c_delegator['newDeposit'] == new_deposit
     assert c_delegator['changeRound'] == change_round
     assert c_delegator['rewardIndex'] == reward_idx
-
-
-
-
