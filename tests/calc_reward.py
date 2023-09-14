@@ -5,7 +5,7 @@ def set_delegate(address, value, last_claim=False):
     return {"address": address, "value": value, 'last_claim': last_claim}
 
 
-def parse_delegation(agents, block_reward):
+def parse_delegation(agents, block_reward, power_factor=20000):
     """
     :param block_reward:
     :param agents:
@@ -48,13 +48,13 @@ def parse_delegation(agents, block_reward):
         coin_count += total_coin
 
     for agent in agents:
-        agent_score[agent['address']] = 2 * agent['total_power'] * coin_count + agent['total_coin'] * btc_count
+        agent_score[agent['address']] = agent['total_power'] * coin_count * power_factor // 10000 + agent[
+            'total_coin'] * btc_count
 
     for agent in agents:
         if not agent['active']:
             continue
-
-        reward_each_power = coin_count * 20000 // 10000 * agent['totalReward'] // agent_score[agent['address']]
+        reward_each_power = coin_count * power_factor // 10000 * agent['totalReward'] // agent_score[agent['address']]
         for item in agent['power']:
             reward = item['value'] * reward_each_power
             delegator_reward[item['address']] += reward
@@ -78,6 +78,31 @@ def parse_delegation(agents, block_reward):
     assert sum(delegator_reward.values()) == block_reward * len(agents)
 
     return agent_score, delegator_reward
+
+
+def set_coin_delegator(coin_delegator, validator, delegator, remain_coin, transfer_out_deposit, total_coin):
+    coin_delegator[validator] = {delegator: {'remain_coin': remain_coin, 'transferOutDeposit': transfer_out_deposit,
+                                             'total_pledged_amount': total_coin}}
+
+
+def calculate_rewards(agent_list: list, coin_delegator: dict, actual_debt_deposit, account, block_reward):
+    result = []
+    total_reward = block_reward
+    for agent in agent_list:
+        d = coin_delegator.get(agent, {}).get(account, 0)
+        expect_reward = 0
+        if d == 0:
+            result.append(expect_reward)
+        else:
+            if d['transferOutDeposit'] > actual_debt_deposit:
+                d['transferOutDeposit'] -= actual_debt_deposit
+                actual_debt_deposit = 0
+            else:
+                actual_debt_deposit -= d['transferOutDeposit']
+                d['transferOutDeposit'] = 0
+            expect_reward = total_reward * (d['transferOutDeposit'] + d['remain_coin']) // d['total_pledged_amount']
+            result.append(expect_reward)
+    return result
 
 
 if __name__ == '__main__':

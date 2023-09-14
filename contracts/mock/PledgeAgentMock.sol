@@ -45,6 +45,10 @@ contract PledgeAgentMock is PledgeAgent {
         return debt;
     }
 
+    function setPowerFactor(uint  newPowerFactor) external {
+        powerFactor = newPowerFactor;
+    }
+
     function collectCoinRewardMock(address agent, address delegator,
         int256 roundLimit) external {
         Agent storage a = agentsMap[agent];

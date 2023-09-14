@@ -119,7 +119,6 @@ class AccountTracker:
                         total_tx_fee += tx.gas_price * tx.gas_used
         previous_balance = web3.eth.get_balance(self.account.address, self.height)
         self.height = chain.height
-
         return self.account.balance() - previous_balance + total_tx_fee
 
 
@@ -141,29 +140,3 @@ def expect_query(query_data, expect: dict):
     for k, v in expect.items():
         ex = query_data[k]
         assert ex == v, f'k:{k} {ex} != {v}'
-
-
-def calculate_rewards(agent_list: list, coin_delegator: dict, actual_debt_deposit, account, block_reward):
-    res = []
-    total_reward = block_reward
-    for agent in agent_list:
-        d = coin_delegator.get(agent, {}).get(account, 0)
-        expect_reward = 0
-        if d == 0:
-            res.append(expect_reward)
-        else:
-            print('_' * 5, agent)
-            print('actual_debt_deposit', actual_debt_deposit)
-            print('transferOutDeposit', d['transferOutDeposit'])
-            if d['transferOutDeposit'] > actual_debt_deposit:
-                d['transferOutDeposit'] -= actual_debt_deposit
-                actual_debt_deposit = 0
-            else:
-                actual_debt_deposit -= d['transferOutDeposit']
-                d['transferOutDeposit'] = 0
-            print('remain_coin', d['remain_coin'])
-            print('actual_debt_deposit', actual_debt_deposit)
-            expect_reward = total_reward * (d['transferOutDeposit'] + d['remain_coin']) // d['total_pledged_amount']
-            res.append(expect_reward)
-    print(res)
-    return res
