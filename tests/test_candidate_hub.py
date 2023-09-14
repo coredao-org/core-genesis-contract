@@ -3,10 +3,10 @@ import pytest
 import brownie
 from web3 import Web3
 from eth_account import Account
-from brownie import accounts
+from brownie import accounts, UnRegisterReentry
 from brownie.test import given, strategy
 from brownie.network.transaction import Status, TransactionReceipt
-from .utils import random_address, expect_event, encode_args_with_signature
+from .utils import random_address, expect_event
 from .common import register_candidate, turn_round, get_candidate
 
 
@@ -495,6 +495,17 @@ def test_turn_round(candidate_hub, pledge_agent, validator_set, required_margin)
                 candidate_hub.unregister({'from': agent})
             if _deposit > 0:
                 pledge_agent.undelegateCoin(agent, {'from': agent})
+
+
+def test_unregister_reentry(candidate_hub, required_margin):
+    candidate_hub_proxy = UnRegisterReentry.deploy(candidate_hub.address, {'from': accounts[0]})
+    register_candidate(operator=accounts[1])
+    candidate_hub_proxy.register(random_address(), candidate_hub_proxy.address, 500, {'value': required_margin})
+    tx = candidate_hub_proxy.unregister()
+    expect_event(tx, "proxyUnregister", {
+        "success": False,
+        "msg": "candidate does not exist"
+    })
 
 
 def __delegate_coin_success(pledge_agent, agent, delegator, old_value, new_value):

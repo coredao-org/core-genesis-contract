@@ -207,7 +207,7 @@ def test_store_btc_block_gasprice_limit_failed(btc_light_client):
     assert btc_light_client.storeBlockGasPrice() == store_block_header_tx_gas_price == tx.gas_price
 
 
-@pytest.mark.parametrize("gasprice", [1, 10, 101, 1000, 10000])
+@pytest.mark.parametrize("gasprice", [1, 10, 101, 1000, 10000,10000.1, 1000000000,10000000000000000000])
 def test_update_param_store_block_gasprice_success(btc_light_client, gasprice, init_gov_address):
     gasprice = Web3.toWei(gasprice, 'gwei')
     hex_value = padding_left(Web3.toHex(gasprice), 64)
@@ -217,13 +217,14 @@ def test_update_param_store_block_gasprice_success(btc_light_client, gasprice, i
     update_default_block_gasprice(btc_light_client)
 
 
-@pytest.mark.parametrize("gasprice", [0.1, 0.99, 10000.1, 10000.2])
+@pytest.mark.parametrize("gasprice", [0.1, 0.99,0.5])
 def test_update_param_store_block_gasprice_failed(btc_light_client, gasprice, init_gov_address):
     gasprice = Web3.toWei(gasprice, 'gwei')
+    uint256_max = 2 ** 256 - 1
     hex_value = padding_left(Web3.toHex(gasprice), 64)
     error_msg = encode_args_with_signature(
         "OutOfBounds(string,uint256,uint256,uint256)",
-        ["storeBlockGasPrice", gasprice, int(1e9), int(1e13)]
+        ["storeBlockGasPrice", gasprice, int(1e9), uint256_max]
     )
     with brownie.reverts(f"typed error: {error_msg}"):
         btc_light_client.updateParam('storeBlockGasPrice', hex_value, {'from': accounts[0]})
