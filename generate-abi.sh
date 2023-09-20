@@ -7,7 +7,7 @@ contracts=( "BtcLightClient" "Burn" "CandidateHub" "Foundation" "GovHub" \
 for e in ${contracts[@]}
 do
   echo "$e"
-  ~/Downloads/solc-macos --optimize --overwrite --abi -o ./abi contracts/${e}.sol
+    solc --optimize --overwrite --abi -o ./abi contracts/${e}.sol
 done
 #~/Downloads/solc-macos --bin -o ./TC_$name contracts/$name.sol
 
