@@ -70,7 +70,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     uint256 commissionLastRoundValue;
   }
 
-  modifier exist() {
+  modifier onlyIfCandidate() {
     require(operateMap[msg.sender] != 0, "candidate does not exist");
     _;
   }
@@ -332,7 +332,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       2. if candidate margin does not exceed global dues value - only transfer the margin 
          value to the system reward contract
   */ 
-  function unregister() external onlyInit exist {
+  function unregister() external onlyInit onlyIfCandidate {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     require(c.status == (c.status & UNREGISTER_STATUS), "candidate status is not cleared");
@@ -353,7 +353,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @param consensusAddr Consensus address configured on the validator node
   /// @param feeAddr Fee address set to collect system rewards
   /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths  
-  function update(address consensusAddr, address payable feeAddr, uint32 commissionThousandths) external onlyInit exist{
+  function update(address consensusAddr, address payable feeAddr, uint32 commissionThousandths) external onlyInit onlyIfCandidate {
     require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should in range (0, 1000)");
     require(consensusAddr != address(0), "consensus address should not be zero");
     require(feeAddr != address(0), "fee address should not be zero");
@@ -384,7 +384,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
   /// Refuse to accept delegate from others
   /// @dev Candidate will not be elected in this state
-  function refuseDelegate() external onlyInit exist {
+  function refuseDelegate() external onlyInit onlyIfCandidate {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     uint256 status = c.status | SET_INACTIVE;
@@ -392,7 +392,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   /// Accept delegate from others
-  function acceptDelegate() external onlyInit exist {
+  function acceptDelegate() external onlyInit onlyIfCandidate {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     uint256 status = c.status & DEL_INACTIVE;
@@ -406,7 +406,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       2. If the new candidate's margin value exceeds or is equal to the global requiredMargin 
          value - the candidate will be promoted to be a validator
 */
-  function addMargin() external payable onlyInit exist onlyIfPositiveValue {
+  function addMargin() external payable onlyInit onlyIfCandidate onlyIfPositiveValue {
     uint256 index = operateMap[msg.sender];
     uint256 totalMargin = candidateSet[index - 1].margin + msg.value;
     candidateSet[index - 1].margin = totalMargin;
