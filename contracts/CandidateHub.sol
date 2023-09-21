@@ -108,10 +108,23 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     return status == (status & ACTIVE_STATUS);
   }
 
-  /// Jail a validator for some rounds and slash some amount of deposits
-  /// @param operateAddress The operator address of the validator
-  /// @param round The number of rounds to jail
-  /// @param fine The amount of deposits to slash
+/* @product Jail a validator for some rounds and slash some amount of deposits
+   @param operateAddress: The operator address of the validator
+   @param round: The number of rounds to jail
+   @param fine: The amount of deposits to slash
+   @logic
+      1. if the candidate's margin is greater or equal to the sum of the candiate's fine plus 
+         the global duos
+          a. set the release round of the candidate to be the current round plus the 
+             'round' parameter (if the candidate has prior jail period - add to it 
+             the current 'round' parameter)
+          b. slash the fine value from the candidate's margin
+          c. and pass the fine eth sum to the SystemReward contarct
+
+      2. Else:
+          a. remove the candidate from internal structures, and
+          b. transfer the candidate's margin eth value to the SystemReward contract
+  */    
   function jailValidator(address operateAddress, uint256 round, uint256 fine) external override onlyValidator {
     uint256 index = operateMap[operateAddress];
     if (index == 0) return;
@@ -146,8 +159,26 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   /********************* External methods  ****************************/
-  /// The `turn round` workflow
-  /// @dev this method is called by Golang consensus engine at the end of a round
+
+/* @product The `turn round` workflow function
+   @dev this method is called by Golang consensus engine at the end of a round
+   @logic
+      1. call ValidatorSet's distributeReward to distribute rewards for now-ending round
+      2. distribute rewards to all BTC miners who delegated hash power for the now-ending round
+      3. update the system round tag tp be the current block.timestamp divided by roundInterval;
+      4. reset validator flags for all candidates.
+      5. create a list of all valid candidates and use it to:
+          a. fetch hash power delegated on list of the valid candidates which is used to 
+             calculate hybrid score for validators in the new round
+          b. calculate the hybrid score for all valid candidates and choose top ones to 
+             form the validator set of the new round. See the documentation of 
+             PledgeAgent.getHybridScore() for the details of the hybrid score calculation
+      6. if a validator's hybrid score is zero - correct its commissionThousandths value to be 1000
+      7. call ValidatorSet's updateValidatorSet() to set the new validators
+      8. clean slash contract
+      9. notify PledgeAgent contract on the new round and the new validators
+      10. remove validators from jail if their jailedRound is <= than the new roundTag
+*/
   function turnRound() external onlyCoinbase onlyInit onlyZeroGasPrice {
     // distribute rewards for the about to end round
     address[] memory lastCandidates = IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward();
@@ -237,10 +268,24 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   /****************** register/unregister ***************************/
-  /// Register as a validator candidate on Core blockchain
-  /// @param consensusAddr Consensus address configured on the validator node
-  /// @param feeAddr Fee address set to collect system rewards
-  /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths
+
+/* @product Called by a to-be validator to become a validator candidate on Core blockchain
+   @param consensusAddr Consensus address configured on the validator node
+   @param feeAddr Fee address set to collect system rewards
+   @param commissionThousandths The commission fee taken by the validator, measured in thousandths (=promils)
+   @logic:
+        1. Apply the following verifications:
+              a. Verify that the candidate limit of CANDIDATE_COUNT_LIMIT (=1000) was not reached
+              b. No double-booking: Verifies that the candidate is not already registered
+              c. Verify that the ether sum carried by this Tx is no less than the global 
+                 requiredMargin value
+              d. Verify that the commissionThousandths value is in the open range (0, 1000)
+              e. Verify that the consensusAddr has not been registedred before
+              f. Verify that the fee address is valid
+              g. Verify that the Tx sender is not jailed, orthat his jailtime has ended 
+                 before current roundTag
+        2. And, if all of these tests have passed - register the validator candidate into the system
+ */
   function register(address consensusAddr, address payable feeAddr, uint32 commissionThousandths)
     external payable
     onlyInit
@@ -264,7 +309,13 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     emit registered(msg.sender, consensusAddr, feeAddr, commissionThousandths, msg.value);
   }
 
-  /// Unregister the validator candidate role on Core blockchain
+  /* @product Unregister the validator candidate role on Core blockchain
+   @logic
+      1. if candidate margin exceeds global dues value - transfer the difference to the 
+         candidate and the dues value to the system reward contract
+      2. if candidate margin does not exceed global dues value - only transfer the margin 
+         value to the system reward contract
+  */ 
   function unregister() external onlyInit exist {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];

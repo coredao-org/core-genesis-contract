@@ -67,9 +67,19 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   }
 
   /*********************** External func ********************************/
-  /// Slash the validator because of unavailability
-  /// This method is called by other validators from golang consensus engine.
-  /// @param validator The consensus address of validator
+
+/* @product Called by the block producer once per-block to slash the validator 
+    because of unavailability
+   @param validator to slash
+   @logic
+      1. increase the count of the validator's slash.indicator record by 1 and sets its 
+         height to the current block number
+      2. If the slash.indicator count has reached the felonyThreshold jump (default = 150), 
+         then zero it and call the felony method for the validator
+      3. Else, if the slash.indicator count has reached the misdemeanorThreshold 
+         jump (default = 50), then leave its value unchanged and call the misdemeanor 
+         method for the validator
+*/
   function slash(address validator) external onlyCoinbase onlyInit oncePerBlock onlyZeroGasPrice{
     if (!IValidatorSet(VALIDATOR_CONTRACT_ADDR).isValidator(validator)) {
       return;
@@ -93,10 +103,22 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     emit validatorSlashed(validator);
   }
 
-  /// Slash the validator because of double sign
-  /// This method is called by external verifiers
-  /// @param header1 A block header submitted by the validator
-  /// @param header2 Another block header submitted by the validator with same height and parent
+/* @product Slash the validator because of double sign
+   @param header1 A block header submitted by the validator
+   @param header2 Another block header submitted by the validator with same height and parent
+
+  @logic
+    1. This method is aimed called by external verifiers, but no verifications are done on 
+       that it receives header1 and header2 parameters, and a start verifies that:
+          a. the headers refer to to distinct blocks i.e. 'double sign'
+          b. that the validators inside each header are identical and legal validators
+    2. it then continues to apply a felony on the validator using the global felonyDeposit value
+       and to pass the global rewardForReportDoubleSign value to the caller of this method
+    3. Note that if the current SystemReward's balance is less than the reward amount than the 
+      latter will be slashed to the balance value with no reverting
+    4. Note2 that nowhere is a check made to verify that the method caller is himself not the 
+       'bad' validator
+*/
   function doubleSignSlash(bytes calldata header1, bytes calldata header2) external onlyInit {
     RLPDecode.RLPItem[] memory items1 = header1.toRLPItem().toList();
     RLPDecode.RLPItem[] memory items2 = header2.toRLPItem().toList();

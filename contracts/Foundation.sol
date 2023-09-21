@@ -15,9 +15,13 @@ contract Foundation is System {
     }
   }
 
-  /// Send funds to a specific address with specific amount
-  /// @param payee The address to send funds to
-  /// @param amount The amount of funds to send
+/* @product Invoked by he theGovHub to send a specific amount of funds to an address
+   @param payee The address to send funds to
+   @param amount The amount of funds to send
+   @logic
+        1. No validations are made to make sure the contract's balance is sufficient
+        2. On failure to transfer funds, a fundFailed() event is emitted but the Tx is not reverted
+*/
   function fund(address payable payee, uint256 amount) external onlyGov {
     require(payee != address(0), "payee address should not be zero");
     bool ret = payee.send(amount);

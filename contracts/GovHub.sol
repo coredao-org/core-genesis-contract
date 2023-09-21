@@ -89,6 +89,11 @@ contract GovHub is System, IParamSubscriber {
     _;
   }
 
+  modifier onlyIfActiveProposal(uint256 proposalId) {
+    require(getState(proposalId) == ProposalState.Active, "voting is closed");
+    _;
+  }
+
   function init() external onlyNotInit {
     proposalMaxOperations = PROPOSAL_MAX_OPERATIONS;
     votingPeriod = VOTING_PERIOD;
@@ -103,13 +108,21 @@ contract GovHub is System, IParamSubscriber {
     alreadyInit = true;
   }
 
-  /// Make a new proposal
-  /// @param targets List of addresses to interact with
-  /// @param values List of values (CORE amount) to send
-  /// @param signatures List of signatures
-  /// @param calldatas List of calldata
-  /// @param description Description of the proposal
-  /// @return The proposal id
+  /* @product Invoked by a member to Create a new proposal
+     @param targets List of addresses to interact with
+     @param values List of values (CORE amount) to send
+     @param signatures List of signatures
+     @param calldatas List of calldata
+     @param description Description of the proposal
+     @return The proposal id
+     @logic
+        1. the targets, values, signatures and calldatas arrays are verified to be of the 
+           same (positive) length but no larger than proposalMaxOperations
+        2. 'one live proposal per proposer' rule:  if a prior proposal by the same proposer 
+           is still active or pending, the proposal is rejected
+        3. Else a proposal record is created with the supplied params with the msg.sender 
+           as the proposer
+  */
   function propose(
     address[] memory targets,
     uint256[] memory values,
@@ -174,11 +187,16 @@ contract GovHub is System, IParamSubscriber {
     return proposalId;
   }
 
-  /// Cast vote on a proposal
-  /// @param proposalId The proposal Id
-  /// @param support Support or not
-  function castVote(uint256 proposalId, bool support) public onlyInit onlyMember {
-    require(getState(proposalId) == ProposalState.Active, "voting is closed");
+/* @product Cast vote on a proposal
+   @param proposalId The proposal Id
+   @param support True if the voter supports the proposal
+   @return The receipt of the vote
+   @logic
+      1. the receipt is stored in the proposal struct, so it is not returned
+      2. the receipt is stored in the proposal struct, so it is not returned
+*/
+  function castVote(uint256 proposalId, bool support) 
+        public onlyInit onlyMember onlyIfActiveProposal(proposalId) {
     Proposal storage proposal = proposals[proposalId];
     Receipt storage receipt = proposal.receipts[msg.sender];
     require(!receipt.hasVoted, "voter already voted");
@@ -228,9 +246,28 @@ contract GovHub is System, IParamSubscriber {
     emit ProposalExecuted(proposalId);
   }
 
-  /// Check the proposal state
-  /// @param proposalId The proposal Id
-  /// @return The state of the proposal
+/* @product Obtains the current state of a proposal 
+   @param proposalId The proposal Id
+   @return The state of the proposal
+   @logic: proposal lifecycle state traversal  
+      1. starts off as pending  and continues to be pending until the startBlock+1 is reached
+         when pending no voting may take place
+      2. moved from pending to active when poroposal's startBlock+1 is reached and as long as 
+         proposal's endBlock+1 is not reached voting may take place only when active
+      3. at any points during states Pending or Active, the proposal can be cancelled 
+         by the proposer effectively marking it as unoperable
+   
+   =>AFTER active time:
+
+      4. if proposal.forVotes <= proposal.againstVotes OR proposal.forVotes <= proposal.totalVotes / 2
+         proposal is marked as defeated,
+      5. if not defeated AND if block.number <= proposal's endBlock + executingPeriod
+         proposal is marked as succeeded
+      6. if not defeated AND if block.number > proposal's endBlock + executingPeriod
+         proposal is marked as expired
+      7. when the proposal is marked succeeded, it is alledged for execution WITH NO NEED FOR ADDITIONAL WAIT TIME (aka Time-Lock)
+         on successful execution it will be marked as executed
+*/
   function getState(uint256 proposalId) public view returns (ProposalState) {
     require(proposalCount >= proposalId && proposalId != 0, "state: invalid proposal id");
     Proposal storage proposal = proposals[proposalId];

@@ -86,10 +86,21 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     return currentValidatorSetMap[addr] != 0;
   }
 
-  /// Add block reward on a validator 
-  /// @dev This method is called by the golang consensus engine every block
-  /// @param valAddr The validator address
-  function deposit(address valAddr) external payable onlyCoinbase onlyInit onlyZeroGasPrice {
+/* @product Called by the current block producer to Add block reward to a validator
+   @logic
+      1. The caller passes with this call eth value that is not tested for min/max caps
+      2. If the current block number is a multiplier of SUBSIDY_REDUCE_INTERVAL (=10512000) 
+         the blockReward is reduced - from this operation henceforth - by a factor of 0.9639
+      3. if the validator address is valid, the validator's income is increased by a value 
+         calculated as follows:
+            a. start with the eth value passed by the block producer with the call
+            b. if the ValidatorSet balance balance (not including current transfer) is equal 
+               or larger than the global totalInCome + blockReward then add blockReward eth 
+               to the value
+      4. ..And the global totalInCome value is increased by the same value
+      5. Else - a deprecatedDeposit() event is emitted
+*/
+    function deposit(address valAddr) external payable onlyCoinbase onlyInit onlyZeroGasPrice {
     if (block.number % SUBSIDY_REDUCE_INTERVAL == 0) {
       blockReward = blockReward * REDUCE_FACTOR / 10000;
     }
@@ -108,9 +119,27 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
   }
 
-  /// Distribute rewards to validators (and delegators through PledgeAgent)
-  /// @dev this method is called by the CandidateHub contract at the beginning of turn round
-  /// @dev this is where we deal with reward distribution logics
+/* @product Called by the CandidateHub contract at the beginning of turn round to Distribute 
+    rewards to all validators (and delegators through PledgeAgent)
+   
+   @logic
+      1. all validators are iterated and for each an incentive value value is calculated 
+         to be one percent of the sum of the current validator income plus a global 
+         blockRewardIncentivePercent value
+      2. Each validator's income gets reduce by the validator's incentive values
+      3. The sum of all validator's incentive values is stored as incentiveSum
+      4. After that the SystemReward's 'receiveRewards function is invoked with eht value 
+         set to incentiveSum, read its doc for the details of its action
+      5. Once done, the validators are iterated over again and, for each validator:
+         if the validator's fee is positive that the validator reward is sent to the validator's 
+         fee address, after which the validator's income is zeroed the validator reward is 
+         calculated as a single promile (1/1000) of the validator's income times the 
+         validator's commissionThousandths value The rewardSum of all validators is set 
+         to be the sum of all validator's (income - reward) values
+      6. After that, the PledgeAgent contract addRoundReward() function is invoked with eth value set 
+         to rewardSum and with operateAddressList and rewardList as params. Read its documentation for details.
+      7. Finally the global totalInCome value is set to zero
+*/
   function distributeReward() external override onlyCandidate returns (address[] memory operateAddressList) {
     address payable feeAddress;
     uint256 validatorReward;

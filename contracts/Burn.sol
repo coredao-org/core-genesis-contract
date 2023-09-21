@@ -22,9 +22,16 @@ contract Burn is System, IBurn, IParamSubscriber {
   event burned(address indexed to, uint256 amount);
   event paramChange(string key, bytes value);
 
-  /// Burn incoming CORE tokens
-  /// Send back the portion which exceeds the cap
-  function burn() external payable override {
+  /* @product Burn incoming CORE tokens by locking them inside the 'gated' contract
+     Can be called by anyone, and is currently called by the SystemReward contract as 
+     part of its receiveRewards flow.
+     @logic
+        1. if the total contract balance (i.e. the sum of all burned tokens) exceeds 
+           the global burnCap then the excess (up to the limit of the current sum of 
+           tokens to burn) is returned back to the caller
+        2. The rest of the funsd remain locked in the contract.
+  */        
+  function burn() external payable override openForAll {
     uint256 v = msg.value;
     if (address(this).balance > burnCap) {
       uint256 remain = address(this).balance - burnCap;

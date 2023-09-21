@@ -69,6 +69,13 @@ contract System {
     _;
   }
 
+  modifier onlyIfPositiveValue() {
+    require(msg.value > 0, "value should not be zero"); 
+    _;
+  }
+
+  modifier openForAll() {_;}
+
   /// The length of param mismatch. Default is 32 bytes.
   /// @param name the name of param.
   error MismatchParamLength(string name);
