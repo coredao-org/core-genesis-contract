@@ -89,6 +89,11 @@ contract GovHub is System, IParamSubscriber {
     _;
   }
 
+  modifier onlyIfMember(address member) {
+    require(members[member] != 0, "member does not exist");
+    _;
+  }
+
   modifier onlyIfActiveProposal(uint256 proposalId) {
     require(getState(proposalId) == ProposalState.Active, "voting is closed");
     _;
@@ -104,6 +109,7 @@ contract GovHub is System, IParamSubscriber {
     require(getState(proposalId) == ProposalState.Succeeded, "proposal is not in successful state");
     _;
   }
+
 
   function init() external onlyNotInit {
     proposalMaxOperations = PROPOSAL_MAX_OPERATIONS;
@@ -313,10 +319,9 @@ contract GovHub is System, IParamSubscriber {
 
   /// Remove a member
   /// @param member The address of the member to remove
-  function removeMember(address member) external onlyInit onlyGov {
+  function removeMember(address member) external onlyInit onlyGov onlyIfMember(member) {
     require(memberSet.length > 5, "at least five members in DAO");
     uint256 index = members[member];
-    require(index != 0, "member does not exist");
     if (index != memberSet.length) {
       address addr = memberSet[memberSet.length - 1];
       memberSet[index - 1] = addr;

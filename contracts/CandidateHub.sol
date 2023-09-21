@@ -138,8 +138,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
           a. set the release round of the candidate to be the current round plus the 
              'round' parameter (if the candidate has prior jail period - add to it 
              the current 'round' parameter)
-          b. slash the fine value from the candidate's margin
-          c. and pass the fine eth sum to the SystemReward contarct
+          b. subtract the fine value from the candidate's margin
+          c. and transfer the fine value to the SystemReward contarct
 
       2. Else:
           a. remove the candidate from internal structures, and
