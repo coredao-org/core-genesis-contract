@@ -105,9 +105,17 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     alreadyInit = true;
   }
 
-  /// Store a BTC block in Core blockchain
-  /// @dev This method is called by relayers
-  /// @param blockBytes BTC block bytes
+/* @product Called by a BTC relayer to store a BTC block on the Core blockchain
+   @param blockBytes BTC block bytes
+   @logic
+      1. Extracts the header bytes from the blockBytes
+      2. Calculates the blockHash from the header bytes
+      3. Check PoW of a relayed BTC block and exit function (but do not revert) if PoW is invalid
+      4. Verify that the block is no older than 5 days ago and revert if that is not the case. The calculation:
+          blockHeight + 720 > getHeight(heaviestBlock)
+      5. Verify MerkleRoot & pickup candidate address, reward address and bindingHash.
+      6. Save & update rewards
+*/
   function storeBlockHeader(bytes calldata blockBytes) external onlyRelayer {
     bytes memory headerBytes = slice(blockBytes, 0, 80);
     bytes32 blockHash = doubleShaFlip(headerBytes);
@@ -196,9 +204,16 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     }
   }
 
-  /// Claim relayer rewards
-  /// @param relayerAddr The relayer address
-  function claimRelayerReward(address relayerAddr) external onlyInit {
+  /* @product Claim relayer rewards
+     @param relayerAddr The relayer address
+     @logic Called by relayers to claim their rewards for storing BTC blocks
+      - Reverts if the provided address is not of a relayer or if the relayer currently has no reward to claim
+      - Else:  invokes SystemReward's claimRewards() to transfer the reward to the relayer.
+     Note that claimReward() may slash the reward to the current SystemReward balance if the latter is smaller than the reward without revertingthe Tx
+     Note2: this function may be called by any party (not only a relayer) with a relayer address to which the funds will be transferred
+     this might prove problematic for relayers that prefer to choose their own dates of reward reclaiming
+  */
+  function claimRelayerReward(address relayerAddr) external onlyInit openForAll {
      uint256 reward = relayerRewardVault[relayerAddr];
      require(reward != 0, "no relayer reward");
      relayerRewardVault[relayerAddr] = 0;
@@ -242,9 +257,15 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     return callerReward;
   }
 
-  /// Calculate relayer weight based number of BTC blocks relayed
-  /// @param count The number of BTC blocks relayed by a specific validator
-  /// @return The relayer weight
+  /* @product Calculate relayer weight based number of BTC blocks relayed
+     @param count The number of BTC blocks relayed by a specific validator
+
+     @logic Weight calculation  (maxWeight default value = 20):
+          1. if count <= maxWeight (default: 20) => return count
+          2. else if count in half-open interval (maxWeight, 2*maxWeight] => return maxWeight
+          3. else if count in half-open interval (2*maxWeight, 2.75*maxWeight] => return 3*maxWeight - count
+          4. else return count/4
+   */
   function calculateRelayerWeight(uint256 count) public view returns(uint256) {
     if (count <= maxWeight) {
       return count;

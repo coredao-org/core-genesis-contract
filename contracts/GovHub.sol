@@ -94,6 +94,17 @@ contract GovHub is System, IParamSubscriber {
     _;
   }
 
+  modifier onlyIfProposer(uint256 proposalId) {
+    Proposal storage proposal = proposals[proposalId];
+    require(msg.sender == proposal.proposer, "not the proposer");
+    _;
+  }
+
+  modifier onlyIfSuccessfulProposal(uint256 proposalId) {
+    require(getState(proposalId) == ProposalState.Succeeded, "proposal is not in successful state");
+    _;
+  }
+
   function init() external onlyNotInit {
     proposalMaxOperations = PROPOSAL_MAX_OPERATIONS;
     votingPeriod = VOTING_PERIOD;
@@ -213,21 +224,18 @@ contract GovHub is System, IParamSubscriber {
 
   /// Cancel the proposal, can only be done by the proposer
   /// @param proposalId The proposal Id
-  function cancel(uint256 proposalId) public onlyInit {
+  function cancel(uint256 proposalId) public onlyInit onlyIfProposer(proposalId){
     ProposalState state = getState(proposalId);
     require(state == ProposalState.Pending || state == ProposalState.Active, "cannot cancel finished proposal");
 
     Proposal storage proposal = proposals[proposalId];
-    require(msg.sender == proposal.proposer, "only cancel by proposer");
-
     proposal.canceled = true;
     emit ProposalCanceled(proposalId);
   }
 
   /// Execute the proposal
   /// @param proposalId The proposal Id
-  function execute(uint256 proposalId) public payable onlyInit {
-    require(getState(proposalId) == ProposalState.Succeeded, "proposal can only be executed if it is succeeded");
+  function execute(uint256 proposalId) public payable onlyInit onlyIfSuccessfulProposal(proposalId){
     Proposal storage proposal = proposals[proposalId];
     proposal.executed = true;
     uint256 targetSize = proposal.targets.length;

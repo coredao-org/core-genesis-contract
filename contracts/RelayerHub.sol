@@ -59,7 +59,12 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     emit relayerRegister(msg.sender);
   }
 
-  /// Unregister the BTC relayer role on Core blockchain
+/* @product Called by a BTC relayer to unregister from the Core blockchain
+   @logic
+      1. Remove the relayer from internal structures
+      2. Transfer (relayer.deposit - relayer.dues) eth to the relayer
+      3. Transfer the relayer.dues eth to the SystemReward contract
+ */
   function  unregister() external exist onlyInit{
     Relayer memory r = relayers[msg.sender];
     delete relayersExistMap[msg.sender];

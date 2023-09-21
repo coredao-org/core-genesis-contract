@@ -64,6 +64,11 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   event validatorFelony(address indexed validator, uint256 amount);
   event paramChange(string key, bytes value);
 
+  modifier onlyIfCurrentValidator(address validator) {
+    require(currentValidatorSetMap[validator] > 0, "not a current validator");
+    _;
+  }
+
   /*********************** init **************************/
   function init() external onlyNotInit {
     (Validator[] memory validatorSet, bool valid) = decodeValidatorSet(INIT_VALIDATORSET_BYTES);
@@ -185,11 +190,19 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     return operateAddressList;
   } 
 
-  /// Update validator set of the new round with elected validators 
-  /// @param operateAddrList List of validator operator addresses
-  /// @param consensusAddrList List of validator consensus addresses
-  /// @param feeAddrList List of validator fee addresses
-  /// @param commissionThousandthsList List of validator commission fees in thousandth
+/* @product Called by the CandidateHub contract as part of the turn round flow to Update validator 
+       set of the new round with elected validators
+   @param operateAddrList: List of validator operator addresses
+   @param consensusAddrList: List of validator consensus addresses
+   @param feeAddrList: List of validator fee addresses
+   @param commissionThousandthsList: List of validator commission fees in promils (=thousandth)
+
+   @logic
+      1. The function validates that all list parameters are of the same length and that
+         each element commissionThousandthsList if less than 1000
+      2. It then replaces the current validators with the newly passed ones, each validator containing
+         an operate address, a consensus addrress, a fee address and a commissionThousandths count
+*/
   function updateValidatorSet(
     address[] calldata operateAddrList,
     address[] calldata consensusAddrList,
@@ -277,15 +290,24 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
   }
 
-  /// Slash the validator for felony behaviors
-  /// @param validator The validator to slash
-  /// @param felonyRound The number of rounds to jail
-  /// @param felonyDeposit The amount of deposits to slash
-  function felony(address validator, uint256 felonyRound, uint256 felonyDeposit) external override onlySlash {
+/* @product Called by the Slash contract (only) to Slash the validator for felony behaviors
+   @param validator The validator to slash
+   @param felonyRound The number of rounds to jail the validator
+   @param felonyDeposit The amount of deposits to slash
+
+   @logic
+        1. If the 'bad' validator is the only validator then he will not be jailed, but 
+           its income will be zeroed
+        2. Else the validator will be removed from the current.validators list
+        3. And a sum equal to the 'bad' validator income qill be equaly divided between the 
+           rest of the validators WITHOUT clearing of the 'bad' validator's income!
+        4. Finally the CandidateHub;s jailValidator() function will be invoked to place the 
+           validator in jail for felonyRound and slash some amount of deposits. Read its 
+           documentation for more details.
+*/
+  function felony(address validator, uint256 felonyRound, uint256 felonyDeposit) 
+          external override onlySlash onlyIfCurrentValidator(validator) {
     uint256 index = currentValidatorSetMap[validator];
-    if (index == 0) {
-      return;
-    }
     // the actually index
     index = index - 1;
     uint256 income = currentValidatorSet[index].income;

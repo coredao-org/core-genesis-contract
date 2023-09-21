@@ -75,6 +75,26 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     _;
   }
 
+  modifier onlyIfCandidate(address operateAddress) {
+    require(operateMap[operateAddress] > 0, "not a candidate");
+    _;
+  }
+
+  modifier onlyIfConsensusAddrNotExist(address consensusAddr) {
+    require(consensusMap[consensusAddr] == 0, "consensus already exists");
+    _;
+  }
+
+  modifier onlyIfNotCandidate() {
+    require(operateMap[msg.sender] == 0, "candidate already exists");
+    _;
+  }
+
+  modifier onlyIfValueExceedsMargin() {
+    require(msg.value >= requiredMargin, "deposit is not enough");
+    _;
+  }
+
   /*********************** events **************************/
   event registered(address indexed operateAddr, address indexed consensusAddr, address indexed feeAddress, uint256 commissionThousandths, uint256 margin);
   event unregistered(address indexed operateAddr, address indexed consensusAddr);
@@ -125,10 +145,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
           a. remove the candidate from internal structures, and
           b. transfer the candidate's margin eth value to the SystemReward contract
   */    
-  function jailValidator(address operateAddress, uint256 round, uint256 fine) external override onlyValidator {
+  function jailValidator(address operateAddress, uint256 round, uint256 fine) 
+          external override onlyValidator onlyIfCandidate(operateAddress) {
     uint256 index = operateMap[operateAddress];
-    if (index == 0) return;
-
     Candidate storage c = candidateSet[index - 1];
     uint256 margin = c.margin;
     if (margin >= dues && margin - dues >= fine) {
@@ -288,13 +307,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
  */
   function register(address consensusAddr, address payable feeAddr, uint32 commissionThousandths)
     external payable
-    onlyInit
+    onlyInit onlyIfNotCandidate onlyIfValueExceedsMargin onlyIfConsensusAddrNotExist(consensusAddr)
   {
-    require(candidateSet.length <= CANDIDATE_COUNT_LIMIT, "maximum candidate size reached");
-    require(operateMap[msg.sender] == 0, "candidate already exists");
-    require(msg.value >= requiredMargin, "deposit is not enough");
+    require(candidateSet.length <= CANDIDATE_COUNT_LIMIT, "maximum candidate size reached");    
     require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should be in (0, 1000)");
-    require(consensusMap[consensusAddr] == 0, "consensus already exists");
     require(consensusAddr != address(0), "consensus address should not be zero");
     require(feeAddr != address(0), "fee address should not be zero");
     // check jail status
@@ -310,7 +326,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   /* @product Unregister the validator candidate role on Core blockchain
-   @logic
+     @logic
       1. if candidate margin exceeds global dues value - transfer the difference to the 
          candidate and the dues value to the system reward contract
       2. if candidate margin does not exceed global dues value - only transfer the margin 
@@ -383,10 +399,14 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     changeStatus(c, status);
   }
 
-  /// Add refundable deposits
-  /// @dev Candidate will not be elected if there are not enough deposits
-  function addMargin() external payable onlyInit exist {
-    require(msg.value != 0, "value should not be zero");
+/* @product Called by a candidate to add refundable deposits
+   Motivation: Candidate will not be elected if there are not enough deposits 
+   @logic
+      1. Tx eth value can be any non zero value will be appended to candidate's margin value
+      2. If the new candidate's margin value exceeds or is equal to the global requiredMargin 
+         value - the candidate will be promoted to be a validator
+*/
+  function addMargin() external payable onlyInit exist onlyIfPositiveValue {
     uint256 index = operateMap[msg.sender];
     uint256 totalMargin = candidateSet[index - 1].margin + msg.value;
     candidateSet[index - 1].margin = totalMargin;
@@ -408,6 +428,12 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     }
   }
 
+/* @product Implementation function for candidate removal
+   @logic
+      1. called by other CandidateHub functions in the flows of jailing orunregistering
+      2. Operation: candidate gets removed from contract internal structures
+      3. No eth transfer takes place as part ofthis function
+*/
   function removeCandidate(uint256 index) internal {
     Candidate storage c = candidateSet[index - 1];
 
