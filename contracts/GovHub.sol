@@ -209,8 +209,11 @@ contract GovHub is System, IParamSubscriber {
    @param support True if the voter supports the proposal
    @return The receipt of the vote
    @logic
-      1. the receipt is stored in the proposal struct, so it is not returned
-      2. the receipt is stored in the proposal struct, so it is not returned
+      1. the Tx sender is verified to be a registered member else the Tx reverts
+      2. the proposal is verified to be in an Active state else the Tx reverts
+      3. the sender's vote is verified to be not casted yet else the Tx reverts
+      4. the sender's vote is executed by incrementing the proposal's for or against counters
+      5. the sender is marked as having voted
 */
   function castVote(uint256 proposalId, bool support) 
         public onlyInit onlyMember onlyIfActiveProposal(proposalId) {
