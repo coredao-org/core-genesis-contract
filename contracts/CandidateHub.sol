@@ -75,7 +75,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     _;
   }
 
-  modifier onlyIfCandidate(address operateAddress) {
+  modifier onlyIfCandidateAddress(address operateAddress) {
     require(operateMap[operateAddress] > 0, "not a candidate");
     _;
   }
@@ -146,7 +146,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
           b. transfer the candidate's margin eth value to the SystemReward contract
   */    
   function jailValidator(address operateAddress, uint256 round, uint256 fine) 
-          external override onlyValidator onlyIfCandidate(operateAddress) {
+          external override onlyValidator onlyIfCandidateAddress(operateAddress) {
     uint256 index = operateMap[operateAddress];
     Candidate storage c = candidateSet[index - 1];
     uint256 margin = c.margin;
