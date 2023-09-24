@@ -291,7 +291,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
 
     if (undelegateCoinReward != 0) {
-      // ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: undelegateCoinReward }(); 
       s_registry.systemReward().receiveRewards{ value: undelegateCoinReward }();
     }
   }
@@ -300,7 +299,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Delegate coin to a validator
   /// @param agent The operator address of validator
   function delegateCoin(address agent) external payable {
-    // if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(agent)) {
     if (!s_registry.candidateHub().canDelegate(agent)) {
       revert InactiveAgent(agent);
     }
@@ -320,7 +318,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param sourceAgent The validator to transfer coin stake from
   /// @param targetAgent The validator to transfer coin stake to
   function transferCoin(address sourceAgent, address targetAgent) external {
-    // if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetAgent)) { 
     if (!s_registry.candidateHub().canDelegate(targetAgent)) {
       revert InactiveAgent(targetAgent);
     }

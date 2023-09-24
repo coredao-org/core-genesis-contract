@@ -156,7 +156,6 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       incentiveSum += incentiveValue;
       v.income -= incentiveValue;
     }
-    // ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: incentiveSum }(); 
     s_registry.systemReward().receiveRewards{ value: incentiveSum }();
 
     operateAddressList = new address[](validatorSize);
@@ -185,7 +184,6 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       }
     }
 
-    // IPledgeAgent(PLEDGE_AGENT_ADDR).addRoundReward{ value: rewardSum }(operateAddressList, rewardList); 
     s_registry.pledgeAgent().addRoundReward{ value: rewardSum }(operateAddressList, rewardList);
     totalInCome = 0;
     return operateAddressList;
@@ -334,7 +332,6 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
         currentValidatorSet[i].income += averageDistribute;
       }
     }
-    // ICandidateHub(CANDIDATE_HUB_ADDR).jailValidator(operateAddress, felonyRound, felonyDeposit); 
     s_registry.candidateHub().jailValidator(operateAddress, felonyRound, felonyDeposit);
   }
 

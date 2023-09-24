@@ -71,7 +71,6 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     delete relayersExistMap[msg.sender];
     delete relayers[msg.sender];
     payable(msg.sender).transfer(r.deposit - r.dues);
-    // payable(SYSTEM_REWARD_ADDR).transfer(r.dues); 
     s_registry.systemRewardPayable().transfer(r.dues);
     emit relayerUnRegister(msg.sender);
   }

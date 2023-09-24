@@ -61,10 +61,8 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     if (address(this).balance > incentiveBalanceCap) {
       uint256 value = address(this).balance - incentiveBalanceCap;
       if (isBurn) {
-        // IBurn(BURN_ADDR).burn{ value: value }(); 
         s_registry.burnContract().burn{ value: value }();
       } else {
-        // payable(FOUNDATION_ADDR).transfer(value); 
         s_registry.foundationPayable().transfer(value);
       }
     }

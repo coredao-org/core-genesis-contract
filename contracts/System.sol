@@ -24,31 +24,26 @@ abstract contract System is Registry, ContractAddresses {
   }
 
   modifier onlySlash() {
-    // require(msg.sender == SLASH_CONTRACT_ADDR, "the msg sender must be slash contract"); 
     require(msg.sender == address(s_registry.slashIndicator()), "the msg sender must be slash contract");
     _;
   }
 
   modifier onlyGov() {
-    // require(msg.sender == GOV_HUB_ADDR, "the msg sender must be governance contract"); 
     require(msg.sender == s_registry.govHubAddr(), "the msg sender must be governance contract");
     _;
   }
 
   modifier onlyCandidate() {
-    // require(msg.sender == CANDIDATE_HUB_ADDR, "the msg sender must be candidate contract"); 
     require(msg.sender == address(s_registry.candidateHub()), "the msg sender must be candidate contract");
     _;
   }
 
   modifier onlyValidator() {
-    // require(msg.sender == VALIDATOR_CONTRACT_ADDR, "the msg sender must be validatorSet contract"); 
     require(msg.sender == address(s_registry.validatorSet()), "the msg sender must be validatorSet contract");
     _;
   }
 
   modifier onlyRelayer() {
-    // require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender), "the msg sender is not a relayer"); 
     require(s_registry.relayerHub().isRelayer(msg.sender), "the msg sender is not a relayer");
     _;
   }

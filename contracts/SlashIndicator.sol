@@ -82,7 +82,6 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
          method for the validator
 */
   function slash(address validator) external onlyCoinbase oncePerBlock onlyZeroGasPrice{
-    // if (!IValidatorSet(VALIDATOR_CONTRACT_ADDR).isValidator(validator)) { 
     if (!s_registry.validatorSet().isValidator(validator)) {
       return;
     }
@@ -97,10 +96,8 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     indicator.height = block.number;
     if (indicator.count % felonyThreshold == 0) {
       indicator.count = 0;
-      // IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(validator, felonyRound, felonyDeposit); 
       s_registry.validatorSet().felony(validator, felonyRound, felonyDeposit);
     } else if (indicator.count % misdemeanorThreshold == 0) {
-      // IValidatorSet(VALIDATOR_CONTRACT_ADDR).misdemeanor(validator); 
       s_registry.validatorSet().misdemeanor(validator);
     }
     indicators[validator] = indicator;
@@ -134,11 +131,8 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     require(sigHash1 != sigHash2, "must be two different blocks");
     require(validator1 != address(0x00), "validator is illegal");
     require(validator1 == validator2, "must be the same validator");
-    // require(IValidatorSet(VALIDATOR_CONTRACT_ADDR).isValidator(validator1), "not a validator"); 
     require(s_registry.validatorSet().isValidator(validator1), "not a validator");
-    // IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(validator1, INFINITY_ROUND, felonyDeposit); 
     s_registry.validatorSet().felony(validator1, INFINITY_ROUND, felonyDeposit);
-    // ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(msg.sender), rewardForReportDoubleSign); 
     s_registry.systemReward().claimRewards(payable(msg.sender), rewardForReportDoubleSign);
   }
 
