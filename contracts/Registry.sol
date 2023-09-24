@@ -48,7 +48,6 @@ contract Registry is ImmutableOwner, SetOnce {
         s_burn = _burn;
         s_govHubAddr = _govHubAddr;
         s_foundationAddr = _foundationAddr;
-        markAsSet(); // avoid double-setting            
     }
 
     function validatorSet() external view returns(IValidatorSet) {

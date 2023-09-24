@@ -4,6 +4,7 @@ pragma solidity 0.8.4;
 import "forge-std/Script.sol";
 
 import {IBurn} from "../contracts/interface/IBurn.sol";
+import {ContractAddresses} from "../contracts/ContractAddresses.sol";
 import {ICandidateHub} from "../contracts/interface/ICandidateHub.sol";
 import {ILightClient} from "../contracts/interface/ILightClient.sol";
 import {IPledgeAgent} from "../contracts/interface/IPledgeAgent.sol";
@@ -25,20 +26,10 @@ import {SystemReward} from "../contracts/SystemReward.sol";
 import {ValidatorSet} from "../contracts/ValidatorSet.sol";
 
 
-contract Deployer is Script {
+contract Deployer is Script, ContractAddresses {
 
     uint public constant ANVIL_CHAINID = 31337;
-    
-    address public constant VALIDATOR_CONTRACT_ADDR = 0x0000000000000000000000000000000000001000;
-    address public constant SLASH_CONTRACT_ADDR = 0x0000000000000000000000000000000000001001;
-    address public constant SYSTEM_REWARD_ADDR = 0x0000000000000000000000000000000000001002;
-    address public constant LIGHT_CLIENT_ADDR = 0x0000000000000000000000000000000000001003;
-    address public constant RELAYER_HUB_ADDR = 0x0000000000000000000000000000000000001004;
-    address public constant CANDIDATE_HUB_ADDR = 0x0000000000000000000000000000000000001005;
-    address public constant GOV_HUB_ADDR = 0x0000000000000000000000000000000000001006;
-    address public constant PLEDGE_AGENT_ADDR = 0x0000000000000000000000000000000000001007;
-    address public constant BURN_ADDR = 0x0000000000000000000000000000000000001008;
-    address public constant FOUNDATION_ADDR = 0x0000000000000000000000000000000000001009;
+    uint public constant GANACHE_CHAINID = 1337;
 
     IBurn private burn;
     IBtcLightClient private lightClient;
@@ -54,9 +45,9 @@ contract Deployer is Script {
     function run() external {
 	    // vm.startBroadcast(); // everything in this block sent via rpc to blockchain
 
-        Registry registry = new Registry();
+        console.log("Deploying contracts to chainid: %d", block.chainid);
 
-        if (block.chainid == ANVIL_CHAINID) {
+        if (block.chainid == ANVIL_CHAINID || block.chainid == GANACHE_CHAINID) {
             deployToLocalTestnet(registry);
         } else {
             connectToPredeployedContracts();
