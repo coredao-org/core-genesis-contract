@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
+
 import "./System.sol";
+import "./Registry.sol";
 import "./interface/IParamSubscriber.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
@@ -11,11 +13,9 @@ contract Burn is System, IBurn, IParamSubscriber {
   uint256 public constant BURN_CAP = 105e25;
 
   uint256 public burnCap;
-
-  /*********************** init **************************/
-  function init() external onlyNotInit {
+ 
+  constructor(Registry registry) System(registry) {
     burnCap = BURN_CAP;
-    alreadyInit = true;
   }
 
   /*********************** events **************************/
@@ -50,7 +50,7 @@ contract Burn is System, IBurn, IParamSubscriber {
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov {
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }

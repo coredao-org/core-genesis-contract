@@ -18,6 +18,7 @@ abi/Ownable.abi
 abi/RLP*.abi
 abi/SafeMath.abi
 abi/System.abi
+forge-cache/solidity-files-cache.json
 
 # test
 .pytest_cache

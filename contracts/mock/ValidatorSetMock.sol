@@ -1,7 +1,11 @@
 pragma solidity 0.8.4;
 import "../ValidatorSet.sol";
+import "../Registry.sol";
 
 contract ValidatorSetMock is ValidatorSet {
+
+    constructor(Registry registry) ValidatorSet(registry) {}
+
     receive() external payable{}
 
     function developmentInit() external {
@@ -27,7 +31,7 @@ contract ValidatorSetMock is ValidatorSet {
     }
 
     function updateSubsidyReduceInterval(uint256 _internal) external {
-        SUBSIDY_REDUCE_INTERVAL = _internal;
+        // SUBSIDY_REDUCE_INTERVAL = _internal; zzzzz cannot set constant
     }
 
     function addRoundRewardMock(address[] memory agentList, uint256[] memory rewardList)

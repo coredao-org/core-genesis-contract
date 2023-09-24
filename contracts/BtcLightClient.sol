@@ -7,6 +7,7 @@ import "./interface/ILightClient.sol";
 import "./interface/ISystemReward.sol";
 import "./interface/IParamSubscriber.sol";
 import "./System.sol";
+import "./Registry.sol";
 
 /// This contract implements a BTC light client on Core blockchain
 /// Relayers store BTC blocks to Core blockchain by calling this contract
@@ -80,9 +81,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   event StoreHeader(bytes32 indexed blockHash, address candidate, address indexed rewardAddr, uint32 indexed height, bytes32 bindingHash);
   event paramChange(string key, bytes value);
 
-  /*********************** init **************************/
-  /// Initialize 
-  function init() external onlyNotInit {
+  constructor(Registry registry) System(registry) {
     bytes32 blockHash = doubleShaFlip(INIT_CONSENSUS_STATE_BYTES);
     address rewardAddr;
     address candidateAddr;
@@ -102,7 +101,6 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     roundSize = ROUND_SIZE;
     maxWeight = MAXIMUM_WEIGHT;
     roundInterval = INIT_ROUND_INTERVAL;
-    alreadyInit = true;
   }
 
 /* @product Called by a BTC relayer to store a BTC block on the Core blockchain
@@ -213,12 +211,13 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
      Note2: this function may be called by any party (not only a relayer) with a relayer address to which the funds will be transferred
      this might prove problematic for relayers that prefer to choose their own dates of reward reclaiming
   */
-  function claimRelayerReward(address relayerAddr) external onlyInit openForAll {
+  function claimRelayerReward(address relayerAddr) external openForAll {
      uint256 reward = relayerRewardVault[relayerAddr];
      require(reward != 0, "no relayer reward");
      relayerRewardVault[relayerAddr] = 0;
      address payable recipient = payable(relayerAddr);
-     ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(recipient, reward);
+    //  ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(recipient, reward);
+     s_registry.systemReward().claimRewards(recipient, reward);
   }
 
   /// Distribute relayer rewards
@@ -524,7 +523,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov{
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov{
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }

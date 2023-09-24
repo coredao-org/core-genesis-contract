@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
+
 import "./System.sol";
+import "./Registry.sol";
 import "./interface/ISystemReward.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/IBurn.sol";
@@ -16,13 +18,15 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   mapping(address => bool) operators;
   bool isBurn;
 
-  /*********************** init **************************/
-  function init() external onlyNotInit {
-    operators[LIGHT_CLIENT_ADDR] = true;
-    operators[SLASH_CONTRACT_ADDR] = true;
+  constructor(Registry registry, address lightClientAddr, address slashIndicatorAddr) System(registry) {
+    assert(lightClientAddr != address(0));
+    assert(slashIndicatorAddr != address(0));
+    // operators[LIGHT_CLIENT_ADDR] = true;
+    operators[lightClientAddr] = true;
+    // operators[SLASH_CONTRACT_ADDR] = true;
+    operators[slashIndicatorAddr] = true;
     numOperator = 2;
     incentiveBalanceCap = INCENTIVE_BALANCE_CAP;
-    alreadyInit = true;
   }
 
   modifier onlyOperator() {
@@ -53,13 +57,15 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
               excess (up to the limit of the current sum of tokens to burn) is returned to the SystemReward contract
           b. if not in isBurn mode - transfer the excess to the FOUNDATION address
 */
-  function receiveRewards() external payable override onlyInit onlyIfPositiveValue {
+  function receiveRewards() external payable override onlyIfPositiveValue {
     if (address(this).balance > incentiveBalanceCap) {
       uint256 value = address(this).balance - incentiveBalanceCap;
       if (isBurn) {
-        IBurn(BURN_ADDR).burn{ value: value }();
+        // IBurn(BURN_ADDR).burn{ value: value }(); 
+        s_registry.burnContract().burn{ value: value }();
       } else {
-        payable(FOUNDATION_ADDR).transfer(value);
+        // payable(FOUNDATION_ADDR).transfer(value); 
+        s_registry.foundationPayable().transfer(value);
       }
     }
     emit receiveDeposit(msg.sender, msg.value);
@@ -77,7 +83,6 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   function claimRewards(address payable to, uint256 amount)
     external
     override(ISystemReward)
-    onlyInit
     onlyOperator
     returns (uint256)
   {
@@ -102,7 +107,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov {
     if (Memory.compareStrings(key, "incentiveBalanceCap")) {
       require(value.length == 32, "length of incentiveBalanceCap mismatch");
       uint256 newIncentiveBalanceCap = BytesToTypes.bytesToUint256(32, value);

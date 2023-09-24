@@ -1,8 +1,12 @@
 pragma solidity 0.8.4;
 
 import "../GovHub.sol";
+import "../Registry.sol";
 
 contract GovHubMock is GovHub {
+
+    constructor(Registry registry) GovHub(registry) {}
+
     function developmentInit() external {
         votingPeriod = 20;
         address[2] memory initMembers = [

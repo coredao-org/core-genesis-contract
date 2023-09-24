@@ -1,9 +1,12 @@
 pragma solidity 0.8.4;
 
 import "../PledgeAgent.sol";
+import "../Registry.sol";
 
 contract PledgeAgentMock is PledgeAgent {
     uint256 public rewardAmountM;
+
+    constructor(Registry registry) PledgeAgent(registry) {}
 
     function developmentInit() external {
         requiredCoinDeposit = requiredCoinDeposit / 1e16;

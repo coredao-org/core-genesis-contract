@@ -2,6 +2,7 @@
 pragma solidity 0.8.4;
 
 import "./System.sol";
+import "./Registry.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./interface/IParamSubscriber.sol";
@@ -69,8 +70,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     _;
   }
 
-  /*********************** init **************************/
-  function init() external onlyNotInit {
+  constructor(Registry registry) System(registry) {
     (Validator[] memory validatorSet, bool valid) = decodeValidatorSet(INIT_VALIDATORSET_BYTES);
     require(valid, "failed to parse init validatorSet");
     uint256 validatorSize = validatorSet.length;
@@ -80,7 +80,6 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
     blockReward = BLOCK_REWARD;
     blockRewardIncentivePercent = BLOCK_REWARD_INCENTIVE_PERCENT;
-    alreadyInit = true;
   }
 
   /*********************** External Functions **************************/
@@ -105,7 +104,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       4. ..And the global totalInCome value is increased by the same value
       5. Else - a deprecatedDeposit() event is emitted
 */
-    function deposit(address valAddr) external payable onlyCoinbase onlyInit onlyZeroGasPrice {
+    function deposit(address valAddr) external payable onlyCoinbase onlyZeroGasPrice {
     if (block.number % SUBSIDY_REDUCE_INTERVAL == 0) {
       blockReward = blockReward * REDUCE_FACTOR / 10000;
     }
@@ -157,7 +156,8 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       incentiveSum += incentiveValue;
       v.income -= incentiveValue;
     }
-    ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: incentiveSum }();
+    // ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: incentiveSum }(); 
+    s_registry.systemReward().receiveRewards{ value: incentiveSum }();
 
     operateAddressList = new address[](validatorSize);
     uint256[] memory rewardList = new uint256[](validatorSize);
@@ -185,7 +185,8 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       }
     }
 
-    IPledgeAgent(PLEDGE_AGENT_ADDR).addRoundReward{ value: rewardSum }(operateAddressList, rewardList);
+    // IPledgeAgent(PLEDGE_AGENT_ADDR).addRoundReward{ value: rewardSum }(operateAddressList, rewardList); 
+    s_registry.pledgeAgent().addRoundReward{ value: rewardSum }(operateAddressList, rewardList);
     totalInCome = 0;
     return operateAddressList;
   } 
@@ -333,14 +334,15 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
         currentValidatorSet[i].income += averageDistribute;
       }
     }
-    ICandidateHub(CANDIDATE_HUB_ADDR).jailValidator(operateAddress, felonyRound, felonyDeposit);
+    // ICandidateHub(CANDIDATE_HUB_ADDR).jailValidator(operateAddress, felonyRound, felonyDeposit); 
+    s_registry.candidateHub().jailValidator(operateAddress, felonyRound, felonyDeposit);
   }
 
   /*********************** Param update ********************************/
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov {
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }

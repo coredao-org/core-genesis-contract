@@ -9,6 +9,8 @@ import "./interface/IPledgeAgent.sol";
 import "./interface/ISlashIndicator.sol";
 import "./interface/ILightClient.sol";
 import "./System.sol";
+import "./Registry.sol";
+
 
 /// This contract manages all validator candidates on Core blockchain
 /// It also exposes the method `turnRound` for the consensus engine to execute the `turn round` workflow
@@ -104,15 +106,13 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   event statusChanged(address indexed operateAddr, uint256 oldStatus, uint256 newStatus);
   event paramChange(string key, bytes value);
 
-  /*********************** init **************************/
-  function init() external onlyNotInit {
+  constructor(Registry registry) System(registry) {
     requiredMargin = INIT_REQUIRED_MARGIN;
     dues = INIT_DUES;
     roundInterval = INIT_ROUND_INTERVAL;
     validatorCount = INIT_VALIDATOR_COUNT;
     maxCommissionChange = MAX_COMMISSION_CHANGE;
     roundTag = 7;
-    alreadyInit = true;
   }
   
   /********************* ICandidateHub interface ****************************/
@@ -167,12 +167,14 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       }
       changeStatus(c, status);
       if (fine != 0) {
-        payable(SYSTEM_REWARD_ADDR).transfer(fine);
+        // payable(SYSTEM_REWARD_ADDR).transfer(fine); 
+        s_registry.systemRewardPayable().transfer(fine);
       }
     } else {
       removeCandidate(index);
 
-      payable(SYSTEM_REWARD_ADDR).transfer(margin);
+      // payable(SYSTEM_REWARD_ADDR).transfer(margin); 
+      s_registry.systemRewardPayable().transfer(margin);
       emit deductedMargin(operateAddress, margin, 0);
     }
   }
@@ -198,16 +200,19 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       9. notify PledgeAgent contract on the new round and the new validators
       10. remove validators from jail if their jailedRound is <= than the new roundTag
 */
-  function turnRound() external onlyCoinbase onlyInit onlyZeroGasPrice {
+  function turnRound() external onlyCoinbase onlyZeroGasPrice {
     // distribute rewards for the about to end round
-    address[] memory lastCandidates = IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward();
+    // address[] memory lastCandidates = IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward(); 
+    address[] memory lastCandidates = s_registry.validatorSet().distributeReward();
 
     // fetch BTC miners who delegated hash power in the about to end round; 
     // and distribute rewards to them
     uint256 lastCandidateSize = lastCandidates.length;
     for (uint256 i = 0; i < lastCandidateSize; i++) {
-      address[] memory miners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(roundTag-7, lastCandidates[i]);
-      IPledgeAgent(PLEDGE_AGENT_ADDR).distributePowerReward(lastCandidates[i], miners);
+      // address[] memory miners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(roundTag-7, lastCandidates[i]); 
+      address[] memory miners = s_registry.lightClient().getRoundMiners(roundTag-7, lastCandidates[i]);
+      // IPledgeAgent(PLEDGE_AGENT_ADDR).distributePowerReward(lastCandidates[i], miners); 
+      s_registry.pledgeAgent().distributePowerReward(lastCandidates[i], miners);
     }
 
     // update the system round tag; new round starts
@@ -236,12 +241,14 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     }
     // fetch hash power delegated on list of candidates
     // which is used to calculate hybrid score for validators in the new round
-    powers = ILightClient(LIGHT_CLIENT_ADDR).getRoundPowers(roundTag-7, candidates);
+    // powers = ILightClient(LIGHT_CLIENT_ADDR).getRoundPowers(roundTag-7, candidates); 
+    powers = s_registry.lightClient().getRoundPowers(roundTag-7, candidates);
 
     // calculate the hybrid score for all valid candidates and 
     // choose top ones to form the validator set of the new round
     (uint256[] memory scores, uint256 totalPower, uint256 totalCoin) =
-      IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(candidates, powers);
+      // IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(candidates, powers); 
+      s_registry.pledgeAgent().getHybridScore(candidates, powers);
     address[] memory validatorList = getValidators(candidates, scores, validatorCount);
 
     // prepare arguments, and notify ValidatorSet contract
@@ -263,13 +270,16 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       statusList[index - 1] |= SET_VALIDATOR;
     }
 
-    IValidatorSet(VALIDATOR_CONTRACT_ADDR).updateValidatorSet(validatorList, consensusAddrList, feeAddrList, commissionThousandthsList);
+    // IValidatorSet(VALIDATOR_CONTRACT_ADDR).updateValidatorSet(validatorList, consensusAddrList, feeAddrList, commissionThousandthsList);
+    s_registry.validatorSet().updateValidatorSet(validatorList, consensusAddrList, feeAddrList, commissionThousandthsList);
 
     // clean slash contract
-    ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
+    // ISlashIndicator(SLASH_CONTRACT_ADDR).clean(); 
+    s_registry.slashIndicator().clean();
 
     // notify PledgeAgent contract
-    IPledgeAgent(PLEDGE_AGENT_ADDR).setNewRound(validatorList, totalPower, totalCoin, roundTag);
+    // IPledgeAgent(PLEDGE_AGENT_ADDR).setNewRound(validatorList, totalPower, totalCoin, roundTag); 
+    s_registry.pledgeAgent().setNewRound(validatorList, totalPower, totalCoin, roundTag);
 
     // update validator jail status
     for (uint256 i = 0; i < candidateSize; i++) {
@@ -307,7 +317,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
  */
   function register(address consensusAddr, address payable feeAddr, uint32 commissionThousandths)
     external payable
-    onlyInit onlyIfNotCandidate onlyIfValueExceedsMargin onlyIfConsensusAddrNotExist(consensusAddr)
+    onlyIfNotCandidate onlyIfValueExceedsMargin onlyIfConsensusAddrNotExist(consensusAddr)
   {
     require(candidateSet.length <= CANDIDATE_COUNT_LIMIT, "maximum candidate size reached");    
     require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should be in (0, 1000)");
@@ -332,7 +342,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       2. if candidate margin does not exceed global dues value - only transfer the margin 
          value to the system reward contract
   */ 
-  function unregister() external onlyInit onlyIfCandidate {
+  function unregister() external onlyIfCandidate {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     require(c.status == (c.status & UNREGISTER_STATUS), "candidate status is not cleared");
@@ -343,9 +353,11 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     if (margin > dues) {
       uint256 value = margin - dues;
       payable(msg.sender).transfer(value);
-      payable(SYSTEM_REWARD_ADDR).transfer(uint256(dues));
+      // payable(SYSTEM_REWARD_ADDR).transfer(uint256(dues)); 
+      s_registry.systemRewardPayable().transfer(uint256(dues));
     } else {
-      payable(SYSTEM_REWARD_ADDR).transfer(margin);
+      // payable(SYSTEM_REWARD_ADDR).transfer(margin); 
+      s_registry.systemRewardPayable().transfer(margin);
     }
   }
 
@@ -353,7 +365,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @param consensusAddr Consensus address configured on the validator node
   /// @param feeAddr Fee address set to collect system rewards
   /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths  
-  function update(address consensusAddr, address payable feeAddr, uint32 commissionThousandths) external onlyInit onlyIfCandidate {
+  function update(address consensusAddr, address payable feeAddr, uint32 commissionThousandths) external onlyIfCandidate {
     require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should in range (0, 1000)");
     require(consensusAddr != address(0), "consensus address should not be zero");
     require(feeAddr != address(0), "fee address should not be zero");
@@ -384,7 +396,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
   /// Refuse to accept delegate from others
   /// @dev Candidate will not be elected in this state
-  function refuseDelegate() external onlyInit onlyIfCandidate {
+  function refuseDelegate() external onlyIfCandidate {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     uint256 status = c.status | SET_INACTIVE;
@@ -392,7 +404,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   /// Accept delegate from others
-  function acceptDelegate() external onlyInit onlyIfCandidate {
+  function acceptDelegate() external onlyIfCandidate {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     uint256 status = c.status & DEL_INACTIVE;
@@ -406,7 +418,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       2. If the new candidate's margin value exceeds or is equal to the global requiredMargin 
          value - the candidate will be promoted to be a validator
 */
-  function addMargin() external payable onlyInit onlyIfCandidate onlyIfPositiveValue {
+  function addMargin() external payable onlyIfCandidate onlyIfPositiveValue {
     uint256 index = operateMap[msg.sender];
     uint256 totalMargin = candidateSet[index - 1].margin + msg.value;
     candidateSet[index - 1].margin = totalMargin;
@@ -504,7 +516,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov {
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }

@@ -2,6 +2,7 @@
 pragma solidity 0.8.4;
 
 import "./System.sol";
+import "./Registry.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./lib/BytesLib.sol";
@@ -110,8 +111,7 @@ contract GovHub is System, IParamSubscriber {
     _;
   }
 
-
-  function init() external onlyNotInit {
+  constructor(Registry registry) System(registry) {
     proposalMaxOperations = PROPOSAL_MAX_OPERATIONS;
     votingPeriod = VOTING_PERIOD;
     executingPeriod = EXECUTING_PERIOD;
@@ -122,7 +122,6 @@ contract GovHub is System, IParamSubscriber {
       memberSet.push(addr);
       members[addr] = memberSet.length;
     }
-    alreadyInit = true;
   }
 
   /* @product Invoked by a member to Create a new proposal
@@ -146,7 +145,7 @@ contract GovHub is System, IParamSubscriber {
     string[] memory signatures,
     bytes[] memory calldatas,
     string memory description
-  ) public onlyInit onlyMember returns (uint256) {
+  ) public onlyMember returns (uint256) {
     require(
       targets.length == values.length && targets.length == signatures.length && targets.length == calldatas.length,
       "proposal function information arity mismatch"
@@ -216,7 +215,7 @@ contract GovHub is System, IParamSubscriber {
       5. the sender is marked as having voted
 */
   function castVote(uint256 proposalId, bool support) 
-        public onlyInit onlyMember onlyIfActiveProposal(proposalId) {
+        public onlyMember onlyIfActiveProposal(proposalId) {
     Proposal storage proposal = proposals[proposalId];
     Receipt storage receipt = proposal.receipts[msg.sender];
     require(!receipt.hasVoted, "voter already voted");
@@ -233,7 +232,7 @@ contract GovHub is System, IParamSubscriber {
 
   /// Cancel the proposal, can only be done by the proposer
   /// @param proposalId The proposal Id
-  function cancel(uint256 proposalId) public onlyInit onlyIfProposer(proposalId){
+  function cancel(uint256 proposalId) public onlyIfProposer(proposalId){
     ProposalState state = getState(proposalId);
     require(state == ProposalState.Pending || state == ProposalState.Active, "cannot cancel finished proposal");
 
@@ -244,7 +243,7 @@ contract GovHub is System, IParamSubscriber {
 
   /// Execute the proposal
   /// @param proposalId The proposal Id
-  function execute(uint256 proposalId) public payable onlyInit onlyIfSuccessfulProposal(proposalId){
+  function execute(uint256 proposalId) public payable onlyIfSuccessfulProposal(proposalId){
     Proposal storage proposal = proposals[proposalId];
     proposal.executed = true;
     uint256 targetSize = proposal.targets.length;
@@ -256,7 +255,7 @@ contract GovHub is System, IParamSubscriber {
         callData = abi.encodePacked(bytes4(keccak256(bytes(proposal.signatures[i]))), proposal.calldatas[i]);
       }
 
-      (bool success, bytes memory returnData) = proposal.targets[i].call{ value: proposal.values[i] }(callData);
+      (bool success,) = proposal.targets[i].call{ value: proposal.values[i] }(callData);
       require(success, "Transaction execution reverted.");
       emit ExecuteTransaction(proposal.targets[i], proposal.values[i], proposal.signatures[i], proposal.calldatas[i]);
     }
@@ -313,7 +312,7 @@ contract GovHub is System, IParamSubscriber {
 
   /// Add a member
   /// @param member The new member address
-  function addMember(address member) external onlyInit onlyGov {
+  function addMember(address member) external onlyGov {
     require(members[member] == 0, "member already exists");
     memberSet.push(member);
     members[member] = memberSet.length;
@@ -322,7 +321,7 @@ contract GovHub is System, IParamSubscriber {
 
   /// Remove a member
   /// @param member The address of the member to remove
-  function removeMember(address member) external onlyInit onlyGov onlyIfMember(member) {
+  function removeMember(address member) external onlyGov onlyIfMember(member) {
     require(memberSet.length > 5, "at least five members in DAO");
     uint256 index = members[member];
     if (index != memberSet.length) {
@@ -344,7 +343,7 @@ contract GovHub is System, IParamSubscriber {
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov {
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }

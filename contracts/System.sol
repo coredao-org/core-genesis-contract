@@ -2,12 +2,13 @@
 pragma solidity 0.8.4;
 
 import "./interface/IRelayerHub.sol";
+import "./Registry.sol";
 
-contract System {
+abstract contract System is Registry {
 
-  bool public alreadyInit;
+  Registry internal immutable s_registry;
 
-
+//zzzz move below to Registry.sol??
   address public constant VALIDATOR_CONTRACT_ADDR = 0x0000000000000000000000000000000000001000;
   address public constant SLASH_CONTRACT_ADDR = 0x0000000000000000000000000000000000001001;
   address public constant SYSTEM_REWARD_ADDR = 0x0000000000000000000000000000000000001002;
@@ -19,53 +20,47 @@ contract System {
   address public constant BURN_ADDR = 0x0000000000000000000000000000000000001008;
   address public constant FOUNDATION_ADDR = 0x0000000000000000000000000000000000001009;
 
+  constructor(Registry registry) {
+    s_registry = registry;
+  }
 
-  modifier onlyCoinbase() {
-  
-    require(msg.sender == block.coinbase, "the message sender must be the block producer");
-  
+  modifier onlyCoinbase() {  
+    require(msg.sender == block.coinbase, "the message sender must be the block producer");  
     _;
   }
 
-  modifier onlyZeroGasPrice() {
-    
-    require(tx.gasprice == 0 , "gasprice is not zero");
-    
-    _;
-  }
-
-  modifier onlyNotInit() {
-    require(!alreadyInit, "the contract already init");
-    _;
-  }
-
-  modifier onlyInit() {
-    require(alreadyInit, "the contract not init yet");
+  modifier onlyZeroGasPrice() {    
+    require(tx.gasprice == 0 , "gasprice is not zero");    
     _;
   }
 
   modifier onlySlash() {
-    require(msg.sender == SLASH_CONTRACT_ADDR, "the msg sender must be slash contract");
+    // require(msg.sender == SLASH_CONTRACT_ADDR, "the msg sender must be slash contract"); 
+    require(msg.sender == address(s_registry.slashIndicator()), "the msg sender must be slash contract");
     _;
   }
 
   modifier onlyGov() {
-    require(msg.sender == GOV_HUB_ADDR, "the msg sender must be governance contract");
+    // require(msg.sender == GOV_HUB_ADDR, "the msg sender must be governance contract"); 
+    require(msg.sender == s_registry.govHubAddr(), "the msg sender must be governance contract");
     _;
   }
 
   modifier onlyCandidate() {
-    require(msg.sender == CANDIDATE_HUB_ADDR, "the msg sender must be candidate contract");
+    // require(msg.sender == CANDIDATE_HUB_ADDR, "the msg sender must be candidate contract"); 
+    require(msg.sender == address(s_registry.candidateHub()), "the msg sender must be candidate contract");
     _;
   }
 
   modifier onlyValidator() {
-    require(msg.sender == VALIDATOR_CONTRACT_ADDR, "the msg sender must be validatorSet contract");
+    // require(msg.sender == VALIDATOR_CONTRACT_ADDR, "the msg sender must be validatorSet contract"); 
+    require(msg.sender == address(s_registry.validatorSet()), "the msg sender must be validatorSet contract");
     _;
   }
 
   modifier onlyRelayer() {
-    require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender), "the msg sender is not a relayer");
+    // require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender), "the msg sender is not a relayer"); 
+    require(s_registry.relayerHub().isRelayer(msg.sender), "the msg sender is not a relayer");
     _;
   }
 

@@ -2,10 +2,13 @@ pragma solidity 0.8.4;
 
 import "../SlashIndicator.sol";
 import "../lib/RLPDecode.sol";
+import "../Registry.sol";
 
 contract SlashIndicatorMock is SlashIndicator {
     using RLPDecode for bytes;
     using RLPDecode for RLPDecode.RLPItem;
+    
+    constructor(Registry registry) SlashIndicator(registry) {}
 
     function developmentInit() external {
         rewardForReportDoubleSign = rewardForReportDoubleSign / 1e16;

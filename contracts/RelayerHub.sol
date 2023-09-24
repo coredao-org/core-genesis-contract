@@ -6,6 +6,8 @@ import "./lib/Memory.sol";
 import "./interface/IRelayerHub.sol";
 import "./interface/IParamSubscriber.sol";
 import "./System.sol";
+import "./Registry.sol";
+
 
 /// This contract manages BTC relayers on Core blockchain
 contract RelayerHub is IRelayerHub, System, IParamSubscriber{
@@ -45,14 +47,13 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   event paramChange(string key, bytes value);
 
 
-  function init() external onlyNotInit{
+  constructor(Registry registry) System(registry) {
     requiredDeposit = INIT_REQUIRED_DEPOSIT;
     dues = INIT_DUES;
-    alreadyInit = true;
   }
 
   /// Register as a BTC relayer on Core blockchain
-  function register() external payable noExist onlyInit noProxy{
+  function register() external payable noExist noProxy{
     require(msg.value == requiredDeposit, "deposit value does not match requirement");
     relayers[msg.sender] = Relayer(requiredDeposit, dues);
     relayersExistMap[msg.sender] = true;
@@ -65,12 +66,13 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
       2. Transfer (relayer.deposit - relayer.dues) eth to the relayer
       3. Transfer the relayer.dues eth to the SystemReward contract
  */
-  function  unregister() external exist onlyInit{
+  function  unregister() external exist {
     Relayer memory r = relayers[msg.sender];
     delete relayersExistMap[msg.sender];
     delete relayers[msg.sender];
     payable(msg.sender).transfer(r.deposit - r.dues);
-    payable(SYSTEM_REWARD_ADDR).transfer(r.dues);
+    // payable(SYSTEM_REWARD_ADDR).transfer(r.dues); 
+    s_registry.systemRewardPayable().transfer(r.dues);
     emit relayerUnRegister(msg.sender);
   }
 
@@ -78,7 +80,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov{
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov{
     if (Memory.compareStrings(key,"requiredDeposit")) {
       require(value.length == 32, "length of requiredDeposit mismatch");
       uint256 newRequiredDeposit = BytesToTypes.bytesToUint256(32, value);

@@ -8,6 +8,7 @@ import "./interface/ISystemReward.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./System.sol";
+import "./Registry.sol";
 
 /// This contract manages user delegate, also known as stake
 /// Including both coin delegate and hash delegate
@@ -101,11 +102,10 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param target Address of the target candidate
   error SameCandidate(address source, address target);
 
-  function init() external onlyNotInit {
+  constructor(Registry registry) System(registry) {
     requiredCoinDeposit = INIT_REQUIRED_COIN_DEPOSIT;
     powerFactor = INIT_HASH_POWER_FACTOR;
     roundTag = 1;
-    alreadyInit = true;
   }
 
   /*********************** Interface implementations ***************************/
@@ -291,7 +291,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
 
     if (undelegateCoinReward != 0) {
-      ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: undelegateCoinReward }();
+      // ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: undelegateCoinReward }(); 
+      s_registry.systemReward().receiveRewards{ value: undelegateCoinReward }();
     }
   }
 
@@ -299,7 +300,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Delegate coin to a validator
   /// @param agent The operator address of validator
   function delegateCoin(address agent) external payable {
-    if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(agent)) {
+    // if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(agent)) {
+    if (!s_registry.candidateHub().canDelegate(agent)) {
       revert InactiveAgent(agent);
     }
     uint256 newDeposit = delegateCoin(agent, msg.sender, msg.value);
@@ -318,7 +320,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param sourceAgent The validator to transfer coin stake from
   /// @param targetAgent The validator to transfer coin stake to
   function transferCoin(address sourceAgent, address targetAgent) external {
-    if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetAgent)) {
+    // if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetAgent)) { 
+    if (!s_registry.candidateHub().canDelegate(targetAgent)) {
       revert InactiveAgent(targetAgent);
     }
     if (sourceAgent == targetAgent) {
@@ -362,7 +365,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   /*********************** Internal methods ***************************/
   function distributeReward(address payable delegator, uint256 reward) internal {
-    (bool success, bytes memory data) = delegator.call{value: reward, gas: 50000}("");
+    (bool success,) = delegator.call{value: reward, gas: 50000}("");
     emit claimedReward(delegator, msg.sender, reward, success);
     if (!success) {
       rewardMap[msg.sender] = reward;
@@ -473,7 +476,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov {
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }

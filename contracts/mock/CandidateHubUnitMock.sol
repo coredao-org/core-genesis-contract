@@ -1,11 +1,14 @@
 pragma solidity 0.8.4;
 
 import "../CandidateHub.sol";
+import "../Registry.sol";
 
 contract CandidateHubUnitMock is CandidateHub {
   uint256[] public scores;
   uint256 public totalPower;
   uint256 public totalCoin;
+
+  constructor(Registry registry) CandidateHub(registry) {}
 
   function developmentInit() external {
     requiredMargin = 1e19;
@@ -62,7 +65,7 @@ contract CandidateHubUnitMock is CandidateHub {
     address consensusAddr,
     address payable feeAddr,
     uint32 commissionThousandths
-  ) external payable onlyInit {
+  ) external payable {
     uint256 status = SET_CANDIDATE;
     candidateSet.push(
       Candidate(

@@ -1,5 +1,6 @@
 pragma solidity 0.8.4;
 import "../BtcLightClient.sol";
+import "../Registry.sol";
 import "../lib/BytesLib.sol";
 
 contract BtcLightClientMock is BtcLightClient {
@@ -8,7 +9,7 @@ contract BtcLightClientMock is BtcLightClient {
     uint256 public constant MOCK_SCORE = 24371874614346;
     uint32 public constant MOCK_ADJUSTMENT = 11;
 
-    constructor() BtcLightClient() {
+    constructor(Registry registry) BtcLightClient(registry) {
         mockBlockHeight = INIT_CHAIN_HEIGHT;
     }
 

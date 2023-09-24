@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
+
 import "./System.sol";
+import "./Registry.sol";
+
 
 /// This is the DAO Treasury smart contract
 /// The funds in this contract can only be moved through governance vote
 contract Foundation is System {
+
   event received(address indexed from, uint256 amount);
   event fundSuccess(address indexed payee, uint256 amount);
   event fundFailed(address indexed payee, uint256 amount, uint256 balance);
+
+  constructor(Registry registry) System(registry) {}
 
   receive() external payable {
     if (msg.value != 0) {

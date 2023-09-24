@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
+
 import "./System.sol";
+import "./Registry.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./lib/BytesLib.sol";
@@ -57,13 +59,12 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   event paramChange(string key, bytes value);
 
   
-  function init() external onlyNotInit{
+  constructor(Registry registry) System(registry) {
     misdemeanorThreshold = MISDEMEANOR_THRESHOLD;
     felonyThreshold = FELONY_THRESHOLD;
     rewardForReportDoubleSign = INIT_REWARD_FOR_REPORT_DOUBLE_SIGN;
     felonyDeposit = INIT_FELONY_DEPOSIT;
     felonyRound = INIT_FELONY_ROUND;
-    alreadyInit = true;
   }
 
   /*********************** External func ********************************/
@@ -80,8 +81,9 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
          jump (default = 50), then leave its value unchanged and call the misdemeanor 
          method for the validator
 */
-  function slash(address validator) external onlyCoinbase onlyInit oncePerBlock onlyZeroGasPrice{
-    if (!IValidatorSet(VALIDATOR_CONTRACT_ADDR).isValidator(validator)) {
+  function slash(address validator) external onlyCoinbase oncePerBlock onlyZeroGasPrice{
+    // if (!IValidatorSet(VALIDATOR_CONTRACT_ADDR).isValidator(validator)) { 
+    if (!s_registry.validatorSet().isValidator(validator)) {
       return;
     }
     Indicator memory indicator = indicators[validator];
@@ -95,9 +97,11 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     indicator.height = block.number;
     if (indicator.count % felonyThreshold == 0) {
       indicator.count = 0;
-      IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(validator, felonyRound, felonyDeposit);
+      // IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(validator, felonyRound, felonyDeposit); 
+      s_registry.validatorSet().felony(validator, felonyRound, felonyDeposit);
     } else if (indicator.count % misdemeanorThreshold == 0) {
-      IValidatorSet(VALIDATOR_CONTRACT_ADDR).misdemeanor(validator);
+      // IValidatorSet(VALIDATOR_CONTRACT_ADDR).misdemeanor(validator); 
+      s_registry.validatorSet().misdemeanor(validator);
     }
     indicators[validator] = indicator;
     emit validatorSlashed(validator);
@@ -119,7 +123,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     4. Note2 that nowhere is a check made to verify that the method caller is himself not the 
        'bad' validator
 */
-  function doubleSignSlash(bytes calldata header1, bytes calldata header2) external onlyInit {
+  function doubleSignSlash(bytes calldata header1, bytes calldata header2) external {
     RLPDecode.RLPItem[] memory items1 = header1.toRLPItem().toList();
     RLPDecode.RLPItem[] memory items2 = header2.toRLPItem().toList();
 
@@ -130,16 +134,19 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     require(sigHash1 != sigHash2, "must be two different blocks");
     require(validator1 != address(0x00), "validator is illegal");
     require(validator1 == validator2, "must be the same validator");
-    require(IValidatorSet(VALIDATOR_CONTRACT_ADDR).isValidator(validator1), "not a validator");
-    IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(validator1, INFINITY_ROUND, felonyDeposit);
-    ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(msg.sender), rewardForReportDoubleSign);
+    // require(IValidatorSet(VALIDATOR_CONTRACT_ADDR).isValidator(validator1), "not a validator"); 
+    require(s_registry.validatorSet().isValidator(validator1), "not a validator");
+    // IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(validator1, INFINITY_ROUND, felonyDeposit); 
+    s_registry.validatorSet().felony(validator1, INFINITY_ROUND, felonyDeposit);
+    // ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(msg.sender), rewardForReportDoubleSign); 
+    s_registry.systemReward().claimRewards(payable(msg.sender), rewardForReportDoubleSign);
   }
 
   /// Clean slash record by felonyThreshold/DECREASE_RATE.
   /// @dev To prevent validator misbehaving and leaving, do not clean slash record
   /// @dev to zero, but decrease by felonyThreshold/DECREASE_RATE.
   /// @dev Clean is an effective implement to reorganize "validators" and "indicators".
-  function clean() external override(ISlashIndicator) onlyCandidate onlyInit{
+  function clean() external override(ISlashIndicator) onlyCandidate {
     if(validators.length == 0){
       return;
     }
@@ -195,7 +202,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov{
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov{
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }
