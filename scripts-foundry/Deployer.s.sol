@@ -4,7 +4,8 @@ pragma solidity 0.8.4;
 import "forge-std/Script.sol";
 
 import {IBurn} from "../contracts/interface/IBurn.sol";
-import {ContractAddresses,AllContracts} from "../contracts/ContractAddresses.sol";
+import {ContractAddresses} from "../contracts/ContractAddresses.sol";
+import {AllContracts} from "../contracts/AllContracts.sol";
 import {ICandidateHub} from "../contracts/interface/ICandidateHub.sol";
 import {ILightClient} from "../contracts/interface/ILightClient.sol";
 import {IPledgeAgent} from "../contracts/interface/IPledgeAgent.sol";
@@ -39,18 +40,18 @@ contract Deployer is Script, ContractAddresses {
         bool isLocalTestnet = block.chainid == ANVIL_CHAINID || block.chainid == GANACHE_CHAINID;
         
         if (isLocalTestnet) {
-            allContracts = deployToLocalTestnet(registry);            
+            allContracts = deployToLocalTestnet();            
         } else {
             allContracts = returnPredeployedContracts();
         }
         // vm.stopBroadcast();
     }
 
-    function deployToLocalTestnet(Registry registry) private returns(AllContracts memory) {
+    function deployToLocalTestnet() private returns(AllContracts memory) {
         Registry registry = new Registry();
 
         IBurn burn = new Burn(registry);
-        IBtcLightClient lightClient = new BtcLightClient(registry);
+        ILightClient lightClient = new BtcLightClient(registry);
         ISlashIndicator slashIndicator = new SlashIndicator(registry);
         ISystemReward systemReward = new SystemReward(registry, address(lightClient), address(slashIndicator));
         
@@ -79,7 +80,7 @@ contract Deployer is Script, ContractAddresses {
         return allContracts;
     }
 
-    function returnPredeployedContracts() private returns(AllContracts memory) {      
+    function returnPredeployedContracts() private pure returns(AllContracts memory) {      
         return AllContracts({
             burn: IBurn(BURN_ADDR),
             lightClient: ILightClient(LIGHT_CLIENT_ADDR),

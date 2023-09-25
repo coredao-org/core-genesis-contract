@@ -1,6 +1,7 @@
 node_modules/
 build/
 out/
+lib/
 .vscode/
 .idea
 pids

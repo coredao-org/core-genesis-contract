@@ -3,7 +3,7 @@ pragma solidity 0.8.4;
 
 import {ImmutableOwner} from "./utils/ImmutableOwner.sol";
 import {SetOnce} from "./utils/SetOnce.sol";
-import {AllContracts} from "./ContractAddresses.sol";
+import {AllContracts} from "./AllContracts.sol";
 
 import {IValidatorSet} from "./interface/IValidatorSet.sol";
 import {ICandidateHub} from "./interface/ICandidateHub.sol";

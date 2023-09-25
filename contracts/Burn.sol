@@ -41,7 +41,7 @@ contract Burn is System, IBurn, IParamSubscriber {
       } else {
         v = msg.value - remain;
       }
-      payable(msg.sender).transfer(remain);
+      payable(msg.sender).transfer(remain); //zzzz DoS danger here??
     }
     if (v != 0) emit burned(msg.sender, v);
   }
