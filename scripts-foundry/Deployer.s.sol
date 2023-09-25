@@ -4,7 +4,7 @@ pragma solidity 0.8.4;
 import "forge-std/Script.sol";
 
 import {IBurn} from "../contracts/interface/IBurn.sol";
-import {ContractAddresses} from "../contracts/ContractAddresses.sol";
+import {ContractAddresses,AllContracts} from "../contracts/ContractAddresses.sol";
 import {ICandidateHub} from "../contracts/interface/ICandidateHub.sol";
 import {ILightClient} from "../contracts/interface/ILightClient.sol";
 import {IPledgeAgent} from "../contracts/interface/IPledgeAgent.sol";
@@ -31,66 +31,66 @@ contract Deployer is Script, ContractAddresses {
     uint public constant ANVIL_CHAINID = 31337;
     uint public constant GANACHE_CHAINID = 1337;
 
-    IBurn private burn;
-    IBtcLightClient private lightClient;
-    ISlashIndicator private slashIndicator;
-    ISystemReward private systemReward;
-    ICandidateHub private candidateHub;
-    IPledgeAgent private pledgeAgent;        
-    IValidatorSet private validatorSet;
-    IRelayerHub private relayerHub;
-    address private foundationAddr;
-    address private govHubAddr;
-
-    function run() external {
-	    // vm.startBroadcast(); // everything in this block sent via rpc to blockchain
+    function run() external returns(AllContracts memory allContracts) {
+	    // vm.startBroadcast(); 
 
         console.log("Deploying contracts to chainid: %d", block.chainid);
 
-        if (block.chainid == ANVIL_CHAINID || block.chainid == GANACHE_CHAINID) {
-            deployToLocalTestnet(registry);
+        bool isLocalTestnet = block.chainid == ANVIL_CHAINID || block.chainid == GANACHE_CHAINID;
+        
+        if (isLocalTestnet) {
+            allContracts = deployToLocalTestnet(registry);            
         } else {
-            connectToPredeployedContracts();
+            allContracts = returnPredeployedContracts();
         }
-
-        registry.setAll(
-                    validatorSet, 
-                    slashIndicator,
-                    systemReward,
-                    lightClient,
-                    relayerHub,
-                    candidateHub,
-                    pledgeAgent,                                         
-                    burn,
-                    address(govHub),
-                    address(foundation)
-        );
         // vm.stopBroadcast();
     }
 
-    function deployToLocalTestnet(Registry registry) private {
-        burn = new Burn(registry);
-        lightClient = new BtcLightClient(registry);
-        slashIndicator = new SlashIndicator(registry);
-        systemReward = new SystemReward(registry, address(lightClient), address(slashIndicator));
-        candidateHub = new CandidateHub(registry);
-        pledgeAgent = new PledgeAgent(registry);        
-        validatorSet = new ValidatorSet(registry);
-        relayerHub = new RelayerHub(registry);
-        foundationAddr = address(new Foundation(registry));
-        govHubAddr = address(new GovHub(registry));        
+    function deployToLocalTestnet(Registry registry) private returns(AllContracts memory) {
+        Registry registry = new Registry();
+
+        IBurn burn = new Burn(registry);
+        IBtcLightClient lightClient = new BtcLightClient(registry);
+        ISlashIndicator slashIndicator = new SlashIndicator(registry);
+        ISystemReward systemReward = new SystemReward(registry, address(lightClient), address(slashIndicator));
+        
+        ICandidateHub candidateHub = new CandidateHub(registry);
+        IPledgeAgent pledgeAgent = new PledgeAgent(registry);    
+        IValidatorSet validatorSet = new ValidatorSet(registry);
+        IRelayerHub relayerHub = new RelayerHub(registry);
+        address foundationAddr = address(new Foundation(registry));
+        address govHubAddr = address(new GovHub(registry));
+
+        AllContracts memory allContracts = AllContracts({
+            burn: burn,
+            lightClient: lightClient,
+            slashIndicator: slashIndicator,
+            systemReward: systemReward,
+            candidateHub: candidateHub,
+            pledgeAgent: pledgeAgent,      
+            validatorSet: validatorSet,
+            relayerHub: relayerHub,
+            foundationAddr: foundationAddr,
+            govHubAddr: govHubAddr
+        });
+
+        registry.setAll(allContracts);
+
+        return allContracts;
     }
 
-    function connectToPredeployedContracts() private {       
-        burn = IBurn(BURN_ADDR);
-        lightClient = ILightClient(LIGHT_CLIENT_ADDR);
-        slashIndicator = ISlashIndicator(SLASH_CONTRACT_ADDR);
-        systemReward = ISystemReward(SYSTEM_REWARD_ADDR);
-        candidateHub = ICandidateHub(CANDIDATE_HUB_ADDR);
-        pledgeAgent = IPledgeAgent(PLEDGE_AGENT_ADDR);        
-        validatorSet = IValidatorSet(VALIDATOR_CONTRACT_ADDR);
-        relayerHub = IRelayerHub(RELAYER_HUB_ADDR);
-        foundationAddr = FOUNDATION_ADDR;
-        govHubAddr = GOV_HUB_ADDR;        
+    function returnPredeployedContracts() private returns(AllContracts memory) {      
+        return AllContracts({
+            burn: IBurn(BURN_ADDR),
+            lightClient: ILightClient(LIGHT_CLIENT_ADDR),
+            slashIndicator: ISlashIndicator(SLASH_CONTRACT_ADDR),
+            systemReward: ISystemReward(SYSTEM_REWARD_ADDR),
+            candidateHub: ICandidateHub(CANDIDATE_HUB_ADDR),
+            pledgeAgent: IPledgeAgent(PLEDGE_AGENT_ADDR),     
+            validatorSet: IValidatorSet(VALIDATOR_CONTRACT_ADDR),
+            relayerHub: IRelayerHub(RELAYER_HUB_ADDR),
+            foundationAddr: FOUNDATION_ADDR,
+            govHubAddr: GOV_HUB_ADDR 
+        });
     }
 }

@@ -14,4 +14,19 @@ abstract contract ContractAddresses {
   address public constant PLEDGE_AGENT_ADDR = 0x0000000000000000000000000000000000001007;
   address public constant BURN_ADDR = 0x0000000000000000000000000000000000001008;
   address public constant FOUNDATION_ADDR = 0x0000000000000000000000000000000000001009;
+
+
+  struct AllContracts {
+    IBurn burn;
+    IBtcLightClient lightClient;
+    ISlashIndicator slashIndicator;
+    ISystemReward systemReward;
+    ICandidateHub candidateHub;
+    IPledgeAgent pledgeAgent;        
+    IValidatorSet validatorSet;
+    IRelayerHub relayerHub;
+    address foundationAddr;
+    address govHubAddr;
+  }
+
 }
