@@ -3,9 +3,11 @@ pragma solidity 0.8.4;
 
 import "forge-std/Script.sol";
 
-import {IBurn} from "../contracts/interface/IBurn.sol";
 import {ContractAddresses} from "../contracts/ContractAddresses.sol";
 import {AllContracts} from "../contracts/AllContracts.sol";
+import {Registry} from "../contracts/Registry.sol";
+
+import {IBurn} from "../contracts/interface/IBurn.sol";
 import {ICandidateHub} from "../contracts/interface/ICandidateHub.sol";
 import {ILightClient} from "../contracts/interface/ILightClient.sol";
 import {IPledgeAgent} from "../contracts/interface/IPledgeAgent.sol";
@@ -14,7 +16,6 @@ import {ISlashIndicator} from "../contracts/interface/ISlashIndicator.sol";
 import {ISystemReward} from "../contracts/interface/ISystemReward.sol";
 import {IValidatorSet} from "../contracts/interface/IValidatorSet.sol";
 
-import {Registry} from "../contracts/Registry.sol";
 import {BtcLightClient} from "../contracts/BtcLightClient.sol";
 import {Burn} from "../contracts/Burn.sol";
 import {CandidateHub} from "../contracts/CandidateHub.sol";

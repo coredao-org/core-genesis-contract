@@ -3,14 +3,14 @@ pragma solidity 0.8.4;
 
 import "forge-std/console.sol";
 
+//zzzz clean imports
 import {Test} from "forge-std/Test.sol";
+
 import {Deployer} from "../../scripts-foundry/Deployer.s.sol";
+import {AllContracts} from "../../contracts/AllContracts.sol";
+import {ContractAddresses} from "../../contracts/ContractAddresses.sol";
 
 import {System} from "../../contracts/System.sol";
-import {AllContracts} from "../../contracts/AllContracts.sol";
-import {IBurn} from "../../contracts/interface/IBurn.sol";
-import {Burn} from "../../contracts/Burn.sol";
-import {ContractAddresses} from "../../contracts/ContractAddresses.sol";
 import {ICandidateHub} from "../../contracts/interface/ICandidateHub.sol";
 import {ILightClient} from "../../contracts/interface/ILightClient.sol";
 import {IPledgeAgent} from "../../contracts/interface/IPledgeAgent.sol";
@@ -18,6 +18,8 @@ import {IRelayerHub} from "../../contracts/interface/IRelayerHub.sol";
 import {ISlashIndicator} from "../../contracts/interface/ISlashIndicator.sol";
 import {ISystemReward} from "../../contracts/interface/ISystemReward.sol";
 import {IValidatorSet} from "../../contracts/interface/IValidatorSet.sol";
+import {IBurn} from "../../contracts/interface/IBurn.sol";
+import {Burn} from "../../contracts/Burn.sol";
 
 contract BurnTest is Test  {
 
@@ -48,7 +50,7 @@ contract BurnTest is Test  {
 
     function testFuzz_burn_with_value_and_balance_variations(uint value, uint addedBalance) public {
         limitFunds(value);
-        limitFunds(addedBalance); 
+        limitFunds(addedBalance);         
         vm.deal(address(burn), addedBalance);
         burn.burn{value: value}();
     }
@@ -125,3 +127,23 @@ contract BurnTest is Test  {
         burn.updateParam(BURN_CAP_KEY, abi.encodePacked(newBurnCap));
     }
 }		
+
+//zzzz forge remappings , forge test --gas-report ,  forge coverage , vm.expectEmit  ,  invariantXxx()
+// change block.timestamp: vm.warp , forge fmt    // code auto-formatting ,  verify getters never revert
+
+
+// zzz invariants:
+// invariant stats: runs(=number of sequences), calls( all func calls in all Seq), reverts( failed funcs)
+
+	// when testing invariants we can limit the tests targets using (in setUp function):
+		// targetContract( contract_addr), targetSelector(FuzzSelector(list-of-funcs)), or excludeContract(addr)
+
+
+	// Handler-based testing https://www.rareskills.io/post/invariant-testing-solidity , https://www.youtube.com/watch?v=kPx4K8kRvUQ&list=PLO5VPQH6OWdUrKEWPF07CSuVm3T99DQki&index=19 
+    //          perform the invariant tests on a "handler"  contract that internally calls the relevant real contracts	
+
+
+	// [invariant]
+	// runs = 128
+	// depth = 128
+	// fail_on_revert = true/false   //the fact that u cannot set fail_on_revert per-test is a major limitation
