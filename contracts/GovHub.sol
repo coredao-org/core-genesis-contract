@@ -125,12 +125,12 @@ contract GovHub is System, IParamSubscriber {
     alreadyInit = true;
   }
 
-  /* @product Invoked by a member to Create a new proposal
-     @param targets List of addresses to interact with
-     @param values List of values (CORE amount) to send
-     @param signatures List of signatures
-     @param calldatas List of calldata
-     @param description Description of the proposal
+  /* @product Invoked by a member to create a new proposal
+     @param targets: List of addresses to interact with
+     @param values: List of values (CORE amount) to send
+     @param signatures: List of signatures
+     @param calldatas: List of calldata
+     @param description: Description of the proposal
      @return The proposal id
      @logic
         1. the targets, values, signatures and calldatas arrays are verified to be of the 
@@ -205,14 +205,14 @@ contract GovHub is System, IParamSubscriber {
   }
 
 /* @product Cast vote on a proposal
-   @param proposalId The proposal Id
-   @param support True if the voter supports the proposal
+   @param proposalId: The proposal ID
+   @param support: True if the voter supports the proposal
    @return The receipt of the vote
    @logic
       1. the Tx sender is verified to be a registered member else the Tx reverts
       2. the proposal is verified to be in an Active state else the Tx reverts
-      3. the sender's vote is verified to be not casted yet else the Tx reverts
-      4. the sender's vote is executed by incrementing the proposal's for or against counters
+      3. the sender's vote is verified to be not yet cast yet else the Tx reverts
+      4. the sender's vote is executed by incrementing the proposal's for or against counter
       5. the sender is marked as having voted
 */
   function castVote(uint256 proposalId, bool support) 
@@ -232,7 +232,7 @@ contract GovHub is System, IParamSubscriber {
   }
 
   /// Cancel the proposal, can only be done by the proposer
-  /// @param proposalId The proposal Id
+  /// @param proposalId The proposal ID
   function cancel(uint256 proposalId) public onlyInit onlyIfProposer(proposalId){
     ProposalState state = getState(proposalId);
     require(state == ProposalState.Pending || state == ProposalState.Active, "cannot cancel finished proposal");
@@ -264,25 +264,25 @@ contract GovHub is System, IParamSubscriber {
   }
 
 /* @product Obtains the current state of a proposal 
-   @param proposalId The proposal Id
+   @param proposalId: The proposal Id
    @return The state of the proposal
    @logic: proposal lifecycle state traversal  
-      1. starts off as pending  and continues to be pending until the startBlock+1 is reached
+      1. starts off as pending and continues to be pending until the startBlock+1 is reached,
          when pending no voting may take place
-      2. moved from pending to active when poroposal's startBlock+1 is reached and as long as 
+      2. moved from pending to active when proposal's startBlock+1 is reached and as long as 
          proposal's endBlock+1 is not reached voting may take place only when active
-      3. at any points during states Pending or Active, the proposal can be cancelled 
-         by the proposer effectively marking it as unoperable
+      3. at any point during states Pending or Active, the proposal can be canceled 
+         by the proposer, effectively making the proposal inoperable
    
    =>AFTER active time:
 
       4. if proposal.forVotes <= proposal.againstVotes OR proposal.forVotes <= proposal.totalVotes / 2
-         proposal is marked as defeated,
+         proposal is marked as defeated
       5. if not defeated AND if block.number <= proposal's endBlock + executingPeriod
          proposal is marked as succeeded
       6. if not defeated AND if block.number > proposal's endBlock + executingPeriod
          proposal is marked as expired
-      7. when the proposal is marked succeeded, it is alledged for execution WITH NO NEED FOR ADDITIONAL WAIT TIME (aka Time-Lock)
+      7. when the proposal is marked succeeded, it is alledged for execution WITHOUT ADDITIONAL WAIT TIME REQUIREMENT (aka Time-Lock) @openissue
          on successful execution it will be marked as executed
 */
   function getState(uint256 proposalId) public view returns (ProposalState) {

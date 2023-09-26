@@ -106,7 +106,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   }
 
 /* @product Called by a BTC relayer to store a BTC block on the Core blockchain
-   @param blockBytes BTC block bytes
+   @param blockBytes: BTC block bytes
    @logic
       1. Extracts the header bytes from the blockBytes
       2. Calculates the blockHash from the header bytes
@@ -205,12 +205,12 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   }
 
   /* @product Claim relayer rewards
-     @param relayerAddr The relayer address
+     @param relayerAddr: The relayer address
      @logic Called by relayers to claim their rewards for storing BTC blocks
-      - Reverts if the provided address is not of a relayer or if the relayer currently has no reward to claim
+      - Reverts if the provided address is not a relayer or if the relayer currently has no reward to claim
       - Else:  invokes SystemReward's claimRewards() to transfer the reward to the relayer.
-     Note that claimReward() may slash the reward to the current SystemReward balance if the latter is smaller than the reward without revertingthe Tx
-     Note2: this function may be called by any party (not only a relayer) with a relayer address to which the funds will be transferred
+     Note that claimReward() may slash the reward to the current SystemReward balance if the latter is smaller than the reward without reverting the Tx
+     @openissue: This function may be called by any party (not only a relayer) with a relayer address to which the funds will be transferred
      this might prove problematic for relayers that prefer to choose their own dates of reward reclaiming
   */
   function claimRelayerReward(address relayerAddr) external onlyInit openForAll {
@@ -258,8 +258,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   }
 
   /* @product Calculate relayer weight based number of BTC blocks relayed
-     @param count The number of BTC blocks relayed by a specific validator
-
+     @param count: The number of BTC blocks relayed by a specific validator
      @logic Weight calculation  (maxWeight default value = 20):
           1. if count <= maxWeight (default: 20) => return count
           2. else if count in half-open interval (maxWeight, 2*maxWeight] => return maxWeight

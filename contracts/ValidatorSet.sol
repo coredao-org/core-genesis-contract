@@ -91,15 +91,15 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     return currentValidatorSetMap[addr] != 0;
   }
 
-/* @product Called by the current block producer to Add block reward to a validator
+/* @product Called by the current block producer to add block reward to a validator
    @logic
-      1. The caller passes with this call eth value that is not tested for min/max caps
+      1. The caller passes with this call eth value that is not tested for min/max caps @openissue
       2. If the current block number is a multiplier of SUBSIDY_REDUCE_INTERVAL (=10512000) 
          the blockReward is reduced - from this operation henceforth - by a factor of 0.9639
       3. if the validator address is valid, the validator's income is increased by a value 
          calculated as follows:
             a. start with the eth value passed by the block producer with the call
-            b. if the ValidatorSet balance balance (not including current transfer) is equal 
+            b. if the ValidatorSet balance (not including current transfer) is equal
                or larger than the global totalInCome + blockReward then add blockReward eth 
                to the value
       4. ..And the global totalInCome value is increased by the same value
@@ -124,23 +124,23 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
   }
 
-/* @product Called by the CandidateHub contract at the beginning of turn round to Distribute 
+/* @product Called by the CandidateHub contract at the beginning of turn round to distribute 
     rewards to all validators (and delegators through PledgeAgent)
    
    @logic
       1. all validators are iterated and for each an incentive value value is calculated 
-         to be one percent of the sum of the current validator income plus a global 
+         to be 1% of the sum of the current validator income plus a global
          blockRewardIncentivePercent value
       2. Each validator's income gets reduce by the validator's incentive values
       3. The sum of all validator's incentive values is stored as incentiveSum
-      4. After that the SystemReward's 'receiveRewards function is invoked with eht value 
+      4. After that the SystemReward's receiveRewards function is invoked with eth value
          set to incentiveSum, read its doc for the details of its action
       5. Once done, the validators are iterated over again and, for each validator:
          if the validator's fee is positive that the validator reward is sent to the validator's 
          fee address, after which the validator's income is zeroed the validator reward is 
          calculated as a single promile (1/1000) of the validator's income times the 
-         validator's commissionThousandths value The rewardSum of all validators is set 
-         to be the sum of all validator's (income - reward) values
+         validator's commissionThousandths value and the rewardSum of all validators is set 
+         to be the sum of all validators' (income - reward) values
       6. After that, the PledgeAgent contract addRoundReward() function is invoked with eth value set 
          to rewardSum and with operateAddressList and rewardList as params. Read its documentation for details.
       7. Finally the global totalInCome value is set to zero
@@ -190,7 +190,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     return operateAddressList;
   } 
 
-/* @product Called by the CandidateHub contract as part of the turn round flow to Update validator 
+/* @product Called by the CandidateHub contract as part of the turn round flow to update validator 
        set of the new round with elected validators
    @param operateAddrList: List of validator operator addresses
    @param consensusAddrList: List of validator consensus addresses
@@ -199,7 +199,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
 
    @logic
       1. The function validates that all list parameters are of the same length and that
-         each element commissionThousandthsList if less than 1000
+         each element commissionThousandthsList is less than 1000
       2. It then replaces the current validators with the newly passed ones, each validator containing
          an operate address, a consensus addrress, a fee address and a commissionThousandths count
 */
@@ -290,20 +290,20 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
   }
 
-/* @product Called by the Slash contract (only) to Slash the validator for felony behaviors
-   @param validator The validator to slash
-   @param felonyRound The number of rounds to jail the validator
-   @param felonyDeposit The amount of deposits to slash
+/* @product Called by the Slash contract (only) to slash validators for felony behaviors
+   @param validator: The validator to slash
+   @param felonyRound: The number of rounds to jail the validator
+   @param felonyDeposit: The amount of deposits to slash
 
    @logic
         1. If the 'bad' validator is the only validator then he will not be jailed, but 
-           its income will be zeroed
+           his income will be zeroed
         2. Else the validator will be removed from the current.validators list
-        3. And a sum equal to the 'bad' validator income qill be equaly divided between the 
-           rest of the validators WITHOUT clearing of the 'bad' validator's income!
-        4. Finally the CandidateHub;s jailValidator() function will be invoked to place the 
+        3. And a sum equal to the 'bad' validator income will be equally divided between the 
+           rest of the validators without clearing of the 'bad' validator's income @openissue
+        4. Finally the CandidateHub's jailValidator() function will be invoked to place the 
            validator in jail for felonyRound and slash some amount of deposits. Read its 
-           documentation for more details.
+           documentation for more details
 */
   function felony(address validator, uint256 felonyRound, uint256 felonyDeposit) 
           external override onlySlash onlyIfCurrentValidator(validator) {

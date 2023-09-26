@@ -70,7 +70,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
 
 /* @product Called by the block producer once per-block to slash the validator 
     because of unavailability
-   @param validator to slash
+   @param validator: validator to slash
    @logic
       1. increase the count of the validator's slash.indicator record by 1 and sets its 
          height to the current block number
@@ -104,18 +104,18 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   }
 
 /* @product Slash the validator because of double sign
-   @param header1 A block header submitted by the validator
-   @param header2 Another block header submitted by the validator with same height and parent
+   @param header1: A block header submitted by the validator
+   @param header2: Another block header submitted by the validator with same height and parent
 
   @logic
-    1. This method is aimed called by external verifiers, but no verifications are done on 
-       that it receives header1 and header2 parameters, and a start verifies that:
+    1. This method is called by external verifiers, with no verifications are done to enfore it. @openissue
+       It receives header1 and header2 parameters, and verifies that:
           a. the headers refer to to distinct blocks i.e. 'double sign'
           b. that the validators inside each header are identical and legal validators
     2. it then continues to apply a felony on the validator using the global felonyDeposit value
        and to pass the global rewardForReportDoubleSign value to the caller of this method
-    3. Note that if the current SystemReward's balance is less than the reward amount than the 
-      latter will be slashed to the balance value with no reverting
+    3. Note that if the current SystemReward's balance is less than the reward amount then the 
+      latter will be slashed to the balance value without reverting
     4. Note2 that nowhere is a check made to verify that the method caller is himself not the 
        'bad' validator
 */

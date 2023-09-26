@@ -111,9 +111,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /*********************** Interface implementations ***************************/
   
   /* @product Called by the ValidatorSet contract (only) at the beginning of turn round to 
-              Receive round rewards
-     @param agentList List of validator operator addresses
-     @param rewardList List of reward amount
+              receive round rewards
+     @param agentList: List of validator operator addresses
+     @param rewardList: List of reward amounts
      @logic
           For each validator - if the roundScore of the agent's last reward is positive and its (new) 
           reward value is positive then set the agent's last reward's total and remain.reward 
@@ -150,20 +150,20 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
   }
 
-/* @product Called by the CandidateHub contract from the turn round flow to Calculate hybrid score for all candidates
+/* @product Called by the CandidateHub contract from the turn round flow to calculate hybrid scores for all candidates
    @param candidates: List of candidate operator addresses
-   @param powers: List of power value in this round
+   @param powers: List of power values in this round
    @return scores List of hybrid scores of all validator candidates in this round
-   @return totalPower Total power delegate in this round
-   @return totalCoin Total coin delegate in this round
+   @return totalPower Total power delegated in this round
+   @return totalCoin Total coin delegated in this round
 
    @logic
         1. assigns, for each candidate, its power to be the new power value times 
            POWER_BLOCK_FACTOR (=1e18) and its coin value to be its totalDeposit
         2. Calculates the totalPower of all candidates as the sum of all of their (new) power 
-           values PLUS ONE (why?)
+           values PLUS ONE @openissue
         3. Calculates the totalCoin of all candidates as the sum of all of their (new) coin 
-           values PLUS ONE (why?)
+           values PLUS ONE @openissue
         4. Use these values to calculates the hybrid score for each candidate as follows:
               agent.score = (agent.power * totalCoin * powerFactor / 10000) +  (agent.coin * totalPower)
 */
@@ -195,19 +195,19 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   }
 
 /* @product Called by the CandidateHub contract as part of the turn round flow to to start new round
-   @param validators List of elected validators in this round
-   @param totalPower Total power delegate in this round as calculated in getHybridScore()
-   @param totalCoin Total coin delegate in this round  as calculated in getHybridScore()
-   @param round The new round tag
+   @param validators: List of elected validators in this round
+   @param totalPower: Total power delegated in this round as calculated in getHybridScore()
+   @param totalCoin: Total coin delegated in this round as calculated in getHybridScore()
+   @param round: The new round tag
 
    @logic
         1. adds a new round record for the new round with power set to the totalPower value, 
-           coin to the totalCoin value, powerFactor set to the global powerFactor
+           coin to the totalCoin value, and powerFactor set to the global powerFactor
         2. Sets the global roundTag value to be that of the new round
         3. For each validator calculates a score as follows:
                new.agent.score = (agent.power * totalCoin * powerFactor / 10000)  +  (agent.coin * totalPower)
            
-           and add a new reward to the agent's list for the new round with the new.agent.score 
+           and adds a new reward to the agent's list for the new round with the new.agent.score 
            and the agent's coin value
 */
   function setNewRound(address[] calldata validators, uint256 totalPower,
@@ -236,7 +236,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         1. Find the candidate.round.reward record i.e. the reward for the current round 
            and verify its totalReward value is positive
         2. Calculate a reward.value = 
-              current.round.coin * 1e18 * current.round.powerFactor / 10000 * agent.reward.totalReward / agent.reward.score;
+              current.round.coin * 1e18 * current.round.powerFactor / 10000 * agent.reward.totalReward / agent.reward.score
         3. Increase the reward of all the miners in the miners list by reward.value
         4. Calculate a powerReward value  = reward.value * number.of.candidate.miners
         5. Calculate a undelegated.coin.reward initial value as follows:

@@ -70,7 +70,7 @@ contract System {
   }
 
   modifier onlyIfPositiveValue() {
-    require(msg.value > 0, "value should not be zero"); 
+    require(msg.value > 0, "value should be greater than zero"); 
     _;
   }
 

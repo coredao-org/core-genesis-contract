@@ -133,12 +133,12 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
    @param round: The number of rounds to jail
    @param fine: The amount of deposits to slash
    @logic
-      1. if the candidate's margin is greater or equal to the sum of the candiate's fine plus 
-         the global duos
+      1. if the candidate's margin is greater or equal to the sum of the candidate's fine plus 
+         the global dues
           a. set the release round of the candidate to be the current round plus the 
              'round' parameter (if the candidate has prior jail period - add to it 
              the current 'round' parameter)
-          b. subtract the fine value from the candidate's margin
+          b. subtract the fine's value from the candidate's margin
           c. and transfer the fine value to the SystemReward contarct
 
       2. Else:
@@ -184,18 +184,19 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
    @logic
       1. call ValidatorSet's distributeReward to distribute rewards for now-ending round
       2. distribute rewards to all BTC miners who delegated hash power for the now-ending round
-      3. update the system round tag tp be the current block.timestamp divided by roundInterval;
+      3. update the system's round tag to the current block.timestamp divided by roundInterval
       4. reset validator flags for all candidates.
       5. create a list of all valid candidates and use it to:
-          a. fetch hash power delegated on list of the valid candidates which is used to 
+          a. fetch hash power delegated on list of the valid candidates, which is used to 
              calculate hybrid score for validators in the new round
           b. calculate the hybrid score for all valid candidates and choose top ones to 
              form the validator set of the new round. See the documentation of 
              PledgeAgent.getHybridScore() for the details of the hybrid score calculation
       6. if a validator's hybrid score is zero - correct its commissionThousandths value to be 1000
       7. call ValidatorSet's updateValidatorSet() to set the new validators
-      8. clean slash contract
-      9. notify PledgeAgent contract on the new round and the new validators
+      8. clean slash contract decreasing validators' accrued slash indicator points by the system's 
+         per-round point reduction rate
+      9. notify PledgeAgent contract of the new round and the new validators
       10. remove validators from jail if their jailedRound is <= than the new roundTag
 */
   function turnRound() external onlyCoinbase onlyInit onlyZeroGasPrice {
@@ -288,20 +289,20 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
   /****************** register/unregister ***************************/
 
-/* @product Called by a to-be validator to become a validator candidate on Core blockchain
-   @param consensusAddr Consensus address configured on the validator node
-   @param feeAddr Fee address set to collect system rewards
-   @param commissionThousandths The commission fee taken by the validator, measured in thousandths (=promils)
+/* @product Called by a non-validator address aiming to become a validator candidate on the Core blockchain
+   @param consensusAddr: Consensus address configured on the validator node
+   @param feeAddr: Fee address set to collect system rewards
+   @param commissionThousandths: The commission fee taken by the validator, measured in thousandths (=promils)
    @logic:
         1. Apply the following verifications:
               a. Verify that the candidate limit of CANDIDATE_COUNT_LIMIT (=1000) was not reached
               b. No double-booking: Verifies that the candidate is not already registered
-              c. Verify that the ether sum carried by this Tx is no less than the global 
+              c. Verify that the ether sum carried by this Tx is >= the global 
                  requiredMargin value
               d. Verify that the commissionThousandths value is in the open range (0, 1000)
-              e. Verify that the consensusAddr has not been registedred before
+              e. Verify that the consensusAddr has not been registered before
               f. Verify that the fee address is valid
-              g. Verify that the Tx sender is not jailed, orthat his jailtime has ended 
+              g. Verify that the Tx sender is not jailed, or that his jail time has ended 
                  before current roundTag
         2. And, if all of these tests have passed - register the validator candidate into the system
  */
@@ -402,7 +403,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 /* @product Called by a candidate to add refundable deposits
    Motivation: Candidate will not be elected if there are not enough deposits 
    @logic
-      1. Tx eth value can be any non zero value will be appended to candidate's margin value
+      1. Tx eth value (must be >0) will be appended to candidate's margin value
       2. If the new candidate's margin value exceeds or is equal to the global requiredMargin 
          value - the candidate will be promoted to be a validator
 */
@@ -428,11 +429,11 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     }
   }
 
-/* @product Implementation function for candidate removal
+/* @product internal function for candidate removal, called by other CandidateHub 
+   functions in the flows of jailing or unregistering candidates
    @logic
-      1. called by other CandidateHub functions in the flows of jailing orunregistering
-      2. Operation: candidate gets removed from contract internal structures
-      3. No eth transfer takes place as part ofthis function
+      2. Candidate gets removed from contract internal structures
+      3. No eth transfer takes place as part of this function
 */
   function removeCandidate(uint256 index) internal {
     Candidate storage c = candidateSet[index - 1];

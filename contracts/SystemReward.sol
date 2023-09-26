@@ -44,10 +44,10 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
 
 /* @product Receive external funds - currently not limited to system-only invocation
    @logic
-      1. Receive and stores in the contract an eth amount up total contract balance of 
+      1. Receive and stores in the contract an eth amount up to the total contract balance of 
          incentiveBalanceCap (default value: 1e25)
       2. If post-transfer balance exeeds incentiveBalanceCap then:
-          a. if in isBurn mode then burn the excess, read the ddoc of Burn.burn() 
+          a. if in isBurn mode then burn the excess, see the Burn.burn() documentation
               for details, especially the part detailing that if the total contract 
               balance (i.e. the sum of all burned tokens) exceeds the burnCap then the 
               excess (up to the limit of the current sum of tokens to burn) is returned to the SystemReward contract
@@ -65,13 +65,12 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     emit receiveDeposit(msg.sender, msg.value);
   }
 
-/* @product Claim rewards 
+/* @product Called by the Light BTC Client for relayers and by the SlashIndicator contracts 
+   to claim a reward for external verifiers (Note: the latter is currently not enforced!)  @openissue
    @logic
-      1. This method can only be called by the Light BTC Client for relayers and by the Slash Indicator 
-         contarct for external verifiers (Note: the latter is currently not enforced!)    
-      2. The function transfers the eth amount specified by the caller to the destination 
+      1. The function transfers the eth amount specified by the caller to the destination 
          address.@author.
-      3. If the current SystemReward balance is less than the amount specified by the caller, 
+      2. If the current SystemReward balance is less than the amount specified by the caller, 
          then no error is issued rather the amount gets slashed to the current balance.
 */
   function claimRewards(address payable to, uint256 amount)
