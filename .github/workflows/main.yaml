@@ -18,40 +18,34 @@ jobs:
   # This workflow contains a single job called "build"
   test:
     # The type of runner that the job will run on
-    runs-on: self-hosted
+#    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
-      
-      - name: Set up Python Environment
-        run: |
-          export PYENV_ROOT="$HOME/.pyenv"
-          command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
-          eval "$(pyenv init -)"
-          pyenv activate brownie
-          
-      - name: Cache node modules
-        id: cache-npm
-        uses: actions/cache@v3
+
+      - name: Setup node
+        uses: actions/setup-node@v3
         with:
-          path: node_modules
-          key: ${{ runner.os }}-nodeModules-${{ hashFiles('package-lock.json') }}-${{ hashFiles('package.json') }}
-          restore-keys: |
-            ${{ runner.os }}-nodeModules-
+          node-version: '16.x'
+
+      - name: Setup python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.7'
+          cache: 'pip' # caching pip dependencies
+
+      - name: Install python dependencies
+        run: pip install -r requirements.txt
           
       - name: Install Node Dependencies
-        if: steps.cache-npm.outputs.cache-hit != 'true'
         run: |
-          npm cache clear --force
           npm install
+          npm install -g ganache
       
       - name: Run tests
         run: |
-          node generate-system.js --mock true
-          node generate-candidatehub.js --mock true
-          node generate-pledgeagent.js --mock true
-          node generate-validatorset.js --mock true
-          node generate-slash.js -c 1112
+          sh generate-test-contracts.sh
           brownie test -v --stateful false
