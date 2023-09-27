@@ -111,7 +111,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     alreadyInit = true;
   }
 
-  /* @product Called by a BTC relayer to store a BTC block on the Core blockchain
+/* @product Called by a BTC relayer to store a BTC block on the Core blockchain
    @param blockBytes: BTC block bytes
    @logic
       1. Extracts the header bytes from the blockBytes
