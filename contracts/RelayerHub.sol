@@ -6,6 +6,7 @@ import "./lib/Memory.sol";
 import "./interface/IRelayerHub.sol";
 import "./interface/IParamSubscriber.sol";
 import "./System.sol";
+import "./registry/Registry.sol";
 
 /// This contract manages BTC relayers on Core blockchain
 contract RelayerHub is IRelayerHub, System, IParamSubscriber{
@@ -45,10 +46,9 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   event paramChange(string key, bytes value);
 
 
-  function init() external onlyNotInit{
+  constructor(Registry registry) System(registry) {
     requiredDeposit = INIT_REQUIRED_DEPOSIT;
     dues = INIT_DUES;
-    alreadyInit = true;
   }
 
   /// Register as a BTC relayer on Core blockchain
@@ -65,7 +65,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     delete relayersExistMap[msg.sender];
     delete relayers[msg.sender];
     payable(msg.sender).transfer(r.deposit - r.dues);
-    payable(SYSTEM_REWARD_ADDR).transfer(r.dues);
+    s_registry.systemRewardPayable().transfer(r.dues);
     emit relayerUnRegister(msg.sender);
   }
 

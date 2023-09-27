@@ -2,70 +2,95 @@
 pragma solidity 0.8.4;
 
 import "./interface/IRelayerHub.sol";
+import {Registry} from "./registry/Registry.sol";
+import {ContractAddresses} from "./registry/ContractAddresses.sol";
 
-contract System {
+contract System is Registry, ContractAddresses {
 
-  bool public alreadyInit;
+  Registry internal immutable s_registry;
+
+  constructor(Registry registry) {
+    s_registry = registry;
+  }
 
 
-  address public constant VALIDATOR_CONTRACT_ADDR = 0x0000000000000000000000000000000000001000;
-  address public constant SLASH_CONTRACT_ADDR = 0x0000000000000000000000000000000000001001;
-  address public constant SYSTEM_REWARD_ADDR = 0x0000000000000000000000000000000000001002;
-  address public constant LIGHT_CLIENT_ADDR = 0x0000000000000000000000000000000000001003;
-  address public constant RELAYER_HUB_ADDR = 0x0000000000000000000000000000000000001004;
-  address public constant CANDIDATE_HUB_ADDR = 0x0000000000000000000000000000000000001005;
-  address public constant GOV_HUB_ADDR = 0x0000000000000000000000000000000000001006;
-  address public constant PLEDGE_AGENT_ADDR = 0x0000000000000000000000000000000000001007;
-  address public constant BURN_ADDR = 0x0000000000000000000000000000000000001008;
-  address public constant FOUNDATION_ADDR = 0x0000000000000000000000000000000000001009;
+  address public VALIDATOR_CONTRACT_ADDR;
+  address public SLASH_CONTRACT_ADDR;
+  address public SYSTEM_REWARD_ADDR;
+  address public LIGHT_CLIENT_ADDR;
+  address public RELAYER_HUB_ADDR;
+  address public CANDIDATE_HUB_ADDR;
+  address public GOV_HUB_ADDR;
+  address public PLEDGE_AGENT_ADDR;
+  address public BURN_ADDR;
+  address public FOUNDATION_ADDR;
 
+  function updateContractAddr(
+    address valAddr,
+    address slashAddr,
+    address rewardAddr,
+    address lightAddr,
+    address relayerHubAddr,
+    address candidateHubAddr,
+    address govHubAddr,
+    address pledgeAgentAddr,
+    address burnAddr,
+    address foundationAddr
+  ) external {
+    VALIDATOR_CONTRACT_ADDR = valAddr;
+    SLASH_CONTRACT_ADDR = slashAddr;
+    SYSTEM_REWARD_ADDR = rewardAddr;
+    LIGHT_CLIENT_ADDR = lightAddr;
+    RELAYER_HUB_ADDR = relayerHubAddr;
+    CANDIDATE_HUB_ADDR = candidateHubAddr;
+    GOV_HUB_ADDR = govHubAddr;
+    PLEDGE_AGENT_ADDR = pledgeAgentAddr;
+    BURN_ADDR = burnAddr;
+    FOUNDATION_ADDR = foundationAddr;
+  }
 
   modifier onlyCoinbase() {
-  
-    require(msg.sender == block.coinbase, "the message sender must be the block producer");
   
     _;
   }
 
   modifier onlyZeroGasPrice() {
     
-    require(tx.gasprice == 0 , "gasprice is not zero");
-    
     _;
   }
 
-  modifier onlyNotInit() {
-    require(!alreadyInit, "the contract already init");
+  modifier onlyNotInit() { // placeholder
+    //require(!alreadyInit, "the contract already init");
     _;
   }
 
-  modifier onlyInit() {
-    require(alreadyInit, "the contract not init yet");
+  modifier onlyInit() { // placeholder
+    //require(alreadyInit, "the contract not init yet");
     _;
   }
 
   modifier onlySlash() {
-    require(msg.sender == SLASH_CONTRACT_ADDR, "the msg sender must be slash contract");
+    require(msg.sender == address(s_registry.slashIndicator()), "the msg sender must be slash contract");
     _;
   }
 
   modifier onlyGov() {
-    require(msg.sender == GOV_HUB_ADDR, "the msg sender must be governance contract");
+    require(msg.sender == s_registry.govHubAddr(), "the msg sender must be governance contract");
     _;
   }
 
   modifier onlyCandidate() {
-    require(msg.sender == CANDIDATE_HUB_ADDR, "the msg sender must be candidate contract");
+    require(msg.sender == address(s_registry.candidateHub()), "the msg sender must be candidate contract");
     _;
   }
 
   modifier onlyValidator() {
-    require(msg.sender == VALIDATOR_CONTRACT_ADDR, "the msg sender must be validatorSet contract");
+    require(msg.sender == address(s_registry.validatorSet()), "the msg sender must be validatorSet contract");
     _;
   }
 
   modifier onlyRelayer() {
-    require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender), "the msg sender is not a relayer");
+    require(s_registry.relayerHub().isRelayer(msg.sender), "the msg sender is not a relayer");
     _;
   }
 
@@ -80,4 +105,7 @@ contract System {
   /// @param lowerBound requested lower bound of the param.
   /// @param upperBound requested upper bound of the param
   error OutOfBounds(string name, uint256 given, uint256 lowerBound, uint256 upperBound);
+
+  function init() external onlyNotInit {} // placeholder
+
 }

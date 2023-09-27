@@ -2,10 +2,16 @@
 pragma solidity 0.8.4;
 
 import "./interface/IRelayerHub.sol";
+import {Registry} from "./registry/Registry.sol";
+import {ContractAddresses} from "./registry/ContractAddresses.sol";
 
-contract System {
+contract System is Registry, ContractAddresses {
 
-  bool public alreadyInit;
+  Registry internal immutable s_registry;
+
+  constructor(Registry registry) {
+    s_registry = registry;
+  }
 
 {% if mock %}
   address public VALIDATOR_CONTRACT_ADDR;
@@ -68,38 +74,38 @@ contract System {
     _;
   }
 
-  modifier onlyNotInit() {
-    require(!alreadyInit, "the contract already init");
+  modifier onlyNotInit() { // placeholder
+    //require(!alreadyInit, "the contract already init");
     _;
   }
 
-  modifier onlyInit() {
-    require(alreadyInit, "the contract not init yet");
+  modifier onlyInit() { // placeholder
+    //require(alreadyInit, "the contract not init yet");
     _;
   }
 
   modifier onlySlash() {
-    require(msg.sender == SLASH_CONTRACT_ADDR, "the msg sender must be slash contract");
+    require(msg.sender == address(s_registry.slashIndicator()), "the msg sender must be slash contract");
     _;
   }
 
   modifier onlyGov() {
-    require(msg.sender == GOV_HUB_ADDR, "the msg sender must be governance contract");
+    require(msg.sender == s_registry.govHubAddr(), "the msg sender must be governance contract");
     _;
   }
 
   modifier onlyCandidate() {
-    require(msg.sender == CANDIDATE_HUB_ADDR, "the msg sender must be candidate contract");
+    require(msg.sender == address(s_registry.candidateHub()), "the msg sender must be candidate contract");
     _;
   }
 
   modifier onlyValidator() {
-    require(msg.sender == VALIDATOR_CONTRACT_ADDR, "the msg sender must be validatorSet contract");
+    require(msg.sender == address(s_registry.validatorSet()), "the msg sender must be validatorSet contract");
     _;
   }
 
   modifier onlyRelayer() {
-    require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender), "the msg sender is not a relayer");
+    require(s_registry.relayerHub().isRelayer(msg.sender), "the msg sender is not a relayer");
     _;
   }
 
@@ -114,4 +120,7 @@ contract System {
   /// @param lowerBound requested lower bound of the param.
   /// @param upperBound requested upper bound of the param
   error OutOfBounds(string name, uint256 given, uint256 lowerBound, uint256 upperBound);
+
+  function init() external onlyNotInit {} // placeholder
+
 }

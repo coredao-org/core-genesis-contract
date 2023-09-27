@@ -6,7 +6,7 @@ contract PledgeAgentProxy {
 
     event delegate(bool success);
     event claim(uint256 reward, bool allClaimed);
-    constructor(address pledgeAgentAddress) public {
+    constructor(address pledgeAgentAddress) {
         pledgeAgent = pledgeAgentAddress;
     }
 

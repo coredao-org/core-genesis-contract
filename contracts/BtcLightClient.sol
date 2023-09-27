@@ -8,6 +8,7 @@ import "./interface/ICandidateHub.sol";
 import "./interface/ISystemReward.sol";
 import "./interface/IParamSubscriber.sol";
 import "./System.sol";
+import "./registry/Registry.sol";
 
 /// This contract implements a BTC light client on Core blockchain
 /// Relayers store BTC blocks to Core blockchain by calling this contract
@@ -85,9 +86,10 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   event StoreHeader(bytes32 indexed blockHash, address candidate, address indexed rewardAddr, uint32 indexed height, bytes32 bindingHash);
   event paramChange(string key, bytes value);
 
+
   /*********************** init **************************/
   /// Initialize 
-  function init() external onlyNotInit {
+  constructor(Registry registry) System(registry) {
     bytes32 blockHash = doubleShaFlip(INIT_CONSENSUS_STATE_BYTES);
     address rewardAddr;
     address candidateAddr;
@@ -108,8 +110,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     maxWeight = MAXIMUM_WEIGHT;
     roundInterval = INIT_ROUND_INTERVAL;
     storeBlockGasPrice = INIT_STORE_BLOCK_GAS_PRICE;
-    alreadyInit = true;
   }
+
 
   /// Store a BTC block in Core blockchain
   /// @dev This method is called by relayers
@@ -198,7 +200,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     // The mining power with rounds less than or equal to frozenRoundTag has been frozen 
     // and there is no need to continue staking, otherwise it may disrupt the reward 
     // distribution mechanism
-    uint256 frozenRoundTag = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag() - POWER_ROUND_GAP;
+    uint256 frozenRoundTag = s_registry.candidateHub().getRoundTag() - POWER_ROUND_GAP;
     if (candidate != address(0) && blockRoundTag > frozenRoundTag) {
       address miner = getRewardAddress(blockHash);
       RoundPower storage r = roundPowerMap[blockRoundTag];
@@ -218,7 +220,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
      require(reward != 0, "no relayer reward");
      relayerRewardVault[relayerAddr] = 0;
      address payable recipient = payable(relayerAddr);
-     ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(recipient, reward);
+     s_registry.systemReward().claimRewards(recipient, reward);
   }
 
   /// Distribute relayer rewards

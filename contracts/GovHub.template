@@ -7,6 +7,8 @@ import "./lib/Memory.sol";
 import "./lib/BytesLib.sol";
 import "./lib/RLPDecode.sol";
 import "./interface/IParamSubscriber.sol";
+import "./registry/Registry.sol";
+
 
 /// This is the smart contract to manage governance votes
 contract GovHub is System, IParamSubscriber {
@@ -89,7 +91,7 @@ contract GovHub is System, IParamSubscriber {
     _;
   }
 
-  function init() external onlyNotInit {
+  constructor(Registry registry) System(registry) {
     proposalMaxOperations = PROPOSAL_MAX_OPERATIONS;
     votingPeriod = VOTING_PERIOD;
     executingPeriod = EXECUTING_PERIOD;
@@ -100,7 +102,6 @@ contract GovHub is System, IParamSubscriber {
       memberSet.push(addr);
       members[addr] = memberSet.length;
     }
-    alreadyInit = true;
   }
 
   /// Make a new proposal

@@ -10,6 +10,7 @@ import "./interface/IPledgeAgent.sol";
 import "./interface/ISystemReward.sol";
 import "./interface/ICandidateHub.sol";
 import "./lib/RLPDecode.sol";
+import "./registry/Registry.sol";
 
 /// This contract manages elected validators in each round
 /// All rewards for validators on Core blockchain are minted in genesis block and stored in this contract
@@ -66,7 +67,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   event received(address indexed from, uint256 amount);
 
   /*********************** init **************************/
-  function init() external onlyNotInit {
+  constructor(Registry registry) System(registry) {
     (Validator[] memory validatorSet, bool valid) = decodeValidatorSet(INIT_VALIDATORSET_BYTES);
     require(valid, "failed to parse init validatorSet");
     uint256 validatorSize = validatorSet.length;
@@ -76,7 +77,6 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
     blockReward = BLOCK_REWARD;
     blockRewardIncentivePercent = BLOCK_REWARD_INCENTIVE_PERCENT;
-    alreadyInit = true;
   }
 
   /*********************** External Functions **************************/
@@ -130,7 +130,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       incentiveSum += incentiveValue;
       v.income -= incentiveValue;
     }
-    ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: incentiveSum }();
+    s_registry.systemReward().receiveRewards{ value: incentiveSum }();
 
     operateAddressList = new address[](validatorSize);
     uint256[] memory rewardList = new uint256[](validatorSize);
@@ -158,7 +158,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       }
     }
 
-    IPledgeAgent(PLEDGE_AGENT_ADDR).addRoundReward{ value: rewardSum }(operateAddressList, rewardList);
+    s_registry.pledgeAgent().addRoundReward{ value: rewardSum }(operateAddressList, rewardList);
     totalInCome = 0;
     return operateAddressList;
   } 
@@ -289,8 +289,8 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
         currentValidatorSet[i].income += averageDistribute;
       }
     }
-    ICandidateHub(CANDIDATE_HUB_ADDR).jailValidator(operateAddress, felonyRound, felonyDeposit);
-    IPledgeAgent(PLEDGE_AGENT_ADDR).onFelony(operateAddress);
+    s_registry.candidateHub().jailValidator(operateAddress, felonyRound, felonyDeposit);
+    s_registry.pledgeAgent().onFelony(operateAddress);
   }
 
   /*********************** Param update ********************************/

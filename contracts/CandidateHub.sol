@@ -10,6 +10,8 @@ import "./interface/ISlashIndicator.sol";
 import "./interface/ILightClient.sol";
 import "./System.sol";
 import "./lib/Address.sol";
+import "./registry/Registry.sol";
+
 
 /// This contract manages all validator candidates on Core blockchain
 /// It also exposes the method `turnRound` for the consensus engine to execute the `turn round` workflow
@@ -59,6 +61,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
   uint256 public roundTag;
   
+  bool public controlRoundTimeTag = false;
+  
 
   struct Candidate {
     address operateAddr;
@@ -86,14 +90,17 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   event paramChange(string key, bytes value);
 
   /*********************** init **************************/
-  function init() external onlyNotInit {
+  constructor(Registry registry) System(registry) {
     requiredMargin = INIT_REQUIRED_MARGIN;
     dues = INIT_DUES;
     roundInterval = INIT_ROUND_INTERVAL;
     validatorCount = INIT_VALIDATOR_COUNT;
     maxCommissionChange = MAX_COMMISSION_CHANGE;
     roundTag = 7;
-    alreadyInit = true;
+  }
+  
+  function setControlRoundTimeTag(bool value) external {
+    controlRoundTimeTag = value;
   }
   
   /********************* ICandidateHub interface ****************************/
@@ -136,12 +143,12 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       }
       changeStatus(c, status);
       if (fine != 0) {
-        payable(SYSTEM_REWARD_ADDR).transfer(fine);
+        s_registry.systemRewardPayable().transfer(fine);
       }
     } else {
       removeCandidate(index);
 
-      payable(SYSTEM_REWARD_ADDR).transfer(margin);
+      s_registry.systemRewardPayable().transfer(margin);
       emit deductedMargin(operateAddress, margin, 0);
     }
   }
@@ -156,21 +163,27 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @dev this method is called by Golang consensus engine at the end of a round
   function turnRound() external onlyCoinbase onlyInit onlyZeroGasPrice {
     // distribute rewards for the about to end round
-    address[] memory lastCandidates = IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward();
+    address[] memory lastCandidates = s_registry.validatorSet().distributeReward();
 
     // fetch BTC miners who delegated hash power in the about to end round; 
     // and distribute rewards to them
     uint256 lastCandidateSize = lastCandidates.length;
     for (uint256 i = 0; i < lastCandidateSize; i++) {
-      address[] memory miners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(roundTag-7, lastCandidates[i]);
-      IPledgeAgent(PLEDGE_AGENT_ADDR).distributePowerReward(lastCandidates[i], miners);
+      address[] memory miners = s_registry.lightClient().getRoundMiners(roundTag-7, lastCandidates[i]);
+      s_registry.pledgeAgent().distributePowerReward(lastCandidates[i], miners);
     }
 
     // update the system round tag; new round starts
     
+    if (controlRoundTimeTag == false) {
+    
     uint256 roundTimestamp = block.timestamp / roundInterval;
     require(roundTimestamp > roundTag, "not allowed to turn round, wait for more time");
     roundTag = roundTimestamp;
+    
+    } else {
+        roundTag++;
+    }
     
 
     // reset validator flags for all candidates.
@@ -192,12 +205,12 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     }
     // fetch hash power delegated on list of candidates
     // which is used to calculate hybrid score for validators in the new round
-    powers = ILightClient(LIGHT_CLIENT_ADDR).getRoundPowers(roundTag-7, candidates);
+    powers = s_registry.lightClient().getRoundPowers(roundTag-7, candidates);
 
     // calculate the hybrid score for all valid candidates and 
     // choose top ones to form the validator set of the new round
     (uint256[] memory scores, uint256 totalPower, uint256 totalCoin) =
-      IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(candidates, powers);
+      s_registry.pledgeAgent().getHybridScore(candidates, powers);
     address[] memory validatorList = getValidators(candidates, scores, validatorCount);
 
     // prepare arguments, and notify ValidatorSet contract
@@ -219,13 +232,13 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       statusList[index - 1] |= SET_VALIDATOR;
     }
 
-    IValidatorSet(VALIDATOR_CONTRACT_ADDR).updateValidatorSet(validatorList, consensusAddrList, feeAddrList, commissionThousandthsList);
+    s_registry.validatorSet().updateValidatorSet(validatorList, consensusAddrList, feeAddrList, commissionThousandthsList);
 
     // clean slash contract
-    ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
+    s_registry.slashIndicator().clean();
 
     // notify PledgeAgent contract
-    IPledgeAgent(PLEDGE_AGENT_ADDR).setNewRound(validatorList, totalPower, totalCoin, roundTag);
+    s_registry.pledgeAgent().setNewRound(validatorList, totalPower, totalCoin, roundTag);
 
     // update validator jail status
     for (uint256 i = 0; i < candidateSize; i++) {
@@ -282,9 +295,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     if (margin > dues) {
       uint256 value = margin - dues;
       Address.sendValue(payable(msg.sender), value);
-      payable(SYSTEM_REWARD_ADDR).transfer(uint256(dues));
+      s_registry.systemRewardPayable().transfer(uint256(dues));
     } else {
-      payable(SYSTEM_REWARD_ADDR).transfer(margin);
+      s_registry.systemRewardPayable().transfer(margin);
     }
   }
 

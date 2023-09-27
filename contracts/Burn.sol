@@ -5,6 +5,8 @@ import "./interface/IParamSubscriber.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./interface/IBurn.sol";
+import "./registry/Registry.sol";
+
 
 /// This contract burns CORE tokens up to pre defined CAP
 contract Burn is System, IBurn, IParamSubscriber {
@@ -13,9 +15,8 @@ contract Burn is System, IBurn, IParamSubscriber {
   uint256 public burnCap;
 
   /*********************** init **************************/
-  function init() external onlyNotInit {
+  constructor(Registry registry) System(registry) {
     burnCap = BURN_CAP;
-    alreadyInit = true;
   }
 
   /*********************** events **************************/

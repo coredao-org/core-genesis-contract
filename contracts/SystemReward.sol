@@ -6,27 +6,23 @@ import "./interface/IParamSubscriber.sol";
 import "./interface/IBurn.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
+import "./registry/Registry.sol";
+
 
 /// This smart contract manages funds for relayers and verifiers
 contract SystemReward is System, ISystemReward, IParamSubscriber {
   uint256 public constant INCENTIVE_BALANCE_CAP = 1e25;
 
   uint256 public incentiveBalanceCap;
-  uint256 public numOperator;
-  mapping(address => bool) operators;
   bool isBurn;
 
   /*********************** init **************************/
-  function init() external onlyNotInit {
-    operators[LIGHT_CLIENT_ADDR] = true;
-    operators[SLASH_CONTRACT_ADDR] = true;
-    numOperator = 2;
+  constructor(Registry registry) System(registry) {
     incentiveBalanceCap = INCENTIVE_BALANCE_CAP;
-    alreadyInit = true;
   }
 
   modifier onlyOperator() {
-    require(operators[msg.sender], "only operator is allowed to call the method");
+    require(_isOperator(msg.sender), "only operator is allowed to call the method");
     _;
   }
 
@@ -48,9 +44,9 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
       if (address(this).balance > incentiveBalanceCap) {
         uint256 value = address(this).balance - incentiveBalanceCap;
         if (isBurn) {
-          IBurn(BURN_ADDR).burn{ value: value }();
+          s_registry.burnContract().burn{ value: value }();
         } else {
-          payable(FOUNDATION_ADDR).transfer(value);
+          s_registry.foundationPayable().transfer(value);
         }
       }
       emit receiveDeposit(msg.sender, msg.value);
@@ -81,7 +77,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   /// @param addr The address to check
   /// @return true/false
   function isOperator(address addr) external view returns (bool) {
-    return operators[addr];
+    return _isOperator(addr);
   }
 
   /*********************** Param update ********************************/
@@ -103,5 +99,9 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
       require(false, "unknown param");
     }
     emit paramChange(key, value);
+  }
+
+  function _isOperator(address addr) private view returns (bool) {
+    return addr == address(s_registry.lightClient()) || addr == address(s_registry.slashIndicator());
   }
 }
