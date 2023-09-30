@@ -88,15 +88,15 @@ contract GovHub is System, IParamSubscriber {
     _;
   }
 
-  constructor(Registry registry, uint256 votingPeriod_, uint256 executingPeriod_, bytes memory membersBytes_) System(registry) {
+  constructor(Registry registry, uint256 votingPeriod_, uint256 executingPeriod_, bytes memory initialMembers_) System(registry) {
     proposalMaxOperations = PROPOSAL_MAX_OPERATIONS;
     votingPeriod = votingPeriod_;
     executingPeriod = executingPeriod_;
-    _loadInitialMembers(membersBytes_);
+    _loadInitialMembers(initialMembers_);
   }
 
-  function _loadInitialMembers(bytes memory membersBytes_) internal virtual {
-    RLPDecode.RLPItem[] memory items = membersBytes_.toRLPItem().toList();
+  function _loadInitialMembers(bytes memory initialMembers_) internal virtual {
+    RLPDecode.RLPItem[] memory items = initialMembers_.toRLPItem().toList();
     uint256 itemSize = items.length;
     for (uint256 i = 0; i < itemSize; i++) {
       address addr = items[i].toAddress();

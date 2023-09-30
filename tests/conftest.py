@@ -102,7 +102,7 @@ def validator_set(accounts, deployed_registry):
 
 @pytest.fixture(scope="module")
 def pledge_agent(accounts, deployed_registry):
-    powerBlockFactor = 2
+    powerBlockFactor = 1
     c = accounts[0].deploy(PledgeAgentMock, deployed_registry, powerBlockFactor) 
     c.init()
     if is_development:

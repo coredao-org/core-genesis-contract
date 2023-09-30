@@ -121,7 +121,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param target Address of the target candidate
   error SameCandidate(address source, address target);
 
-  constructor(Registry registry, uint256 powerBlockFactor_) System(registry) {
+  constructor(Registry registry, uint256 powerBlockFactor_) System(registry) { //@openissue on mainnet: powerBlockFactor_ = 1e18
     POWER_BLOCK_FACTOR = powerBlockFactor_;    
     requiredCoinDeposit = INIT_REQUIRED_COIN_DEPOSIT;
     powerFactor = INIT_HASH_POWER_FACTOR;
