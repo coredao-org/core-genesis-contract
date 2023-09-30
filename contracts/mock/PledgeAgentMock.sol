@@ -1,9 +1,14 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
 import "../PledgeAgent.sol";
+import "../registry/Registry.sol";
+
 
 contract PledgeAgentMock is PledgeAgent {
     uint256 public rewardAmountM;
+    constructor(Registry registry, uint256 powerBlockFactor) 
+                PledgeAgent(registry, powerBlockFactor) {}
 
     function developmentInit() external {
         requiredCoinDeposit = requiredCoinDeposit / 1e16;

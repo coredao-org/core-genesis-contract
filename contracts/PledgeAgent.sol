@@ -24,7 +24,8 @@ import "./registry/Registry.sol";
 contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   uint256 public constant INIT_REQUIRED_COIN_DEPOSIT = 1e18;
   uint256 public constant INIT_HASH_POWER_FACTOR = 20000;
-  uint256 public constant POWER_BLOCK_FACTOR = 1;
+
+  uint256 public immutable POWER_BLOCK_FACTOR;
 
   uint256 public requiredCoinDeposit;
 
@@ -120,7 +121,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param target Address of the target candidate
   error SameCandidate(address source, address target);
 
-  constructor(Registry registry) System(registry) {
+  constructor(Registry registry, uint256 powerBlockFactor_) System(registry) {
+    POWER_BLOCK_FACTOR = powerBlockFactor_;    
     requiredCoinDeposit = INIT_REQUIRED_COIN_DEPOSIT;
     powerFactor = INIT_HASH_POWER_FACTOR;
     roundTag = 1;
@@ -259,7 +261,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
 
     if (undelegateCoinReward != 0) {
-      s_registry.systemReward().receiveRewards{ value: undelegateCoinReward }();
+      safe_systemReward().receiveRewards{ value: undelegateCoinReward }();
     }
   }
 
@@ -278,7 +280,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Delegate coin to a validator
   /// @param agent The operator address of validator
   function delegateCoin(address agent) external payable {
-    if (!s_registry.candidateHub().canDelegate(agent)) {
+    if (!safe_candidateHub().canDelegate(agent)) {
       revert InactiveAgent(agent);
     }
     uint256 newDeposit = delegateCoin(agent, msg.sender, msg.value, 0);
@@ -312,7 +314,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param targetAgent The validator to transfer coin stake to
   /// @param amount The amount of CORE to transfer
   function transferCoin(address sourceAgent, address targetAgent, uint256 amount) public {
-    if (!s_registry.candidateHub().canDelegate(targetAgent)) {
+    if (!safe_candidateHub().canDelegate(targetAgent)) {
       revert InactiveAgent(targetAgent);
     }
     if (sourceAgent == targetAgent) {
@@ -538,7 +540,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
           if (r.coin == 0) {
             delete a.rewardSet[rewardIndex];
           }
-          s_registry.systemReward().receiveRewards{ value: undelegateReward }();
+          safe_systemReward().receiveRewards{ value: undelegateReward }();
         }
         deposit = d.deposit + transferOutDeposit;
         d.deposit = d.newDeposit;

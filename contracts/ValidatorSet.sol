@@ -22,9 +22,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   uint256 public constant BLOCK_REWARD = 3e18;
   uint256 public constant BLOCK_REWARD_INCENTIVE_PERCENT = 10;
   uint256 public constant REDUCE_FACTOR = 9639;
-  uint256 public  SUBSIDY_REDUCE_INTERVAL = 10512000;
-
-  bytes public constant INIT_VALIDATORSET_BYTES = hex"f90285ea944121f067b0f5135d77c29b2b329e8cb1bd96c96094f8b18cecc98d976ad253d38e4100a73d4e154726ea947f461f8a1c35edecd6816e76eb2e84eb661751ee94f8b18cecc98d976ad253d38e4100a73d4e154726ea94fd806ab93db5742944b7b50ce759e5eee5f6fe5094f8b18cecc98d976ad253d38e4100a73d4e154726ea947ef3a94ad1c443481fb3d86829355ca90477f8b594f8b18cecc98d976ad253d38e4100a73d4e154726ea9467d1ad48f91e131413bd0b04e823f3ae4f81e85394f8b18cecc98d976ad253d38e4100a73d4e154726ea943fb42cab4416024dc1b4c9e21b9acd0dfcef35f694f8b18cecc98d976ad253d38e4100a73d4e154726ea943511e3b8ac7336b99517d324145e9b5bb33e08a494f8b18cecc98d976ad253d38e4100a73d4e154726ea94729f39a54304fcc6ec279684c71491a385d7b9ae94f8b18cecc98d976ad253d38e4100a73d4e154726ea94f44a785fd9f23f0abd443541386e71356ce619dc94f8b18cecc98d976ad253d38e4100a73d4e154726ea942efd3cf0733421aec3e4202480d0a90bd157514994f8b18cecc98d976ad253d38e4100a73d4e154726ea94613b0f519ada008cb99b6130e89122ba416bf15994f8b18cecc98d976ad253d38e4100a73d4e154726ea94c0925eeb800ff6ba4695ded61562a10102152b5f94f8b18cecc98d976ad253d38e4100a73d4e154726ea9419e3c7d7e69f273f3f91c060bb438a007f6fc33c94f8b18cecc98d976ad253d38e4100a73d4e154726ea94e127f110d172a0c4c6209fe045dd71781e8fe9d494f8b18cecc98d976ad253d38e4100a73d4e154726ea94f778dc4a199a440dbe9f16d1e13e185bb179b3b794f8b18cecc98d976ad253d38e4100a73d4e154726";
+  uint256 public constant SUBSIDY_REDUCE_INTERVAL = 10512000;
 
   /*********************** state of the contract **************************/
   uint256 public blockReward;
@@ -67,16 +65,20 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   event received(address indexed from, uint256 amount);
 
   /*********************** init **************************/
-  constructor(Registry registry) System(registry) {
-    (Validator[] memory validatorSet, bool valid) = decodeValidatorSet(INIT_VALIDATORSET_BYTES);
+  constructor(Registry registry, bytes memory validatorBytes_) System(registry) {
+    blockReward = BLOCK_REWARD;
+    blockRewardIncentivePercent = BLOCK_REWARD_INCENTIVE_PERCENT;
+    _loadInitialValidatorSet(validatorBytes_);
+  }
+
+  function _loadInitialValidatorSet(bytes memory validatorBytes_) internal virtual {
+    (Validator[] memory validatorSet, bool valid) = decodeValidatorSet(validatorBytes_);
     require(valid, "failed to parse init validatorSet");
     uint256 validatorSize = validatorSet.length;
     for (uint256 i = 0; i < validatorSize; i++) {
       currentValidatorSet.push(validatorSet[i]);
       currentValidatorSetMap[validatorSet[i].consensusAddress] = i + 1;
     }
-    blockReward = BLOCK_REWARD;
-    blockRewardIncentivePercent = BLOCK_REWARD_INCENTIVE_PERCENT;
   }
 
   /*********************** External Functions **************************/
@@ -96,8 +98,8 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// Add block reward on a validator 
   /// @dev This method is called by the golang consensus engine every block
   /// @param valAddr The validator address
-  function deposit(address valAddr) external payable onlyCoinbase onlyInit onlyZeroGasPrice {
-    if (block.number % SUBSIDY_REDUCE_INTERVAL == 0) {
+  function deposit(address valAddr) public virtual payable onlyCoinbase onlyInit onlyZeroGasPrice {
+    if (block.number % subsidyReduceInterval() == 0) {
       blockReward = blockReward * REDUCE_FACTOR / 10000;
     }
     uint256 value = msg.value;
@@ -115,6 +117,10 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
   }
 
+  function subsidyReduceInterval() public virtual view returns(uint) { 
+    return SUBSIDY_REDUCE_INTERVAL;
+  }
+
   /// Distribute rewards to validators (and delegators through PledgeAgent)
   /// @dev this method is called by the CandidateHub contract at the beginning of turn round
   /// @dev this is where we deal with reward distribution logics
@@ -130,7 +136,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       incentiveSum += incentiveValue;
       v.income -= incentiveValue;
     }
-    s_registry.systemReward().receiveRewards{ value: incentiveSum }();
+    safe_systemReward().receiveRewards{ value: incentiveSum }();
 
     operateAddressList = new address[](validatorSize);
     uint256[] memory rewardList = new uint256[](validatorSize);
@@ -158,7 +164,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       }
     }
 
-    s_registry.pledgeAgent().addRoundReward{ value: rewardSum }(operateAddressList, rewardList);
+    safe_pledgeAgent().addRoundReward{ value: rewardSum }(operateAddressList, rewardList);
     totalInCome = 0;
     return operateAddressList;
   } 
@@ -289,8 +295,8 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
         currentValidatorSet[i].income += averageDistribute;
       }
     }
-    s_registry.candidateHub().jailValidator(operateAddress, felonyRound, felonyDeposit);
-    s_registry.pledgeAgent().onFelony(operateAddress);
+    safe_candidateHub().jailValidator(operateAddress, felonyRound, felonyDeposit);
+    safe_pledgeAgent().onFelony(operateAddress);
   }
 
   /*********************** Param update ********************************/

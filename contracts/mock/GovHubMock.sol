@@ -1,8 +1,16 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
 import "../GovHub.sol";
+import "../registry/Registry.sol";
 
 contract GovHubMock is GovHub {
+    constructor(Registry registry, uint256 votingPeriod_, uint256 executingPeriod_, bytes memory membersBytes_) 
+            GovHub(registry, votingPeriod_, executingPeriod_, membersBytes_) {}
+        
+    
+    function _loadInitialMembers(bytes memory membersBytes_) internal override {}
+
     function developmentInit() external {
         votingPeriod = 20;
         address[2] memory initMembers = [

@@ -24,10 +24,11 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   uint256 public constant FELONY_THRESHOLD = 150;
   uint256 public constant DECREASE_RATE = 4;
   uint256 public constant INIT_REWARD_FOR_REPORT_DOUBLE_SIGN = 5e20;
-  uint32 public constant CHAINID = 1112;
   uint256 public constant INIT_FELONY_DEPOSIT = 1e21;
   uint256 public constant INIT_FELONY_ROUND = 2;
   uint256 public constant INFINITY_ROUND = 0xFFFFFFFFFFFFFFFF;
+
+  uint32 public immutable CHAINID;
 
   // State of the contract
   address[] public validators;
@@ -58,8 +59,9 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   event indicatorCleaned();
   event paramChange(string key, bytes value);
 
-  
-  constructor(Registry registry) System(registry) {
+
+  constructor(Registry registry, uint32 chainID_) System(registry) {
+    CHAINID = chainID_;
     misdemeanorThreshold = MISDEMEANOR_THRESHOLD;
     felonyThreshold = FELONY_THRESHOLD;
     rewardForReportDoubleSign = INIT_REWARD_FOR_REPORT_DOUBLE_SIGN;
@@ -67,12 +69,16 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     felonyRound = INIT_FELONY_ROUND;
   }
 
+  function getSlashValidators() external view returns (address[] memory) {
+    return validators;
+  }
+
   /*********************** External func ********************************/
   /// Slash the validator because of unavailability
   /// This method is called by other validators from golang consensus engine.
   /// @param validator The consensus address of validator
-  function slash(address validator) external onlyCoinbase onlyInit oncePerBlock onlyZeroGasPrice{
-    if (!s_registry.validatorSet().isValidator(validator)) {
+  function slash(address validator) public virtual onlyCoinbase onlyInit oncePerBlock onlyZeroGasPrice{
+    if (!safe_validatorSet().isValidator(validator)) {
       return;
     }
     Indicator memory indicator = indicators[validator];
@@ -86,9 +92,9 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     indicator.height = block.number;
     if (indicator.count % felonyThreshold == 0) {
       indicator.count = 0;
-      s_registry.validatorSet().felony(validator, felonyRound, felonyDeposit);
+      safe_validatorSet().felony(validator, felonyRound, felonyDeposit);
     } else if (indicator.count % misdemeanorThreshold == 0) {
-      s_registry.validatorSet().misdemeanor(validator);
+      safe_validatorSet().misdemeanor(validator);
     }
     indicators[validator] = indicator;
     emit validatorSlashed(validator);
@@ -109,9 +115,9 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     require(sigHash1 != sigHash2, "must be two different blocks");
     require(validator1 != address(0x00), "validator is illegal");
     require(validator1 == validator2, "must be the same validator");
-    require(s_registry.validatorSet().isValidator(validator1), "not a validator");
-    s_registry.validatorSet().felony(validator1, INFINITY_ROUND, felonyDeposit);
-    s_registry.systemReward().claimRewards(payable(msg.sender), rewardForReportDoubleSign);
+    require(safe_validatorSet().isValidator(validator1), "not a validator");
+    safe_validatorSet().felony(validator1, INFINITY_ROUND, felonyDeposit);
+    safe_systemReward().claimRewards(payable(msg.sender), rewardForReportDoubleSign);
   }
 
   /// Clean slash record by felonyThreshold/DECREASE_RATE.
@@ -223,7 +229,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   }
 
   /*********************** Internal Functions **************************/
-  function parseHeader(RLPDecode.RLPItem[] memory items) internal pure returns (bytes32,address){
+  function parseHeader(RLPDecode.RLPItem[] memory items) internal view returns (bytes32,address){
     bytes memory extra = items[12].toBytes();
     bytes memory sig = BytesLib.slice(extra, 32, 65);
     bytes[] memory rlpbytes_list = new bytes[](16);

@@ -19,8 +19,6 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
   uint256 public constant INIT_REQUIRED_MARGIN = 1e22;
   uint256 public constant INIT_DUES = 1e20;
-  uint256 public constant INIT_ROUND_INTERVAL = 86400;
-  uint256 public constant INIT_VALIDATOR_COUNT = 21;
   uint256 public constant MAX_COMMISSION_CHANGE = 10;
   uint256 public constant CANDIDATE_COUNT_LIMIT = 1000;
 
@@ -60,9 +58,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   mapping(address => uint256) public jailMap;
 
   uint256 public roundTag;
-  
   bool public controlRoundTimeTag = false;
-  
 
   struct Candidate {
     address operateAddr;
@@ -90,19 +86,19 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   event paramChange(string key, bytes value);
 
   /*********************** init **************************/
-  constructor(Registry registry) System(registry) {
+  constructor(Registry registry, uint256 roundInterval_, uint256 validatorCount_) System(registry) {
     requiredMargin = INIT_REQUIRED_MARGIN;
     dues = INIT_DUES;
-    roundInterval = INIT_ROUND_INTERVAL;
-    validatorCount = INIT_VALIDATOR_COUNT;
+    roundInterval = roundInterval_;
+    validatorCount = validatorCount_;
     maxCommissionChange = MAX_COMMISSION_CHANGE;
     roundTag = 7;
   }
-  
-  function setControlRoundTimeTag(bool value) external {
+
+  function setControlRoundTimeTag(bool value) external onlyGov {
     controlRoundTimeTag = value;
   }
-  
+
   /********************* ICandidateHub interface ****************************/
   /// Whether users can delegate on a validator candidate
   /// @param agent The operator address of the validator candidate
@@ -143,12 +139,12 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       }
       changeStatus(c, status);
       if (fine != 0) {
-        s_registry.systemRewardPayable().transfer(fine);
+        safe_systemRewardPayable().transfer(fine);
       }
     } else {
       removeCandidate(index);
 
-      s_registry.systemRewardPayable().transfer(margin);
+      safe_systemRewardPayable().transfer(margin);
       emit deductedMargin(operateAddress, margin, 0);
     }
   }
@@ -161,30 +157,26 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /********************* External methods  ****************************/
   /// The `turn round` workflow
   /// @dev this method is called by Golang consensus engine at the end of a round
-  function turnRound() external onlyCoinbase onlyInit onlyZeroGasPrice {
+  function turnRound() public virtual onlyCoinbase onlyInit onlyZeroGasPrice {
     // distribute rewards for the about to end round
-    address[] memory lastCandidates = s_registry.validatorSet().distributeReward();
+    address[] memory lastCandidates = safe_validatorSet().distributeReward();
 
     // fetch BTC miners who delegated hash power in the about to end round; 
     // and distribute rewards to them
     uint256 lastCandidateSize = lastCandidates.length;
     for (uint256 i = 0; i < lastCandidateSize; i++) {
-      address[] memory miners = s_registry.lightClient().getRoundMiners(roundTag-7, lastCandidates[i]);
-      s_registry.pledgeAgent().distributePowerReward(lastCandidates[i], miners);
+      address[] memory miners = safe_lightClient().getRoundMiners(roundTag-7, lastCandidates[i]);
+      safe_pledgeAgent().distributePowerReward(lastCandidates[i], miners);
     }
 
     // update the system round tag; new round starts
-    
-    if (controlRoundTimeTag == false) {
-    
-    uint256 roundTimestamp = block.timestamp / roundInterval;
-    require(roundTimestamp > roundTag, "not allowed to turn round, wait for more time");
-    roundTag = roundTimestamp;
-    
+    if (!controlRoundTimeTag) {
+      uint256 roundTimestamp = block.timestamp / roundInterval;
+      require(roundTimestamp > roundTag, "not allowed to turn round, wait for more time");
+      roundTag = roundTimestamp;
     } else {
         roundTag++;
     }
-    
 
     // reset validator flags for all candidates.
     uint256 candidateSize = candidateSet.length;
@@ -205,12 +197,12 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     }
     // fetch hash power delegated on list of candidates
     // which is used to calculate hybrid score for validators in the new round
-    powers = s_registry.lightClient().getRoundPowers(roundTag-7, candidates);
+    powers = safe_lightClient().getRoundPowers(roundTag-7, candidates);
 
     // calculate the hybrid score for all valid candidates and 
     // choose top ones to form the validator set of the new round
     (uint256[] memory scores, uint256 totalPower, uint256 totalCoin) =
-      s_registry.pledgeAgent().getHybridScore(candidates, powers);
+      safe_pledgeAgent().getHybridScore(candidates, powers);
     address[] memory validatorList = getValidators(candidates, scores, validatorCount);
 
     // prepare arguments, and notify ValidatorSet contract
@@ -232,13 +224,13 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       statusList[index - 1] |= SET_VALIDATOR;
     }
 
-    s_registry.validatorSet().updateValidatorSet(validatorList, consensusAddrList, feeAddrList, commissionThousandthsList);
+    safe_validatorSet().updateValidatorSet(validatorList, consensusAddrList, feeAddrList, commissionThousandthsList);
 
     // clean slash contract
-    s_registry.slashIndicator().clean();
+    safe_slashIndicator().clean();
 
     // notify PledgeAgent contract
-    s_registry.pledgeAgent().setNewRound(validatorList, totalPower, totalCoin, roundTag);
+    safe_pledgeAgent().setNewRound(validatorList, totalPower, totalCoin, roundTag);
 
     // update validator jail status
     for (uint256 i = 0; i < candidateSize; i++) {
@@ -295,9 +287,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     if (margin > dues) {
       uint256 value = margin - dues;
       Address.sendValue(payable(msg.sender), value);
-      s_registry.systemRewardPayable().transfer(uint256(dues));
+      safe_systemRewardPayable().transfer(uint256(dues));
     } else {
-      s_registry.systemRewardPayable().transfer(margin);
+      safe_systemRewardPayable().transfer(margin);
     }
   }
 

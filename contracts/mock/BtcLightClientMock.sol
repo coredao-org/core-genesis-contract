@@ -1,6 +1,9 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
+
 import "../BtcLightClient.sol";
 import "../lib/BytesLib.sol";
+import "../registry/Registry.sol";
 
 contract BtcLightClientMock is BtcLightClient {
     using BytesLib for bytes;
@@ -8,9 +11,12 @@ contract BtcLightClientMock is BtcLightClient {
     uint256 public constant MOCK_SCORE = 24371874614346;
     uint32 public constant MOCK_ADJUSTMENT = 11;
 
-    constructor() BtcLightClient() {
-        mockBlockHeight = INIT_CHAIN_HEIGHT;
+    constructor(Registry registry, bytes memory consensusState, uint32 chainHeight, uint256 roundInterval_) 
+            BtcLightClient(registry, consensusState, chainHeight, roundInterval_) {
+        mockBlockHeight = chainHeight;
     }
+
+    function _initConsensusState(bytes memory consensusStateBytes_, uint32 chainHeight_) internal override {}
 
     function developmentInit() external {
         rewardForSyncHeader = rewardForSyncHeader / 1e16;

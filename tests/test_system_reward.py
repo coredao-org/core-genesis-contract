@@ -15,7 +15,7 @@ foundation_tracker = None
 @pytest.fixture(scope="module", autouse=True)
 def set_up(validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub,
            gov_hub, pledge_agent, burn, foundation):
-    system_reward.updateContractAddr(
+    system_reward.updateContractAddr( 
         validator_set.address,
         slash_indicator.address,
         system_reward.address,

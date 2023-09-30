@@ -15,19 +15,18 @@ def set_up():
     pass
 
 
-def fake_gov():
-    GovHubMock[0].updateContractAddr(
-        ValidatorSetMock[0].address,
-        SlashIndicatorMock[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        accounts[0],
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address
-    )
+def fake_gov(deployed_registry):
+    govHubAddr = accounts[0]
+    deployed_registry.setAll([Burn[0], 
+                              BtcLightClientMock[0], 
+                              SlashIndicatorMock[0], 
+                              SystemRewardMock[0], 
+                              CandidateHubMock[0], 
+                              PledgeAgentMock[0], 
+                              ValidatorSetMock[0], 
+                              RelayerHubMock[0], 
+                              Foundation[0].address, 
+                              govHubAddr]); 
 
 
 def test_receive_money(gov_hub):

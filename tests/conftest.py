@@ -5,7 +5,7 @@ from brownie import *
 
 @pytest.fixture(scope="session", autouse=True)
 def is_development() -> bool:
-    return network.show_active() == "development"
+    return network.show_active() == "development" 
 
 
 @pytest.fixture(autouse=True)
@@ -23,9 +23,18 @@ def library_set_up(accounts):
     accounts[0].deploy(SafeMath)
 
 
+
 @pytest.fixture(scope="module")
-def candidate_hub(accounts):
-    c = accounts[0].deploy(CandidateHubMock)
+def deployed_registry(accounts):
+    c = accounts[0].deploy(Registry)
+    return c
+
+
+@pytest.fixture(scope="module")
+def candidate_hub(accounts, deployed_registry):
+    roundInterval = 0
+    validatorCount = 0
+    c = accounts[0].deploy(CandidateHubMock, deployed_registry, roundInterval, validatorCount) 
     c.init()
     if is_development:
         c.developmentInit()
@@ -33,8 +42,11 @@ def candidate_hub(accounts):
 
 
 @pytest.fixture(scope="module")
-def btc_light_client(accounts):
-    c = accounts[0].deploy(BtcLightClientMock)
+def btc_light_client(accounts, deployed_registry):
+    consensusState = '' 
+    chainHeight = 1 
+    roundInterval = 1
+    c = accounts[0].deploy(BtcLightClientMock, deployed_registry, consensusState, chainHeight, roundInterval) 
     c.init()
     if is_development:
         c.developmentInit()
@@ -42,8 +54,11 @@ def btc_light_client(accounts):
 
 
 @pytest.fixture(scope="module")
-def gov_hub(accounts):
-    c = accounts[0].deploy(GovHubMock)
+def gov_hub(accounts, deployed_registry):
+    votingPeriod = 1
+    executingPeriod = 1 
+    membersBytes = ''
+    c = accounts[0].deploy(GovHubMock, deployed_registry, votingPeriod, executingPeriod, membersBytes) 
     c.init()
     if is_development:
         c.developmentInit()
@@ -51,8 +66,8 @@ def gov_hub(accounts):
 
 
 @pytest.fixture(scope="module")
-def relay_hub(accounts):
-    c = accounts[0].deploy(RelayerHubMock)
+def relay_hub(accounts, deployed_registry):
+    c = accounts[0].deploy(RelayerHubMock, deployed_registry) 
     c.init()
     if is_development:
         c.developmentInit()
@@ -60,8 +75,9 @@ def relay_hub(accounts):
 
 
 @pytest.fixture(scope="module")
-def slash_indicator(accounts):
-    c = accounts[0].deploy(SlashIndicatorMock)
+def slash_indicator(accounts, deployed_registry):
+    chainID = 1
+    c = accounts[0].deploy(SlashIndicatorMock, deployed_registry, chainID) 
     c.init()
     if is_development:
         c.developmentInit()
@@ -69,13 +85,15 @@ def slash_indicator(accounts):
 
 
 @pytest.fixture(scope="module")
-def system_reward(accounts):
-    return accounts[0].deploy(SystemRewardMock)
+def system_reward(accounts, deployed_registry):
+    c = accounts[0].deploy(SystemRewardMock, deployed_registry) 
+    c.init()
+    return c
 
 
 @pytest.fixture(scope="module")
-def validator_set(accounts):
-    c = accounts[0].deploy(ValidatorSetMock)
+def validator_set(accounts, deployed_registry):
+    c = accounts[0].deploy(ValidatorSetMock, deployed_registry) 
     c.init()
     if is_development:
         c.developmentInit()
@@ -83,8 +101,9 @@ def validator_set(accounts):
 
 
 @pytest.fixture(scope="module")
-def pledge_agent(accounts):
-    c = accounts[0].deploy(PledgeAgentMock)
+def pledge_agent(accounts, deployed_registry):
+    powerBlockFactor = 1
+    c = accounts[0].deploy(PledgeAgentMock, deployed_registry, powerBlockFactor) 
     c.init()
     if is_development:
         c.developmentInit()
@@ -92,15 +111,16 @@ def pledge_agent(accounts):
 
 
 @pytest.fixture(scope="module")
-def burn(accounts):
-    c = accounts[0].deploy(Burn)
+def burn(accounts, deployed_registry):
+    c = accounts[0].deploy(Burn, deployed_registry) 
     c.init()
     return c
 
 
 @pytest.fixture(scope="module")
-def foundation(accounts):
-    c = accounts[0].deploy(Foundation)
+def foundation(accounts, deployed_registry):
+    c = accounts[0].deploy(Foundation, deployed_registry) 
+    c.init()
     return c
 
 
@@ -122,26 +142,19 @@ def set_system_contract_address(
     validator_set,
     pledge_agent,
     burn,
-    foundation
+    foundation,
+    deployed_registry
 ):
-    args = [validator_set.address, slash_indicator.address, system_reward.address,
-            btc_light_client.address, relay_hub.address, candidate_hub.address,
-            gov_hub.address, pledge_agent.address, burn.address, foundation]
-
-    candidate_hub.updateContractAddr(*args)
-    btc_light_client.updateContractAddr(*args)
-    gov_hub.updateContractAddr(*args)
-    relay_hub.updateContractAddr(*args)
-    slash_indicator.updateContractAddr(*args)
-    system_reward.updateContractAddr(*args)
-    validator_set.updateContractAddr(*args)
-    pledge_agent.updateContractAddr(*args)
-    burn.updateContractAddr(*args)
-    foundation.updateContractAddr(*args)
-
-    system_reward.init()
-    # used for distribute reward
-    # accounts[-2].transfer(validator_set.address, Web3.toWei(100000, 'ether'))
+    deployed_registry.setAll([burn, 
+                              btc_light_client, 
+                              slash_indicator, 
+                              system_reward, 
+                              candidate_hub, 
+                              pledge_agent, 
+                              validator_set, 
+                              relay_hub, 
+                              foundation, 
+                              gov_hub.address]); 
 
 
 @pytest.fixture(scope="module")

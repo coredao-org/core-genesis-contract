@@ -16,9 +16,6 @@ contract GovHub is System, IParamSubscriber {
   using RLPDecode for RLPDecode.RLPItem;
 
   uint256 public constant PROPOSAL_MAX_OPERATIONS = 1;
-  uint256 public constant VOTING_PERIOD = 201600;
-  uint256 public constant EXECUTING_PERIOD = 201600;
-  bytes public constant INIT_MEMBERS = hex"f86994548e6acce441866674e04ab84587af2d394034c094bb06d463bc143eecc4a0cfa35e0346d5690fa9f694e2fe60f349c6e1a85caad1d22200c289da40dc1294b198db68258f06e79d415a0998be7f9b38ea722694dd173b85f306128f1b10d7d7219059c28c6d6c09";
 
   uint256 public proposalMaxOperations;
   uint256 public votingPeriod;
@@ -91,11 +88,15 @@ contract GovHub is System, IParamSubscriber {
     _;
   }
 
-  constructor(Registry registry) System(registry) {
+  constructor(Registry registry, uint256 votingPeriod_, uint256 executingPeriod_, bytes memory membersBytes_) System(registry) {
     proposalMaxOperations = PROPOSAL_MAX_OPERATIONS;
-    votingPeriod = VOTING_PERIOD;
-    executingPeriod = EXECUTING_PERIOD;
-    RLPDecode.RLPItem[] memory items = INIT_MEMBERS.toRLPItem().toList();
+    votingPeriod = votingPeriod_;
+    executingPeriod = executingPeriod_;
+    _loadInitialMembers(membersBytes_);
+  }
+
+  function _loadInitialMembers(bytes memory membersBytes_) internal virtual {
+    RLPDecode.RLPItem[] memory items = membersBytes_.toRLPItem().toList();
     uint256 itemSize = items.length;
     for (uint256 i = 0; i < itemSize; i++) {
       address addr = items[i].toAddress();
@@ -222,7 +223,7 @@ contract GovHub is System, IParamSubscriber {
         callData = abi.encodePacked(bytes4(keccak256(bytes(proposal.signatures[i]))), proposal.calldatas[i]);
       }
 
-      (bool success, bytes memory returnData) = proposal.targets[i].call{ value: proposal.values[i] }(callData);
+      (bool success,) = proposal.targets[i].call{ value: proposal.values[i] }(callData);
       require(success, "Transaction execution reverted.");
       emit ExecuteTransaction(proposal.targets[i], proposal.values[i], proposal.signatures[i], proposal.calldatas[i]);
     }

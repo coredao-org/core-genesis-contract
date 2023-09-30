@@ -108,7 +108,7 @@ def test_deduct_margin(slash_indicator, candidate_hub):
         slash_indicator.slash(consensus1)
     candidate = candidate_hub.candidateSet(candidate_hub.operateMap(operator1)-1).dict()
     assert candidate['margin'] == candidate_hub.requiredMargin() - slash_indicator.felonyDeposit()
-
+    
 
 def test_clean(slash_indicator, validator_set):
     decrease_value = felonyThreshold // slash_indicator.DECREASE_RATE()

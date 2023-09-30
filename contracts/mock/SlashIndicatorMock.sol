@@ -1,11 +1,19 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
 import "../SlashIndicator.sol";
 import "../lib/RLPDecode.sol";
+import "../registry/Registry.sol";
+
 
 contract SlashIndicatorMock is SlashIndicator {
     using RLPDecode for bytes;
     using RLPDecode for RLPDecode.RLPItem;
+
+    uint private txgasprice;
+    address private blockcoinbase;
+
+    constructor(Registry registry, uint32 chainID) SlashIndicator(registry, chainID) {}
 
     function developmentInit() external {
         rewardForReportDoubleSign = rewardForReportDoubleSign / 1e16;
@@ -14,10 +22,24 @@ contract SlashIndicatorMock is SlashIndicator {
         felonyThreshold = 4;
     }
 
-    function parseHeader(bytes calldata header) public pure returns (bytes32, address) {
+    function parseHeader(bytes calldata header) public view returns (bytes32, address) {
         RLPDecode.RLPItem[] memory items = header.toRLPItem().toList();
         return parseHeader(items);
     }
+
+    function slash(address validator) public override {
+        txgasprice = 0;
+        blockcoinbase = msg.sender;
+        super.slash(validator);
+    }
+
+    function _gasprice() internal override view returns (uint) {
+      return txgasprice;
+    }
+
+    function _coinbase() internal override view returns (address) {
+      return blockcoinbase;
+    }  
 
   function setIndicators(address[] calldata newValidators, uint256[] calldata counts) public {
     for (uint256 i = validators.length; i > 0; i--) {

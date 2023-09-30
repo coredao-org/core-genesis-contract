@@ -1,11 +1,20 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
 import "../CandidateHub.sol";
+import "../registry/Registry.sol";
 
 contract CandidateHubMock is CandidateHub {
     uint256[] public scores;
     uint256 public totalPower;
     uint256 public totalCoin;
+
+    address private blockcoinbase;
+    uint private txgasprice;
+
+    constructor(Registry registry, uint256 roundInterval_, uint256 validatorCount) 
+        CandidateHub(registry, roundInterval_, validatorCount) {
+    }
 
     function developmentInit() external {
         roundInterval = 1;
@@ -14,6 +23,20 @@ contract CandidateHubMock is CandidateHub {
         maxCommissionChange = 100;
         roundTag = 7;
     }
+
+    function turnRound() public override {
+      txgasprice = 0;
+      blockcoinbase = msg.sender;
+      super.turnRound();
+    }
+
+    function _gasprice() internal override view returns (uint) {
+      return txgasprice;
+    }
+
+    function _coinbase() internal override view returns (address) {
+      return blockcoinbase;
+    }  
 
     function setRoundTag(uint value) external {
         roundTag = value;
@@ -74,7 +97,7 @@ contract CandidateHubMock is CandidateHub {
   }
 
   function getScoreMock(address[] memory candidates, uint256[] memory powers) external {
-    (scores, totalPower, totalCoin) = IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(
+    (scores, totalPower, totalCoin) = safe_pledgeAgent().getHybridScore(
       candidates,
       powers
     );
@@ -93,7 +116,7 @@ contract CandidateHubMock is CandidateHub {
   }
 
   function cleanMock() public {
-    ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
+    safe_slashIndicator().clean();
   }
 
   function registerMock(

@@ -70,19 +70,18 @@ def __contract_check(total_income, validator_incomes):
         assert current_validate_incomes[i] == validator_incomes[i]
 
 
-def __fake_validator_set():
-    validator_set_instance.updateContractAddr(
-        ValidatorSetMock[0].address,
-        SlashIndicatorMock[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        accounts[0],
-        GovHubMock[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address
-    )
+def __fake_validator_set(deployed_registry):
+    candidateHubAddr = accounts[0]
+    deployed_registry.setAll([Burn[0], 
+                            BtcLightClientMock[0], 
+                            SlashIndicatorMock[0], 
+                            SystemRewardMock[0], 
+                            candidateHubAddr, 
+                            PledgeAgentMock[0], 
+                            ValidatorSetMock[0], 
+                            RelayerHubMock[0], 
+                            Foundation[0].address, 
+                            GovHubMock[0].address]);
 
 
 def test_check_validator_address_failed_with_zero_address(validator_set):
@@ -286,19 +285,19 @@ def update_param_success_with_block_reward(value, expected):
     assert validator_set_instance.blockReward() == expected
 
 
-def test_update_param_success_with_key_blockRewardIncentivePercent():
-    validator_set_instance.updateContractAddr(
-        ValidatorSetMock[0].address,
-        SlashIndicatorMock[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0],
-        accounts[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address
-    )
+def test_update_param_success_with_key_blockRewardIncentivePercent(deployed_registry):
+    govHubAddr = accounts[0].address
+    deployed_registry.setAll([Burn[0], 
+                            BtcLightClientMock[0], 
+                            SlashIndicatorMock[0], 
+                            SystemRewardMock[0], 
+                            CandidateHubMock[0], 
+                            PledgeAgentMock[0], 
+                            ValidatorSetMock[0], 
+                            RelayerHubMock[0], 
+                            Foundation[0].address, 
+                            govHubAddr]); 
+
     validator_set_instance.updateParam('blockRewardIncentivePercent', '0x0000000000000000000000000000000000000000000000000000000000000014')
     assert validator_set_instance.blockRewardIncentivePercent() == 20
 
@@ -384,22 +383,20 @@ def test_misdemeanor_failed_with_address_which_is_not_slash():
         validator_set_instance.misdemeanor(init_validators[0])
 
 
-def test_misdemeanor_failed_with_after_set_empty_validator_set():
+def test_misdemeanor_failed_with_after_set_empty_validator_set(deployed_registry):
     __fake_validator_set()
     validator_set_instance.updateValidatorSet([], [], [], [])
 
-    validator_set_instance.updateContractAddr(
-        ValidatorSetMock[0].address,
-        accounts[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        GovHubMock[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address
-    )
+    deployed_registry.setAll([Burn[0], 
+                            BtcLightClientMock[0], 
+                            accounts[0].address, 
+                            SystemRewardMock[0], 
+                            CandidateHubMock[0], 
+                            PledgeAgentMock[0], 
+                            ValidatorSetMock[0], 
+                            RelayerHubMock[0], 
+                            Foundation[0].address, 
+                            GovHubMock[0].address]); 
 
     validator = validator_set_instance.getValidatorByConsensus(init_validators[0]).dict()
     tx = validator_set_instance.misdemeanor(init_validators[0])
@@ -409,46 +406,46 @@ def test_misdemeanor_failed_with_after_set_empty_validator_set():
     })
 
 
-def test_misdemeanor_return_empty_with_empty_validator_set_and_ZERO_ADDRESS():
+def test_misdemeanor_return_empty_with_empty_validator_set_and_ZERO_ADDRESS(deployed_registry):
     __fake_validator_set()
     validator_set_instance.updateValidatorSet([], [], [], [])
 
-    validator_set_instance.updateContractAddr(
-        ValidatorSetMock[0].address,
-        accounts[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        GovHubMock[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address
-    )
+    slashIndicator = accounts[0].address
+    deployed_registry.setAll([Burn[0], 
+                            BtcLightClientMock[0], 
+                            slashIndicator,
+                            SystemRewardMock[0], 
+                            CandidateHubMock[0], 
+                            PledgeAgentMock[0], 
+                            ValidatorSetMock[0], 
+                            RelayerHubMock[0], 
+                            Foundation[0].address, 
+                            GovHubMock[0].address]); 
+
     assert validator_set_instance.misdemeanor.call(ZERO_ADDRESS) == ()
 
 
-def test_misdemeanor_return_empty_with_only_one_validator_set_and_0_income():
+def test_misdemeanor_return_empty_with_only_one_validator_set_and_0_income(deployed_registry):
     __fake_validator_set()
     validator_set_instance.updateValidatorSet([init_validators[0]], [init_validators[0]], [init_validators[0]], [100])
 
-    validator_set_instance.updateContractAddr(
-        ValidatorSetMock[0].address,
-        accounts[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        GovHubMock[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address
-    )
+    slashIndicator = accounts[0].address
+    deployed_registry.setAll([Burn[0], 
+                            BtcLightClientMock[0], 
+                            slashIndicator,
+                            SystemRewardMock[0], 
+                            CandidateHubMock[0], 
+                            PledgeAgentMock[0], 
+                            ValidatorSetMock[0], 
+                            RelayerHubMock[0], 
+                            Foundation[0].address, 
+                            GovHubMock[0].address]); 
+
     assert validator_set_instance.misdemeanor.call(init_validators[0]) == ()
     __contract_check(0, [0])
 
 
-def test_misdemeanor_return_empty_with_only_one_validator_set():
+def test_misdemeanor_return_empty_with_only_one_validator_set(deployed_registry):
     __fake_validator_set()
     validator_set_instance.updateValidatorSet([init_validators[0]], [init_validators[0]], [init_validators[0]], [100])
 
@@ -458,40 +455,40 @@ def test_misdemeanor_return_empty_with_only_one_validator_set():
         "validator": init_validators[0]
     })
 
-    validator_set_instance.updateContractAddr(
-        ValidatorSetMock[0].address,
-        accounts[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        GovHubMock[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address
-    )
+    slashIndicator = accounts[0].address
+    deployed_registry.setAll([Burn[0], 
+                            BtcLightClientMock[0], 
+                            slashIndicator,
+                            SystemRewardMock[0], 
+                            CandidateHubMock[0], 
+                            PledgeAgentMock[0], 
+                            ValidatorSetMock[0], 
+                            RelayerHubMock[0], 
+                            Foundation[0].address, 
+                            GovHubMock[0].address]); 
+
     assert validator_set_instance.misdemeanor.call(init_validators[0]) == ()
     __contract_check(deposit_value, [deposit_value])
 
 
-def test_misdemeanor_success_0_income():
-    validator_set_instance.updateContractAddr(
-        ValidatorSetMock[0].address,
-        accounts[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        GovHubMock[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address
-    )
+def test_misdemeanor_success_0_income(deployed_registry):
+    slashIndicator = accounts[0].address
+    deployed_registry.setAll([Burn[0], 
+                            BtcLightClientMock[0], 
+                            slashIndicator,
+                            SystemRewardMock[0], 
+                            CandidateHubMock[0], 
+                            PledgeAgentMock[0], 
+                            ValidatorSetMock[0], 
+                            RelayerHubMock[0], 
+                            Foundation[0].address, 
+                            GovHubMock[0].address]); 
+    
     validator_set_instance.misdemeanor.call(init_validators[0])
     __contract_check(0, init_validator_incomes)
 
 
-def test_misdemeanor_success():
+def test_misdemeanor_success(deployed_registry):
     __fake_validator_set()
     deposit_value = 1000000000
     average_value = deposit_value // (len(init_validators) - 1)
@@ -500,18 +497,18 @@ def test_misdemeanor_success():
         "validator": init_validators[2]
     })
 
-    validator_set_instance.updateContractAddr(
-        ValidatorSetMock[0].address,
-        accounts[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        GovHubMock[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address
-    )
+    slashIndicator = accounts[0].address
+    deployed_registry.setAll([Burn[0], 
+                            BtcLightClientMock[0], 
+                            slashIndicator,
+                            SystemRewardMock[0], 
+                            CandidateHubMock[0], 
+                            PledgeAgentMock[0], 
+                            ValidatorSetMock[0], 
+                            RelayerHubMock[0], 
+                            Foundation[0].address, 
+                            GovHubMock[0].address]); 
+
     validator_set_instance.misdemeanor(init_validators[2])
     __contract_check(deposit_value, [average_value, average_value, 0, average_value, average_value])
     __balance_check(0-deposit_value, deposit_value, 0, 0)
@@ -522,83 +519,83 @@ def test_felony_failed_with_address_which_is_not_slash():
         validator_set_instance.felony(init_validators[0], felony_round, felony_deposit)
 
 
-def test_misdemeanor_return_empty_with_ZERO_ADDRESS_validator():
-    validator_set_instance.updateContractAddr(
-        ValidatorSetMock[0].address,
-        accounts[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        GovHubMock[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address
-    )
+def test_misdemeanor_return_empty_with_ZERO_ADDRESS_validator(deployed_registry):
+    slashIndicator = accounts[0].address
+    deployed_registry.setAll([Burn[0], 
+                            BtcLightClientMock[0], 
+                            slashIndicator,
+                            SystemRewardMock[0], 
+                            CandidateHubMock[0], 
+                            PledgeAgentMock[0], 
+                            ValidatorSetMock[0], 
+                            RelayerHubMock[0], 
+                            Foundation[0].address, 
+                            GovHubMock[0].address]); 
+
     assert validator_set_instance.felony.call(ZERO_ADDRESS, felony_round, felony_deposit) == ()
 
 
-def test_felony_failed_with_one_validator_which_has_0_income():
+def test_felony_failed_with_one_validator_which_has_0_income(deployed_registry):
     __fake_validator_set()
     validator_set_instance.updateValidatorSet([init_validators[0]], [init_validators[0]], [init_validators[0]], [100])
-    validator_set_instance.updateContractAddr(
-        ValidatorSetMock[0].address,
-        accounts[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        GovHubMock[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address
-    )
+
+    slashIndicator = accounts[0].address
+    deployed_registry.setAll([Burn[0], 
+                            BtcLightClientMock[0], 
+                            slashIndicator,
+                            SystemRewardMock[0], 
+                            CandidateHubMock[0], 
+                            PledgeAgentMock[0], 
+                            ValidatorSetMock[0], 
+                            RelayerHubMock[0], 
+                            Foundation[0].address, 
+                            GovHubMock[0].address]); 
+
     assert validator_set_instance.felony.call(init_validators[0], felony_round, felony_deposit) == ()
     __contract_check(0, [0])
 
 
-def test_felony_failed_with_one_validator_which_has_income():
+def test_felony_failed_with_one_validator_which_has_income(deployed_registry):
     __fake_validator_set()
     validator_set_instance.updateValidatorSet([init_validators[0]], [init_validators[0]], [init_validators[0]], [100])
     deposit_value = 1000000000
     validator_set_instance.deposit(init_validators[0], {'value': deposit_value})
 
-    validator_set_instance.updateContractAddr(
-        ValidatorSetMock[0].address,
-        accounts[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        GovHubMock[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address
-    )
+    slashIndicator = accounts[0].address
+    deployed_registry.setAll([Burn[0], 
+                            BtcLightClientMock[0], 
+                            slashIndicator,
+                            SystemRewardMock[0], 
+                            CandidateHubMock[0], 
+                            PledgeAgentMock[0], 
+                            ValidatorSetMock[0], 
+                            RelayerHubMock[0], 
+                            Foundation[0].address, 
+                            GovHubMock[0].address]); 
+
     assert validator_set_instance.felony.call(init_validators[0], felony_round, felony_deposit) == ()
     validator_set_instance.felony(init_validators[0], felony_round, felony_deposit)
     __contract_check(deposit_value, [0])
     __balance_check(0-deposit_value, deposit_value, 0, 0)
 
 
-def test_felony_success_with_validator_set_which_has_0_income(candidate_hub):
+def test_felony_success_with_validator_set_which_has_0_income(candidate_hub, deployed_registry):
     candidate_hub.register(accounts[0], accounts[0], 100, {'from': accounts[0], 'value': Web3.toWei(20000, 'ether')})
     candidate_hub.register(accounts[1], accounts[1], 100, {'from': accounts[1], 'value': Web3.toWei(20000, 'ether')})
     __fake_validator_set()
     validator_set_instance.updateValidatorSet([accounts[0], accounts[1]], [accounts[0], accounts[1]], [accounts[0], accounts[1]], [100, 100])
 
-    validator_set_instance.updateContractAddr(
-        ValidatorSetMock[0].address,
-        accounts[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        GovHubMock[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address
-    )
+    slashIndicator = accounts[0].address
+    deployed_registry.setAll([Burn[0], 
+                            BtcLightClientMock[0], 
+                            slashIndicator,
+                            SystemRewardMock[0], 
+                            CandidateHubMock[0], 
+                            PledgeAgentMock[0], 
+                            ValidatorSetMock[0], 
+                            RelayerHubMock[0], 
+                            Foundation[0].address, 
+                            GovHubMock[0].address]); 
 
     candidate = candidate_hub.candidateSet(0).dict()
     tx = validator_set_instance.felony(accounts[0], felony_round, felony_deposit)
@@ -622,25 +619,24 @@ def test_felony_success_with_validator_set_which_has_0_income(candidate_hub):
     __contract_check(0, [0])
 
 
-def test_felony_success_with_validator_set_which_has_income(candidate_hub):
+def test_felony_success_with_validator_set_which_has_income(candidate_hub, deployed_registry):
     candidate_hub.register(accounts[0], accounts[0], 100, {'from': accounts[0], 'value': Web3.toWei(20000, 'ether')})
     candidate_hub.register(accounts[1], accounts[1], 100, {'from': accounts[1], 'value': Web3.toWei(20000, 'ether')})
     __fake_validator_set()
     validator_set_instance.updateValidatorSet([accounts[0], accounts[1]], [accounts[0], accounts[1]],
                                               [accounts[0], accounts[1]], [100, 100])
 
-    validator_set_instance.updateContractAddr(
-        ValidatorSetMock[0].address,
-        accounts[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        GovHubMock[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address
-    )
+    slashIndicator = accounts[0].address
+    deployed_registry.setAll([Burn[0], 
+                            BtcLightClientMock[0], 
+                            slashIndicator,
+                            SystemRewardMock[0], 
+                            CandidateHubMock[0], 
+                            PledgeAgentMock[0], 
+                            ValidatorSetMock[0], 
+                            RelayerHubMock[0], 
+                            Foundation[0].address, 
+                            GovHubMock[0].address]); 
 
     deposit_value = 1000000000
     average_value = deposit_value / 1
@@ -673,7 +669,7 @@ def test_felony_success_with_validator_set_which_has_income(candidate_hub):
 def test_subsidy_reduce():
     validator_set_instance.updateBlockReward(BLOCK_REWARD)
     validator_set_instance.updateSubsidyReduceInterval(3)
-    reduce_interval = validator_set_instance.SUBSIDY_REDUCE_INTERVAL()
+    reduce_interval = validator_set_instance.subsidyReduceInterval()
     chain.mine(reduce_interval - chain.height % reduce_interval - 1)
     validator_set_instance.deposit(ZERO_ADDRESS, {'value': 1})
     assert validator_set_instance.blockReward() == validator_set_instance.BLOCK_REWARD() * validator_set_instance.REDUCE_FACTOR() // 10000
@@ -686,7 +682,7 @@ def test_subsidy_reduce_for_81_times():
 
     validator_set_instance.updateBlockReward(BLOCK_REWARD)
     validator_set_instance.updateSubsidyReduceInterval(3)
-    reduce_interval = validator_set_instance.SUBSIDY_REDUCE_INTERVAL()
+    reduce_interval = validator_set_instance.subsidyReduceInterval()
     chain.mine(reduce_interval - chain.height % reduce_interval - 1)
     validator_set_instance.deposit(ZERO_ADDRESS, {'value': 1})
     for _ in range(80):

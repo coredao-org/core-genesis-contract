@@ -32,29 +32,17 @@ def isolation():
 
 @pytest.fixture(scope="function")
 def init_gov_address(validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub,
-                     gov_hub, pledge_agent, burn, foundation):
-    VALIDATOR_CONTRACT_ADDR = validator_set.address
-    SLASH_CONTRACT_ADDR = slash_indicator.address
-    SYSTEM_REWARD_ADDR = system_reward.address
-    LIGHT_CLIENT_ADDR = btc_light_client.address
-    RELAYER_HUB_ADDR = relay_hub.address
-    CANDIDATE_HUB_ADDR = candidate_hub.address
-    GOV_HUB_ADDR = gov_hub.address
-    PLEDGE_AGENT_ADDR = pledge_agent.address
-    BURN_ADDR = burn.address
-    FOUNDATION_ADDR = foundation.address
-    btc_light_client.updateContractAddr(
-        VALIDATOR_CONTRACT_ADDR,
-        SLASH_CONTRACT_ADDR,
-        SYSTEM_REWARD_ADDR,
-        LIGHT_CLIENT_ADDR,
-        RELAYER_HUB_ADDR,
-        CANDIDATE_HUB_ADDR,
-        accounts[0],
-        PLEDGE_AGENT_ADDR,
-        BURN_ADDR,
-        FOUNDATION_ADDR,
-    )
+                     gov_hub, pledge_agent, burn, foundation, deployed_registry):
+    deployed_registry.setAll([burn, 
+                              btc_light_client, 
+                              slash_indicator, 
+                              system_reward, 
+                              candidate_hub, 
+                              pledge_agent, 
+                              validator_set, 
+                              relay_hub, 
+                              foundation.address, 
+                              gov_hub.address]); 
 
 
 def update_default_block_gasprice(btc_light_client):

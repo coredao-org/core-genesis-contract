@@ -44,9 +44,9 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
       if (address(this).balance > incentiveBalanceCap) {
         uint256 value = address(this).balance - incentiveBalanceCap;
         if (isBurn) {
-          s_registry.burnContract().burn{ value: value }();
+          safe_burnContract().burn{ value: value }();
         } else {
-          s_registry.foundationPayable().transfer(value);
+          safe_foundationPayable().transfer(value);
         }
       }
       emit receiveDeposit(msg.sender, msg.value);
@@ -76,7 +76,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   /// Whether the given address is a valid operator
   /// @param addr The address to check
   /// @return true/false
-  function isOperator(address addr) external view returns (bool) {
+  function isOperator(address addr) external returns (bool) {
     return _isOperator(addr);
   }
 
@@ -101,7 +101,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     emit paramChange(key, value);
   }
 
-  function _isOperator(address addr) private view returns (bool) {
-    return addr == address(s_registry.lightClient()) || addr == address(s_registry.slashIndicator());
+  function _isOperator(address addr) internal virtual returns (bool) {
+    return addr == address(safe_lightClient()) || addr == address(safe_slashIndicator());
   }
 }

@@ -30,9 +30,6 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   uint64 public constant TARGET_TIMESPAN_MUL_4 = TARGET_TIMESPAN * 4;
   int256 public constant UNROUNDED_MAX_TARGET = 2**224 - 1; // different from (2**16-1)*2**208 http://bitcoin.stackexchange.com/questions/13803/how-exactly-was-the-original-coefficient-for-difficulty-determined
 
-  bytes public constant INIT_CONSENSUS_STATE_BYTES = hex"0000402089138e40cd8b4832beb8013bc80b1425c8bcbe10fc280400000000000000000058a06ab0edc5653a6ab78490675a954f8d8b4d4f131728dcf965cd0022a02cdde59f8e63303808176bbe3919";
-  uint32 public constant INIT_CHAIN_HEIGHT = 766080;
-
   uint256 public highScore;
   bytes32 public heaviestBlock;
   bytes32 public initBlockHash;
@@ -42,9 +39,11 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   uint256 public constant ROUND_SIZE=100;
   uint256 public constant MAXIMUM_WEIGHT=20;
   uint256 public constant CONFIRM_BLOCK = 6;
-  uint256 public constant INIT_ROUND_INTERVAL = 86400;
   uint256 public constant POWER_ROUND_GAP = 7;
   uint256 public constant INIT_STORE_BLOCK_GAS_PRICE = 35e9;
+
+  uint32 public immutable INIT_CHAIN_HEIGHT;
+  uint256 public immutable INIT_ROUND_INTERVAL;
 
   uint256 public callerCompensationMolecule;
   uint256 public rewardForSyncHeader;
@@ -57,6 +56,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   address payable[] public headerRelayerAddressRecord;
   mapping(address => uint256) public headerRelayersSubmitCount;
   mapping(address => uint256) public relayerRewardVault;
+
 
   struct CandidatePower {
     // miner is the reward address of BTC miner
@@ -89,27 +89,33 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
   /*********************** init **************************/
   /// Initialize 
-  constructor(Registry registry) System(registry) {
-    bytes32 blockHash = doubleShaFlip(INIT_CONSENSUS_STATE_BYTES);
+  constructor(Registry registry, bytes memory consensusStateBytes_, uint32 chainHeight_, uint256 roundInterval_) System(registry) {
+    INIT_CHAIN_HEIGHT = chainHeight_;
+    INIT_ROUND_INTERVAL = roundInterval_;
+    rewardForSyncHeader = INIT_REWARD_FOR_SYNC_HEADER;
+    callerCompensationMolecule = CALLER_COMPENSATION_MOLECULE;
+    roundSize = ROUND_SIZE;
+    maxWeight = MAXIMUM_WEIGHT;
+    roundInterval = roundInterval_;
+    storeBlockGasPrice = INIT_STORE_BLOCK_GAS_PRICE;
+    highScore = 1;
+    _initConsensusState(consensusStateBytes_, chainHeight_);
+  }
+
+  function _initConsensusState(bytes memory consensusStateBytes_, uint32 chainHeight_) internal virtual {
+    bytes32 blockHash = doubleShaFlip(consensusStateBytes_);
     address rewardAddr;
     address candidateAddr;
 
-    highScore = 1;
     uint256 scoreBlock = 1;
+
+    uint32 adjustment = chainHeight_ / DIFFICULTY_ADJUSTMENT_INTERVAL;
+    adjustmentHashes[adjustment] = blockHash;
+    bytes memory nodeBytes = encode(consensusStateBytes_, rewardAddr, scoreBlock, chainHeight_, adjustment, candidateAddr);
+    blockChain[blockHash] = nodeBytes;
+
     heaviestBlock = blockHash;
     initBlockHash = blockHash;
-
-    bytes memory initBytes = INIT_CONSENSUS_STATE_BYTES;
-    uint32 adjustment = INIT_CHAIN_HEIGHT / DIFFICULTY_ADJUSTMENT_INTERVAL;
-    adjustmentHashes[adjustment] = blockHash;
-    bytes memory nodeBytes = encode(initBytes, rewardAddr, scoreBlock, INIT_CHAIN_HEIGHT, adjustment, candidateAddr);
-    blockChain[blockHash] = nodeBytes;
-    rewardForSyncHeader = INIT_REWARD_FOR_SYNC_HEADER;
-    callerCompensationMolecule=CALLER_COMPENSATION_MOLECULE;
-    roundSize = ROUND_SIZE;
-    maxWeight = MAXIMUM_WEIGHT;
-    roundInterval = INIT_ROUND_INTERVAL;
-    storeBlockGasPrice = INIT_STORE_BLOCK_GAS_PRICE;
   }
 
 
@@ -200,7 +206,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     // The mining power with rounds less than or equal to frozenRoundTag has been frozen 
     // and there is no need to continue staking, otherwise it may disrupt the reward 
     // distribution mechanism
-    uint256 frozenRoundTag = s_registry.candidateHub().getRoundTag() - POWER_ROUND_GAP;
+    uint256 frozenRoundTag = safe_candidateHub().getRoundTag() - POWER_ROUND_GAP;
     if (candidate != address(0) && blockRoundTag > frozenRoundTag) {
       address miner = getRewardAddress(blockHash);
       RoundPower storage r = roundPowerMap[blockRoundTag];
@@ -220,7 +226,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
      require(reward != 0, "no relayer reward");
      relayerRewardVault[relayerAddr] = 0;
      address payable recipient = payable(relayerAddr);
-     s_registry.systemReward().claimRewards(recipient, reward);
+     safe_systemReward().claimRewards(recipient, reward);
   }
 
   /// Distribute relayer rewards

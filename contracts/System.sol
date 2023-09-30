@@ -1,31 +1,30 @@
 // SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
-import "./interface/IRelayerHub.sol";
 import {Registry} from "./registry/Registry.sol";
-import {ContractAddresses} from "./registry/ContractAddresses.sol";
+import {AllContracts} from "./registry/AllContracts.sol";
 
-contract System is Registry, ContractAddresses {
+import {IBurn} from "./interface/IBurn.sol";
+import {IValidatorSet} from "./interface/IValidatorSet.sol";
+import {ICandidateHub} from "./interface/ICandidateHub.sol";
+import {ILightClient} from "./interface/ILightClient.sol";
+import {ISystemReward} from "./interface/ISystemReward.sol";
+import {ISlashIndicator} from "./interface/ISlashIndicator.sol";
+import {IRelayerHub} from "./interface/IRelayerHub.sol";
+import {IPledgeAgent} from "./interface/IPledgeAgent.sol";
 
-  Registry internal immutable s_registry;
+
+contract System is Registry {
+  
+  Registry private immutable s_registry;  
+
+  AllContracts private s_allContracts;  
 
   constructor(Registry registry) {
-    s_registry = registry;
+    s_registry = registry;  
   }
 
-
-  address public VALIDATOR_CONTRACT_ADDR;
-  address public SLASH_CONTRACT_ADDR;
-  address public SYSTEM_REWARD_ADDR;
-  address public LIGHT_CLIENT_ADDR;
-  address public RELAYER_HUB_ADDR;
-  address public CANDIDATE_HUB_ADDR;
-  address public GOV_HUB_ADDR;
-  address public PLEDGE_AGENT_ADDR;
-  address public BURN_ADDR;
-  address public FOUNDATION_ADDR;
-
-  function updateContractAddr(
+  function updateContractAddr( //placeholder
     address valAddr,
     address slashAddr,
     address rewardAddr,
@@ -36,61 +35,51 @@ contract System is Registry, ContractAddresses {
     address pledgeAgentAddr,
     address burnAddr,
     address foundationAddr
-  ) external {
-    VALIDATOR_CONTRACT_ADDR = valAddr;
-    SLASH_CONTRACT_ADDR = slashAddr;
-    SYSTEM_REWARD_ADDR = rewardAddr;
-    LIGHT_CLIENT_ADDR = lightAddr;
-    RELAYER_HUB_ADDR = relayerHubAddr;
-    CANDIDATE_HUB_ADDR = candidateHubAddr;
-    GOV_HUB_ADDR = govHubAddr;
-    PLEDGE_AGENT_ADDR = pledgeAgentAddr;
-    BURN_ADDR = burnAddr;
-    FOUNDATION_ADDR = foundationAddr;
+  ) external pure {
   }
-
-  modifier onlyCoinbase() {
   
+  modifier onlyCoinbase() {
+    require(msg.sender == _coinbase(), "the message sender must be the block producer");
     _;
   }
 
   modifier onlyZeroGasPrice() {
-    
+    require(_gasprice() == 0 , "gasprice is not zero");
     _;
   }
 
-  modifier onlyNotInit() { // placeholder
-    //require(!alreadyInit, "the contract already init");
+  modifier onlyNotInit() { //placeholder
+    //require(!s_alreadyInit, "the contract already init");
     _;
   }
 
-  modifier onlyInit() { // placeholder
-    //require(alreadyInit, "the contract not init yet");
+  modifier onlyInit() { //placeholder
+    //require(s_alreadyInit, "the contract not init yet");
     _;
   }
 
   modifier onlySlash() {
-    require(msg.sender == address(s_registry.slashIndicator()), "the msg sender must be slash contract");
+    require(msg.sender == address(safe_slashIndicator()), "the msg sender must be slash contract");
     _;
   }
 
   modifier onlyGov() {
-    require(msg.sender == s_registry.govHubAddr(), "the msg sender must be governance contract");
+    require(msg.sender == safe_govHubAddr(), "the msg sender must be governance contract");
     _;
   }
 
   modifier onlyCandidate() {
-    require(msg.sender == address(s_registry.candidateHub()), "the msg sender must be candidate contract");
+    require(msg.sender == address(safe_candidateHub()), "the msg sender must be candidate contract");
     _;
   }
 
   modifier onlyValidator() {
-    require(msg.sender == address(s_registry.validatorSet()), "the msg sender must be validatorSet contract");
+    require(msg.sender == address(safe_validatorSet()), "the msg sender must be validatorSet contract");
     _;
   }
 
   modifier onlyRelayer() {
-    require(s_registry.relayerHub().isRelayer(msg.sender), "the msg sender is not a relayer");
+    require(safe_relayerHub().isRelayer(msg.sender), "the msg sender is not a relayer");
     _;
   }
 
@@ -107,5 +96,84 @@ contract System is Registry, ContractAddresses {
   error OutOfBounds(string name, uint256 given, uint256 lowerBound, uint256 upperBound);
 
   function init() external onlyNotInit {} // placeholder
+
+  function _gasprice() internal virtual view returns (uint) {
+    return tx.gasprice;
+  }
+
+  function _coinbase() internal virtual view returns (address) {
+    return block.coinbase;
+  } 
+
+  function govHub() external returns (address) {
+    return safe_govHubAddr();
+  }
+
+
+
+  // --- Registry functions below are platform-contracts that are safe to access ---
+
+  function safe_foundationPayable() internal returns(address payable) {
+    _cacheAllContractsLocally();
+    return payable(s_allContracts.foundationAddr);
+  }
+
+  function safe_systemReward() internal returns(ISystemReward) {
+    _cacheAllContractsLocally();
+    return s_allContracts.systemReward;
+  }
+
+  function safe_systemRewardPayable() internal returns(address payable) {
+    _cacheAllContractsLocally();
+    address _systemRewardAddr = address(s_allContracts.systemReward);
+    return payable(_systemRewardAddr);
+  }
+
+  function safe_lightClient() internal returns(ILightClient) {
+    _cacheAllContractsLocally();
+    return s_allContracts.lightClient;
+  }  
+
+  function safe_relayerHub() internal returns(IRelayerHub) {
+    _cacheAllContractsLocally();
+    return s_allContracts.relayerHub;
+  }
+
+  function safe_candidateHub() internal returns(ICandidateHub) {
+    _cacheAllContractsLocally();
+    return s_allContracts.candidateHub;
+  }  
+
+  function safe_pledgeAgent() internal returns(IPledgeAgent) {
+    _cacheAllContractsLocally();
+    return s_allContracts.pledgeAgent;
+  }
+
+  function safe_burnContract() internal returns(IBurn) {
+    _cacheAllContractsLocally();
+    return s_allContracts.burn;
+  }
+
+  function safe_validatorSet() internal returns(IValidatorSet) {
+    _cacheAllContractsLocally();
+    return s_allContracts.validatorSet;
+  }  
+
+  function safe_slashIndicator() internal returns(ISlashIndicator) {
+    _cacheAllContractsLocally();
+    return s_allContracts.slashIndicator;
+  }  
+
+  function safe_govHubAddr() internal returns(address) {
+    _cacheAllContractsLocally();
+    return s_allContracts.govHubAddr;
+  }
+
+  function _cacheAllContractsLocally() private {
+    //@correlate-regcache
+    if (s_allContracts.burn == IBurn(address(0))) { 
+      s_allContracts = s_registry.getAllContracts();
+    }
+  }
 
 }

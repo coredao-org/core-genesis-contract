@@ -1,11 +1,17 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
 import "../CandidateHub.sol";
+import "../registry/Registry.sol";
+
 
 contract CandidateHubUnitMock is CandidateHub {
   uint256[] public scores;
   uint256 public totalPower;
   uint256 public totalCoin;
+
+  constructor(Registry registry, uint256 roundInterval_, uint256 validatorCount) 
+          CandidateHub(registry, roundInterval_, validatorCount) {}
 
   function developmentInit() external {
     requiredMargin = 1e19;
@@ -35,7 +41,7 @@ contract CandidateHubUnitMock is CandidateHub {
   }
 
   function getScoreMock(address[] memory candidates, uint256[] memory powers) external {
-    (scores, totalPower, totalCoin) = IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(
+    (scores, totalPower, totalCoin) = safe_pledgeAgent().getHybridScore(
       candidates,
       powers
     );
@@ -54,7 +60,7 @@ contract CandidateHubUnitMock is CandidateHub {
   }
 
   function cleanMock() public {
-    ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
+    safe_slashIndicator().clean();
   }
 
   function registerMock(

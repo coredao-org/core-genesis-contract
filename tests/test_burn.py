@@ -18,6 +18,17 @@ PLEDGE_AGENT_ADDR = None
 BURN_ADDR = None
 FOUNDATION_ADDR = None
 
+g_validator_set = None
+g_slash_indicator = None
+g_system_reward = None
+g_btc_light_client = None
+g_relay_hub = None
+g_candidate_hub = None
+g_gov_hub = None
+g_pledge_agent = None
+g_burn = None
+g_foundation = None
+
 
 @pytest.fixture(scope="module", autouse=True)
 def set_up(validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub,
@@ -32,6 +43,28 @@ def set_up(validator_set, slash_indicator, system_reward, btc_light_client, rela
     global PLEDGE_AGENT_ADDR
     global BURN_ADDR
     global FOUNDATION_ADDR
+    global g_validator_set 
+    global g_slash_indicator
+    global g_system_reward
+    global g_btc_light_client
+    global g_relay_hub
+    global g_candidate_hub
+    global g_gov_hub
+    global g_pledge_agent
+    global g_burn
+    global g_foundation
+
+    g_validator_set = validator_set
+    g_slash_indicator = slash_indicator
+    g_system_reward = system_reward
+    g_btc_light_client = btc_light_client
+    g_relay_hub = relay_hub
+    g_candidate_hub = candidate_hub
+    g_gov_hub = gov_hub
+    g_pledge_agent = pledge_agent
+    g_burn = burn
+    g_foundation = foundation
+
     VALIDATOR_CONTRACT_ADDR = validator_set.address
     SLASH_CONTRACT_ADDR = slash_indicator.address
     SYSTEM_REWARD_ADDR = system_reward.address
@@ -44,19 +77,18 @@ def set_up(validator_set, slash_indicator, system_reward, btc_light_client, rela
     FOUNDATION_ADDR = foundation.address
 
 
-def __update_gov_address(burn_instance):
-    burn_instance.updateContractAddr(
-        VALIDATOR_CONTRACT_ADDR,
-        SLASH_CONTRACT_ADDR,
-        SYSTEM_REWARD_ADDR,
-        LIGHT_CLIENT_ADDR,
-        RELAYER_HUB_ADDR,
-        CANDIDATE_HUB_ADDR,
-        accounts[0],
-        PLEDGE_AGENT_ADDR,
-        BURN_ADDR,
-        FOUNDATION_ADDR,
-    )
+def __update_gov_address(burn_instance, deployed_registry):
+    gov_hub_addr2 = accounts[0];
+    deployed_registry.setAll([g_burn, 
+                              g_btc_light_client, 
+                              g_slash_indicator, 
+                              g_system_reward, 
+                              g_candidate_hub, 
+                              g_pledge_agent, 
+                              g_validator_set, 
+                              g_relay_hub, 
+                              g_foundation.address, 
+                              gov_hub_addr2]); 
 
 
 def __add_balance(address, value):
