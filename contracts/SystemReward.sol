@@ -6,6 +6,7 @@ import "./interface/IParamSubscriber.sol";
 import "./interface/IBurn.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
+import "./lib/Address.sol";
 import "./registry/Registry.sol";
 
 
@@ -46,7 +47,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
         if (isBurn) {
           safe_burnContract().burn{ value: value }();
         } else {
-          safe_foundationPayable().transfer(value);
+          Address.sendValue(safe_foundationPayable(), value);
         }
       }
       emit receiveDeposit(msg.sender, msg.value);
@@ -65,7 +66,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   {
     uint256 actualAmount = amount < address(this).balance ? amount : address(this).balance;
     if (to != address(0) && actualAmount != 0) {
-      to.transfer(actualAmount);
+      Address.sendValue(to, actualAmount);
       emit rewardTo(to, actualAmount);
     } else {
       emit rewardEmpty();

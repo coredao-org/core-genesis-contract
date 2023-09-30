@@ -2,6 +2,7 @@
 pragma solidity 0.8.4;
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
+import "./lib/Address.sol";
 import "./interface/IValidatorSet.sol";
 import "./interface/ICandidateHub.sol";
 import "./interface/IParamSubscriber.sol";
@@ -139,12 +140,12 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       }
       changeStatus(c, status);
       if (fine != 0) {
-        safe_systemRewardPayable().transfer(fine);
+        Address.sendValue(safe_systemRewardPayable(), fine);
       }
     } else {
       removeCandidate(index);
 
-      safe_systemRewardPayable().transfer(margin);
+      Address.sendValue(safe_systemRewardPayable(), margin);
       emit deductedMargin(operateAddress, margin, 0);
     }
   }
@@ -287,9 +288,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     if (margin > dues) {
       uint256 value = margin - dues;
       Address.sendValue(payable(msg.sender), value);
-      safe_systemRewardPayable().transfer(uint256(dues));
+      Address.sendValue(safe_systemRewardPayable(), uint256(dues));
     } else {
-      safe_systemRewardPayable().transfer(margin);
+      Address.sendValue(safe_systemRewardPayable(), margin);
     }
   }
 

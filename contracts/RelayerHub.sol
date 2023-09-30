@@ -3,6 +3,7 @@ pragma solidity 0.8.4;
 
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
+import "./lib/Address.sol";
 import "./interface/IRelayerHub.sol";
 import "./interface/IParamSubscriber.sol";
 import "./System.sol";
@@ -64,8 +65,9 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     Relayer memory r = relayers[msg.sender];
     delete relayersExistMap[msg.sender];
     delete relayers[msg.sender];
-    payable(msg.sender).transfer(r.deposit - r.dues);
-    safe_systemRewardPayable().transfer(r.dues);
+    uint amount_ = r.deposit - r.dues;
+    Address.sendValue(payable(msg.sender), amount_);
+    Address.sendValue(safe_systemRewardPayable(), r.dues);
     emit relayerUnRegister(msg.sender);
   }
 

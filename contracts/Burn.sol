@@ -3,6 +3,7 @@ pragma solidity 0.8.4;
 import "./System.sol";
 import "./interface/IParamSubscriber.sol";
 import "./lib/BytesToTypes.sol";
+import "./lib/Address.sol";
 import "./lib/Memory.sol";
 import "./interface/IBurn.sol";
 import "./registry/Registry.sol";
@@ -35,7 +36,7 @@ contract Burn is System, IBurn, IParamSubscriber {
       } else {
         v = msg.value - remain;
       }
-      payable(msg.sender).transfer(remain);
+      Address.sendValue(payable(msg.sender), remain);
     }
     if (v != 0) emit burned(msg.sender, v);
   }
