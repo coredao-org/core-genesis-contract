@@ -32,7 +32,7 @@ def deployed_registry(accounts):
 
 @pytest.fixture(scope="module")
 def candidate_hub(accounts, deployed_registry):
-    roundInterval = 0
+    roundInterval = 100
     validatorCount = 0
     c = accounts[0].deploy(CandidateHubMock, deployed_registry, roundInterval, validatorCount) 
     c.init()
@@ -55,8 +55,8 @@ def btc_light_client(accounts, deployed_registry):
 
 @pytest.fixture(scope="module")
 def gov_hub(accounts, deployed_registry):
-    votingPeriod = 1
-    executingPeriod = 1 
+    votingPeriod = 1000
+    executingPeriod = 1000 
     membersBytes = ''
     c = accounts[0].deploy(GovHubMock, deployed_registry, votingPeriod, executingPeriod, membersBytes) 
     c.init()
@@ -102,7 +102,7 @@ def validator_set(accounts, deployed_registry):
 
 @pytest.fixture(scope="module")
 def pledge_agent(accounts, deployed_registry):
-    powerBlockFactor = 1
+    powerBlockFactor = 2
     c = accounts[0].deploy(PledgeAgentMock, deployed_registry, powerBlockFactor) 
     c.init()
     if is_development:
