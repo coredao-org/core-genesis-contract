@@ -218,9 +218,12 @@ contract GovHub is System, IParamSubscriber {
     for (uint256 i = 0; i < targetSize; i++) {
       bytes memory callData;
       if (bytes(proposal.signatures[i]).length == 0) {
-        callData = proposal.calldatas[i];
+        // eth transfer
+        callData = proposal.calldatas[i]; 
       } else {
-        callData = abi.encodePacked(bytes4(keccak256(bytes(proposal.signatures[i]))), proposal.calldatas[i]);
+        // function call
+        bytes4 functionSelector = bytes4(keccak256(bytes(proposal.signatures[i])));
+        callData = abi.encodePacked(functionSelector, proposal.calldatas[i]);
       }
 
       (bool success,) = proposal.targets[i].call{ value: proposal.values[i] }(callData);
@@ -231,8 +234,8 @@ contract GovHub is System, IParamSubscriber {
   }
 
   /// Check the proposal state
-  /// @param proposalId The proposal Id
   /// @return The state of the proposal
+  /// @param proposalId The proposal Id
   function getState(uint256 proposalId) public view returns (ProposalState) {
     require(proposalCount >= proposalId && proposalId != 0, "state: invalid proposal id");
     Proposal storage proposal = proposals[proposalId];
