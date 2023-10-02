@@ -65,9 +65,10 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     Relayer memory r = relayers[msg.sender];
     delete relayersExistMap[msg.sender];
     delete relayers[msg.sender];
-    uint amount_ = r.deposit - r.dues;
-    Address.sendValue(payable(msg.sender), amount_);
-    Address.sendValue(safe_systemRewardPayable(), r.dues);
+    uint256 relayerCut = r.deposit - r.dues;
+    uint256 systemCut = r.dues;
+    Address.sendValue(payable(msg.sender), relayerCut);
+    Address.sendValue(safe_systemRewardPayable(), systemCut);
     emit relayerUnRegister(msg.sender);
   }
 
