@@ -199,7 +199,8 @@ def test_store_btc_block_gasprice_limit_failed(btc_light_client):
 def test_update_param_store_block_gasprice_success(btc_light_client, gasprice, init_gov_address):
     gasprice = Web3.toWei(gasprice, 'gwei')
     hex_value = padding_left(Web3.toHex(gasprice), 64)
-    tx = btc_light_client.updateParam('storeBlockGasPrice', hex_value, {'from': accounts[0]})
+
+    tx = btc_light_client.updateParam('storeBlockGasPrice', hex_value)
     expect_event(tx, 'paramChange', {'key': 'storeBlockGasPrice', 'value': hex_value})
     assert btc_light_client.storeBlockGasPrice() == gasprice
     update_default_block_gasprice(btc_light_client)

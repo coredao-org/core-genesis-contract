@@ -219,14 +219,14 @@ def test_update_failed_by_address_which_is_not_candidate():
         validator_set_instance.updateValidatorSet([random_address], [random_address], [random_address], [100])
 
 
-def test_update_failed_with_empty_validator_set():
-    __fake_validator_set()
+def test_update_failed_with_empty_validator_set(deployed_registry):
+    __fake_validator_set(deployed_registry)
     validator_set_instance.updateValidatorSet([], [], [], [])
     assert validator_set_instance.getValidators() == init_validators
 
 
-def test_update_failed_with_addresses_of_different_length():
-    __fake_validator_set()
+def test_update_failed_with_addresses_of_different_length(deployed_registry):
+    __fake_validator_set(deployed_registry)
     with brownie.reverts("the numbers of consensusAddresses and commissionThousandthss should be equal"):
         validator_set_instance.updateValidatorSet([accounts[0].address], [accounts[1].address], [accounts[2].address], [accounts[3].address, accounts[4].address])
     with brownie.reverts("the numbers of consensusAddresses and feeAddresses should be equal"):
@@ -237,20 +237,20 @@ def test_update_failed_with_addresses_of_different_length():
         validator_set_instance.updateValidatorSet([accounts[0].address, accounts[4].address], [accounts[1].address], [accounts[2].address], [accounts[3].address])
 
 
-def test_update_failed_with_duplicate_consensus_address():
-    __fake_validator_set()
+def test_update_failed_with_duplicate_consensus_address(deployed_registry):
+    __fake_validator_set(deployed_registry)
     with brownie.reverts("duplicate consensus address"):
         validator_set_instance.updateValidatorSet([accounts[0], accounts[0]], [accounts[1], accounts[1]], [accounts[2], accounts[2]], [100, 100])
 
 
-def test_update_failed_with_commissionThousandths_out_of_range():
-    __fake_validator_set()
+def test_update_failed_with_commissionThousandths_out_of_range(deployed_registry):
+    __fake_validator_set(deployed_registry)
     with brownie.reverts("commissionThousandths out of bound"):
         validator_set_instance.updateValidatorSet([accounts[0], accounts[0]], [accounts[1], accounts[3]], [accounts[2], accounts[2]], [1000, 10000])
 
 
-def test_update_success():
-    __fake_validator_set()
+def test_update_success(deployed_registry):
+    __fake_validator_set(deployed_registry)
     tx = validator_set_instance.updateValidatorSet([accounts[0]], [accounts[1]], [accounts[2]], [1000])
     expect_event(tx, "validatorSetUpdated")
     assert validator_set_instance.getValidators() == [accounts[1]]
@@ -267,9 +267,9 @@ def test_update_success():
     (True, "blockRewardIncentivePercent", "0x0000000000000000000000000000000000000000000000000000000000000000", "the blockRewardIncentivePercent out of range"),
     (True, "blockRewardIncentivePercent", "0x0000000000000000000000000000000000000000000000000000000000000064", "the blockRewardIncentivePercent out of range"),
 ])
-def update_param_failed(fake, key, value, err):
+def update_param_failed(deployed_registry, fake, key, value, err):
     if fake:
-        __fake_validator_set()
+        __fake_validator_set(deployed_registry)
     with brownie.reverts(err):
         validator_set_instance.updateParam(key, value)
 
@@ -279,8 +279,8 @@ def update_param_failed(fake, key, value, err):
     ("0x000000000000000000000000000000000000000000000001a055690d9db80000", 30000000000000000000),
     ("0x0000000000000000000000000000000000000000000000001bc16d674ec80000", 2000000000000000000),
 ])
-def update_param_success_with_block_reward(value, expected):
-    __fake_validator_set()
+def update_param_success_with_block_reward(value, expected, deployed_registry):
+    __fake_validator_set(deployed_registry)
     validator_set_instance.updateParam("blockReward", value)
     assert validator_set_instance.blockReward() == expected
 
@@ -309,23 +309,23 @@ def test_distribute_reward_failed_by_address_which_is_not_candidate():
     __balance_check()
 
 
-def test_distribute_reward_success_with_empty_validators():
-    __fake_validator_set()
+def test_distribute_reward_success_with_empty_validators(deployed_registry):
+    __fake_validator_set(deployed_registry)
     validator_set_instance.updateValidatorSet([], [], [], [])
     validator_set_instance.distributeReward()
     __contract_check(0, init_validator_incomes)
     __balance_check()
 
 
-def test_distribute_reward_success_with_validators_which_have_no_incomes():
-    __fake_validator_set()
+def test_distribute_reward_success_with_validators_which_have_no_incomes(deployed_registry):
+    __fake_validator_set(deployed_registry)
     validator_set_instance.distributeReward()
     __contract_check(0, init_validator_incomes)
     __balance_check()
 
 
-def test_distribute_reward_success_with_commissionThousandths_1000():
-    __fake_validator_set()
+def test_distribute_reward_success_with_commissionThousandths_1000(deployed_registry):
+    __fake_validator_set(deployed_registry)
     validator = validator_set_instance.currentValidatorSet(0).dict()
     blockRewardIncentivePercent = validator_set_instance.blockRewardIncentivePercent()
     value = 1000000000000000000
@@ -346,8 +346,8 @@ def test_distribute_reward_success_with_commissionThousandths_1000():
     assert brownie.web3.eth.get_balance(validator['feeAddress']) == expect_reward
 
 
-def test_distribute_reward_success_with_commissionThousandths_500():
-    __fake_validator_set()
+def test_distribute_reward_success_with_commissionThousandths_500(deployed_registry):
+    __fake_validator_set(deployed_registry)
     commission = 500
     value = 1000000000000000000
     blockRewardIncentivePercent = validator_set_instance.blockRewardIncentivePercent()
@@ -384,7 +384,7 @@ def test_misdemeanor_failed_with_address_which_is_not_slash():
 
 
 def test_misdemeanor_failed_with_after_set_empty_validator_set(deployed_registry):
-    __fake_validator_set()
+    __fake_validator_set(deployed_registry)
     validator_set_instance.updateValidatorSet([], [], [], [])
 
     deployed_registry.setAll([Burn[0], 
@@ -407,7 +407,7 @@ def test_misdemeanor_failed_with_after_set_empty_validator_set(deployed_registry
 
 
 def test_misdemeanor_return_empty_with_empty_validator_set_and_ZERO_ADDRESS(deployed_registry):
-    __fake_validator_set()
+    __fake_validator_set(deployed_registry)
     validator_set_instance.updateValidatorSet([], [], [], [])
 
     slashIndicator = accounts[0].address
@@ -426,7 +426,7 @@ def test_misdemeanor_return_empty_with_empty_validator_set_and_ZERO_ADDRESS(depl
 
 
 def test_misdemeanor_return_empty_with_only_one_validator_set_and_0_income(deployed_registry):
-    __fake_validator_set()
+    __fake_validator_set(deployed_registry)
     validator_set_instance.updateValidatorSet([init_validators[0]], [init_validators[0]], [init_validators[0]], [100])
 
     slashIndicator = accounts[0].address
@@ -446,7 +446,7 @@ def test_misdemeanor_return_empty_with_only_one_validator_set_and_0_income(deplo
 
 
 def test_misdemeanor_return_empty_with_only_one_validator_set(deployed_registry):
-    __fake_validator_set()
+    __fake_validator_set(deployed_registry)
     validator_set_instance.updateValidatorSet([init_validators[0]], [init_validators[0]], [init_validators[0]], [100])
 
     deposit_value = 1000000000
@@ -489,7 +489,7 @@ def test_misdemeanor_success_0_income(deployed_registry):
 
 
 def test_misdemeanor_success(deployed_registry):
-    __fake_validator_set()
+    __fake_validator_set(deployed_registry)
     deposit_value = 1000000000
     average_value = deposit_value // (len(init_validators) - 1)
     expect_event(validator_set_instance.deposit(init_validators[2], {'value': deposit_value}), "validatorDeposit", {
@@ -536,7 +536,7 @@ def test_misdemeanor_return_empty_with_ZERO_ADDRESS_validator(deployed_registry)
 
 
 def test_felony_failed_with_one_validator_which_has_0_income(deployed_registry):
-    __fake_validator_set()
+    __fake_validator_set(deployed_registry)
     validator_set_instance.updateValidatorSet([init_validators[0]], [init_validators[0]], [init_validators[0]], [100])
 
     slashIndicator = accounts[0].address
@@ -556,7 +556,7 @@ def test_felony_failed_with_one_validator_which_has_0_income(deployed_registry):
 
 
 def test_felony_failed_with_one_validator_which_has_income(deployed_registry):
-    __fake_validator_set()
+    __fake_validator_set(deployed_registry)
     validator_set_instance.updateValidatorSet([init_validators[0]], [init_validators[0]], [init_validators[0]], [100])
     deposit_value = 1000000000
     validator_set_instance.deposit(init_validators[0], {'value': deposit_value})
@@ -582,7 +582,7 @@ def test_felony_failed_with_one_validator_which_has_income(deployed_registry):
 def test_felony_success_with_validator_set_which_has_0_income(candidate_hub, deployed_registry):
     candidate_hub.register(accounts[0], accounts[0], 100, {'from': accounts[0], 'value': Web3.toWei(20000, 'ether')})
     candidate_hub.register(accounts[1], accounts[1], 100, {'from': accounts[1], 'value': Web3.toWei(20000, 'ether')})
-    __fake_validator_set()
+    __fake_validator_set(deployed_registry)
     validator_set_instance.updateValidatorSet([accounts[0], accounts[1]], [accounts[0], accounts[1]], [accounts[0], accounts[1]], [100, 100])
 
     slashIndicator = accounts[0].address
@@ -622,7 +622,7 @@ def test_felony_success_with_validator_set_which_has_0_income(candidate_hub, dep
 def test_felony_success_with_validator_set_which_has_income(candidate_hub, deployed_registry):
     candidate_hub.register(accounts[0], accounts[0], 100, {'from': accounts[0], 'value': Web3.toWei(20000, 'ether')})
     candidate_hub.register(accounts[1], accounts[1], 100, {'from': accounts[1], 'value': Web3.toWei(20000, 'ether')})
-    __fake_validator_set()
+    __fake_validator_set(deployed_registry)
     validator_set_instance.updateValidatorSet([accounts[0], accounts[1]], [accounts[0], accounts[1]],
                                               [accounts[0], accounts[1]], [100, 100])
 

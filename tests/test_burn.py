@@ -137,8 +137,7 @@ def test_update_param_burn_cap_success(burn):
     __add_balance(burn.address, Web3.toWei(1, 'ether'))
     account0_tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
-
-    tx = burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000de0b6b3a7640001")
+    tx = burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000de0b6b3a7640001")    
     expect_event(tx, "paramChange", {
         "key": "burnCap",
         "value": "0x0000000000000000000000000000000000000000000000000de0b6b3a7640001"
@@ -159,7 +158,6 @@ def test_burn_success_with_value_0_and_balance_is_equal_to_burn_cap(burn):
     __update_gov_address(burn)
     burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000")
     __add_balance(burn.address, Web3.toWei(1, 'ether'))
-
     account0_tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
 
@@ -174,7 +172,6 @@ def test_burn_success_with_value_0_and_balance_is_greater_than_burn_cap(burn):
     __update_gov_address(burn)
     burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000")
     __add_balance(burn.address, Web3.toWei(2, 'ether'))
-
     account0_tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
 

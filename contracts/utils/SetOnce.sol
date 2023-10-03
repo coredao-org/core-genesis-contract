@@ -6,7 +6,12 @@ abstract contract SetOnce {
 
     modifier setOnlyOnce() {
         require(!s_wasSet, "already set");
-        s_wasSet = true;
+        _markAsSet();
         _;
     }
+
+    function _markAsSet() internal virtual {
+        s_wasSet = true;
+    }
+
 }

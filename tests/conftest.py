@@ -26,7 +26,7 @@ def library_set_up(accounts):
 
 @pytest.fixture(scope="module")
 def deployed_registry(accounts):
-    c = accounts[0].deploy(Registry)
+    c = accounts[0].deploy(RegistryMock)
     return c
 
 

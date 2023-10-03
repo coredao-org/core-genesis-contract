@@ -25,8 +25,14 @@ contract Registry is ImmutableOwner, SetOnce {
     }
 
     function getAllContracts() external view returns (AllContracts memory) {
-        verifyAll_(s_allContracts);
+        assert(s_allContracts.burn != IBurn(address(0))); // make sure we'reverifyAll()
         return s_allContracts;
+    }
+
+    function govHubAddr() external view returns (address) {
+        address gotHub = s_allContracts.govHubAddr;
+        assert(gotHub != address(0)); // make sure setAll() was called
+        return gotHub;
     }
 
     function verifyAll_(AllContracts memory allContracts) private pure {

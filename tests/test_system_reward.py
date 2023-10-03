@@ -78,12 +78,14 @@ def test_update_param_incentive_balance_cap_success(system_reward):
 
 
 @pytest.mark.parametrize("value,success", [(0, True), (1, True), (2, False), (int(math.pow(2, 256))-1, False)])
-def test_update_param_is_burn(system_reward, value, success):
+def test_update_param_is_burn(system_reward, value, success, deployed_registry):
+    gov_hub = deployed_registry.govHubAddr()
+    accounts[0].transfer(gov_hub, Web3.toWei(1, 'ether'))
     if success:
-        system_reward.updateParam("isBurn", padding_left(Web3.toHex(value), 64))
+        system_reward.updateParam("isBurn", padding_left(Web3.toHex(value), 64), {'from' : gov_hub})
     else:
         with brownie.reverts("the newIsBurn out of range"):
-            system_reward.updateParam("isBurn", padding_left(Web3.toHex(value), 64))
+            system_reward.updateParam("isBurn", padding_left(Web3.toHex(value), 64), {'from' : gov_hub})
 
 
 def test_receive_rewards_with_value_0(system_reward):
