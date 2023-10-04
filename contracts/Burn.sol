@@ -36,7 +36,7 @@ contract Burn is System, IBurn, IParamSubscriber {
       } else {
         v = msg.value - remain;
       }
-      Address.sendValue(payable(msg.sender), remain);
+      secureTransfer_(msg.sender, remain);
     }
     if (v != 0) emit burned(msg.sender, v);
   }

@@ -140,12 +140,12 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       }
       changeStatus(c, status);
       if (fine != 0) {
-        Address.sendValue(safe_systemRewardPayable(), fine);
+        secureTransfer_(safe_systemRewardPayable(), fine);
       }
     } else {
       removeCandidate(index);
 
-      Address.sendValue(safe_systemRewardPayable(), margin);
+      secureTransfer_(safe_systemRewardPayable(), margin);
       emit deductedMargin(operateAddress, margin, 0);
     }
   }
@@ -287,10 +287,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
     if (margin > dues) {
       uint256 value = margin - dues;
-      Address.sendValue(payable(msg.sender), value);
-      Address.sendValue(safe_systemRewardPayable(), uint256(dues));
+      secureTransfer_(msg.sender, value);
+      secureTransfer_(safe_systemRewardPayable(), uint256(dues));
     } else {
-      Address.sendValue(safe_systemRewardPayable(), margin);
+      secureTransfer_(safe_systemRewardPayable(), margin);
     }
   }
 
