@@ -19,13 +19,13 @@ contract Registry is ImmutableOwner, SetOnce {
     AllContracts private s_allContracts;
 
     function setAll(AllContracts memory allContracts) external onlyOwner setOnlyOnce { 
-        //@correlate-regcache: allow registry caching of each contract only if setAll may be called only once
+        //@correlate-registry.cache: allow registry caching of each contract only if setAll may be called only once
         verifyAll_(allContracts);
         s_allContracts = allContracts;
     }
 
     function getAllContracts() external view returns (AllContracts memory) {
-        assert(s_allContracts.burn != IBurn(address(0))); // make sure we'reverifyAll()
+        assert(s_allContracts.burn != IBurn(address(0))); // make sure setAll() was called
         return s_allContracts;
     }
 

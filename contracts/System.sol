@@ -170,7 +170,7 @@ contract System is Registry {
   }
 
   function _cacheAllContractsLocally() private {
-    //@correlate-regcache
+    //@correlate-registry.cache
     if (s_allContracts.burn == IBurn(address(0))) { 
       s_allContracts = s_registry.getAllContracts();
     }
