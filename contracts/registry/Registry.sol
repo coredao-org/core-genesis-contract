@@ -30,9 +30,9 @@ contract Registry is ImmutableOwner, SetOnce {
     }
 
     function govHubAddr() external view returns (address) {
-        address gotHub = s_allContracts.govHubAddr;
-        assert(gotHub != address(0)); // make sure setAll() was called
-        return gotHub;
+        address govHub = s_allContracts.govHubAddr;
+        assert(govHub != address(0));
+        return govHub;
     }
 
     function _verifyAll(AllContracts memory allContracts) private pure {
