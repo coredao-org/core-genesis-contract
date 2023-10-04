@@ -25,7 +25,7 @@ contract Foundation is System {
   /// @param amount The amount of funds to send
   function fund(address payable payee, uint256 amount) external onlyGov {
     require(payee != address(0), "payee address should not be zero");
-    bool wasSent = secureSend_(payee, amount);
+    bool wasSent = _secureSend(payee, amount);
     if (wasSent) {
       emit fundSuccess(payee, amount);
     } else {

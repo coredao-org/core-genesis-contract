@@ -20,7 +20,7 @@ contract Registry is ImmutableOwner, SetOnce {
 
     function setAll(AllContracts memory allContracts) external onlyOwner setOnlyOnce { 
         //@correlate-registry.cache: allow registry caching of each contract only if setAll may be called only once
-        verifyAll_(allContracts);
+        _verifyAll(allContracts);
         s_allContracts = allContracts;
     }
 
@@ -35,7 +35,7 @@ contract Registry is ImmutableOwner, SetOnce {
         return gotHub;
     }
 
-    function verifyAll_(AllContracts memory allContracts) private pure {
+    function _verifyAll(AllContracts memory allContracts) private pure {
         assert(allContracts.burn != IBurn(address(0)));
         assert(allContracts.lightClient != ILightClient(address(0)));
         assert(allContracts.slashIndicator != ISlashIndicator(address(0)));

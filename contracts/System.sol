@@ -110,19 +110,19 @@ contract System is Registry {
   }
   // -------
 
-  function secureSend_(address sendTo, uint256 amount) internal returns (bool) {
-    if (!sufficientBalance_(amount)) {
+  function _secureSend(address sendTo, uint256 amount) internal returns (bool) {
+    if (!_sufficientBalance(amount)) {
       return false;
     }
     return payable(sendTo).send(amount);
   }
 
-  function secureTransfer_(address sendTo, uint256 amount) internal {
-    require(sufficientBalance_(amount), "insufficient balance");
+  function _secureTransfer(address sendTo, uint256 amount) internal {
+    require(_sufficientBalance(amount), "insufficient balance");
     payable(sendTo).transfer(amount);
   }
 
-  function sufficientBalance_(uint256 amount) private view returns (bool) {
+  function _sufficientBalance(uint256 amount) private view returns (bool) {
     return address(this).balance >= amount;
   }
 

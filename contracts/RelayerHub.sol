@@ -67,8 +67,8 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     delete relayers[msg.sender];
     uint256 relayerCut = r.deposit - r.dues;
     uint256 systemCut = r.dues;
-    secureTransfer_(msg.sender, relayerCut);
-    secureTransfer_(safe_systemRewardPayable(), systemCut);
+    _secureTransfer(msg.sender, relayerCut);
+    _secureTransfer(safe_systemRewardPayable(), systemCut);
     emit relayerUnRegister(msg.sender);
   }
 

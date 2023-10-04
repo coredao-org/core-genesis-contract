@@ -47,7 +47,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
         if (isBurn) {
           safe_burnContract().burn{ value: value }();
         } else {
-          secureTransfer_(safe_foundationPayable(), value);
+          _secureTransfer(safe_foundationPayable(), value);
         }
       }
       emit receiveDeposit(msg.sender, msg.value);
@@ -66,7 +66,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   {
     uint256 actualAmount = amount < address(this).balance ? amount : address(this).balance;
     if (to != address(0) && actualAmount != 0) {
-      secureTransfer_(to, actualAmount);
+      _secureTransfer(to, actualAmount);
       emit rewardTo(to, actualAmount);
     } else {
       emit rewardEmpty();

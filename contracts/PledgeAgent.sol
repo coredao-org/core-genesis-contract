@@ -298,7 +298,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param amount The amount of CORE to undelegate
   function undelegateCoin(address agent, uint256 amount) public {
     (uint256 deposit, ) = undelegateCoin(agent, msg.sender, amount, false);
-    secureTransfer_(msg.sender, deposit);
+    _secureTransfer(msg.sender, deposit);
     emit undelegatedCoin(agent, msg.sender, deposit);
   }
 
@@ -369,7 +369,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   /*********************** Internal methods ***************************/
   function distributeReward(address payable delegator, uint256 reward) internal {
-    secureTransfer_(delegator, reward);
+    _secureTransfer(delegator, reward);
     emit claimedReward(delegator, msg.sender, reward, true);
   }
 
