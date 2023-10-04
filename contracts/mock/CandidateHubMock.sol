@@ -11,6 +11,7 @@ contract CandidateHubMock is CandidateHub {
 
     address private blockcoinbase;
     uint private txgasprice;
+    bool private controlRoundTimeTag;
 
     constructor(Registry registry, uint256 roundInterval_, uint256 validatorCount) 
         CandidateHub(registry, roundInterval_, validatorCount) {
@@ -44,6 +45,19 @@ contract CandidateHubMock is CandidateHub {
     function setValidatorCount(uint256 value) external {
         validatorCount = value;
     }
+
+    function setControlRoundTimeTag(bool value) external onlyGov {
+        controlRoundTimeTag = value;
+    }
+
+    function _updateSystemRoundTag() internal override {
+        if (!controlRoundTimeTag) {
+          CandidateHub._updateSystemRoundTag();
+        } else {
+            _incRoundTag();
+        }
+    }
+
     function getCanDelegateCandidates() external view returns(address[] memory) {
         uint count;
         for (uint256 i = 0; i < candidateSet.length; i++) {

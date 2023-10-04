@@ -59,7 +59,6 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   mapping(address => uint256) public jailMap;
 
   uint256 public roundTag;
-  bool public controlRoundTimeTag = false;
 
   struct Candidate {
     address operateAddr;
@@ -94,10 +93,6 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     validatorCount = validatorCount_;
     maxCommissionChange = MAX_COMMISSION_CHANGE;
     roundTag = 7;
-  }
-
-  function setControlRoundTimeTag(bool value) external onlyGov {
-    controlRoundTimeTag = value;
   }
 
   /********************* ICandidateHub interface ****************************/
@@ -170,14 +165,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       safe_pledgeAgent().distributePowerReward(lastCandidates[i], miners);
     }
 
-    // update the system round tag; new round starts
-    if (!controlRoundTimeTag) {
-      uint256 roundTimestamp = block.timestamp / roundInterval;
-      require(roundTimestamp > roundTag, "not allowed to turn round, wait for more time");
-      roundTag = roundTimestamp;
-    } else {
-        roundTag++;
-    }
+    _updateSystemRoundTag();
 
     // reset validator flags for all candidates.
     uint256 candidateSize = candidateSet.length;
@@ -247,6 +235,17 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       changeStatus(candidateSet[i], statusList[i]);
     }
   }
+
+  function _updateSystemRoundTag() internal virtual {
+    uint256 roundTimestamp = block.timestamp / roundInterval;
+    require(roundTimestamp > roundTag, "not allowed to turn round, wait for more time");
+    roundTag = roundTimestamp;
+  }
+
+  function _incRoundTag() internal { // for test
+    roundTag++;
+  }
+
 
   /****************** register/unregister ***************************/
   /// Register as a validator candidate on Core blockchain
