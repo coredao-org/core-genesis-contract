@@ -6,12 +6,13 @@ import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./lib/BytesLib.sol";
 import "./lib/RLPDecode.sol";
+import {ReentrancyGuard} from "./lib/ReentrancyGuard.sol";
 import "./interface/IParamSubscriber.sol";
 import "./registry/Registry.sol";
 
 
 /// This is the smart contract to manage governance votes
-contract GovHub is System, IParamSubscriber {
+contract GovHub is System, IParamSubscriber, ReentrancyGuard {
   using RLPDecode for bytes;
   using RLPDecode for RLPDecode.RLPItem;
 
@@ -210,7 +211,7 @@ contract GovHub is System, IParamSubscriber {
 
   /// Execute the proposal
   /// @param proposalId The proposal Id
-  function execute(uint256 proposalId) public payable onlyInit {
+  function execute(uint256 proposalId) public payable nonReentrant onlyInit { 
     require(getState(proposalId) == ProposalState.Succeeded, "proposal can only be executed if it is succeeded");
     Proposal storage proposal = proposals[proposalId];
     proposal.executed = true;
@@ -226,6 +227,8 @@ contract GovHub is System, IParamSubscriber {
         callData = abi.encodePacked(functionSelector, proposal.calldatas[i]);
       }
 
+      //@openissue: is it guaranteed that all proposal targets will be platform contracts?
+      //if so: it needs to be checked. If not: reentrancy should be protected against (which I added)
       (bool success,) = proposal.targets[i].call{ value: proposal.values[i] }(callData);
       require(success, "Transaction execution reverted.");
       emit ExecuteTransaction(proposal.targets[i], proposal.values[i], proposal.signatures[i], proposal.calldatas[i]);
