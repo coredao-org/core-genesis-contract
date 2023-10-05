@@ -2,7 +2,7 @@
 pragma solidity 0.8.4;
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
-import "./lib/Address.sol";
+import {ReentrancyGuard} from "./lib/ReentrancyGuard.sol";
 import "./interface/IValidatorSet.sol";
 import "./interface/ICandidateHub.sol";
 import "./interface/IParamSubscriber.sol";
@@ -10,13 +10,12 @@ import "./interface/IPledgeAgent.sol";
 import "./interface/ISlashIndicator.sol";
 import "./interface/ILightClient.sol";
 import "./System.sol";
-import "./lib/Address.sol";
 import "./registry/Registry.sol";
 
 
 /// This contract manages all validator candidates on Core blockchain
 /// It also exposes the method `turnRound` for the consensus engine to execute the `turn round` workflow
-contract CandidateHub is ICandidateHub, System, IParamSubscriber {
+contract CandidateHub is ICandidateHub, System, IParamSubscriber, ReentrancyGuard {
 
   uint256 public constant INIT_REQUIRED_MARGIN = 1e22;
   uint256 public constant INIT_DUES = 1e20;
@@ -135,12 +134,12 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       }
       changeStatus(c, status);
       if (fine != 0) {
-        _secureTransfer(safe_systemRewardPayable(), fine);
+        _transfer(_systemRewardPayable(), fine);
       }
     } else {
       removeCandidate(index);
 
-      _secureTransfer(safe_systemRewardPayable(), margin);
+      _transfer(_systemRewardPayable(), margin);
       emit deductedMargin(operateAddress, margin, 0);
     }
   }
@@ -155,14 +154,14 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @dev this method is called by Golang consensus engine at the end of a round
   function turnRound() public virtual onlyCoinbase onlyInit onlyZeroGasPrice {
     // distribute rewards for the about to end round
-    address[] memory lastCandidates = safe_validatorSet().distributeReward();
+    address[] memory lastCandidates = _validatorSet().distributeReward();
 
     // fetch BTC miners who delegated hash power in the about to end round; 
     // and distribute rewards to them
     uint256 lastCandidateSize = lastCandidates.length;
     for (uint256 i = 0; i < lastCandidateSize; i++) {
-      address[] memory miners = safe_lightClient().getRoundMiners(roundTag-7, lastCandidates[i]);
-      safe_pledgeAgent().distributePowerReward(lastCandidates[i], miners);
+      address[] memory miners = _lightClient().getRoundMiners(roundTag-7, lastCandidates[i]);
+      _pledgeAgent().distributePowerReward(lastCandidates[i], miners);
     }
 
     _updateSystemRoundTag();
@@ -186,12 +185,12 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     }
     // fetch hash power delegated on list of candidates
     // which is used to calculate hybrid score for validators in the new round
-    powers = safe_lightClient().getRoundPowers(roundTag-7, candidates);
+    powers = _lightClient().getRoundPowers(roundTag-7, candidates);
 
     // calculate the hybrid score for all valid candidates and 
     // choose top ones to form the validator set of the new round
     (uint256[] memory scores, uint256 totalPower, uint256 totalCoin) =
-      safe_pledgeAgent().getHybridScore(candidates, powers);
+      _pledgeAgent().getHybridScore(candidates, powers);
     address[] memory validatorList = getValidators(candidates, scores, validatorCount);
 
     // prepare arguments, and notify ValidatorSet contract
@@ -213,13 +212,13 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       statusList[index - 1] |= SET_VALIDATOR;
     }
 
-    safe_validatorSet().updateValidatorSet(validatorList, consensusAddrList, feeAddrList, commissionThousandthsList);
+    _validatorSet().updateValidatorSet(validatorList, consensusAddrList, feeAddrList, commissionThousandthsList);
 
     // clean slash contract
-    safe_slashIndicator().clean();
+    _slashIndicator().clean();
 
     // notify PledgeAgent contract
-    safe_pledgeAgent().setNewRound(validatorList, totalPower, totalCoin, roundTag);
+    _pledgeAgent().setNewRound(validatorList, totalPower, totalCoin, roundTag);
 
     // update validator jail status
     for (uint256 i = 0; i < candidateSize; i++) {
@@ -276,7 +275,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   /// Unregister the validator candidate role on Core blockchain
-  function unregister() external onlyInit exist {
+  function unregister() external onlyInit exist nonReentrant {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     require(c.status == (c.status & UNREGISTER_STATUS), "candidate status is not cleared");
@@ -286,10 +285,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
     if (margin > dues) {
       uint256 value = margin - dues;
-      _secureTransfer(msg.sender, value);
-      _secureTransfer(safe_systemRewardPayable(), uint256(dues));
+      _unsafeTransfer(msg.sender, value);
+      _transfer(_systemRewardPayable(), uint256(dues));
     } else {
-      _secureTransfer(safe_systemRewardPayable(), margin);
+      _transfer(_systemRewardPayable(), margin);
     }
   }
 

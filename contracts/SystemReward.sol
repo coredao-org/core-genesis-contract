@@ -6,7 +6,6 @@ import "./interface/IParamSubscriber.sol";
 import "./interface/IBurn.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
-import "./lib/Address.sol";
 import "./registry/Registry.sol";
 
 
@@ -45,9 +44,9 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
       if (address(this).balance > incentiveBalanceCap) {
         uint256 value = address(this).balance - incentiveBalanceCap;
         if (isBurn) {
-          safe_burnContract().burn{ value: value }();
+          _burnContract().burn{ value: value }();
         } else {
-          _secureTransfer(safe_foundationPayable(), value);
+          _transfer(_foundationPayable(), value);
         }
       }
       emit receiveDeposit(msg.sender, msg.value);
@@ -66,7 +65,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   {
     uint256 actualAmount = amount < address(this).balance ? amount : address(this).balance;
     if (to != address(0) && actualAmount != 0) {
-      _secureTransfer(to, actualAmount);
+      _transfer(to, actualAmount);
       emit rewardTo(to, actualAmount);
     } else {
       emit rewardEmpty();
@@ -103,6 +102,6 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   }
 
   function _isOperator(address addr) internal virtual returns (bool) {
-    return addr == address(safe_lightClient()) || addr == address(safe_slashIndicator());
+    return addr == address(_lightClient()) || addr == address(_slashIndicator());
   }
 }

@@ -67,11 +67,11 @@ contract ValidatorSetMock is ValidatorSet {
         for (uint256 i = 0; i < rewardList.length; i++) {
         	rewardSum += rewardList[i];
         }
-        safe_pledgeAgent().addRoundReward{ value: rewardSum }(agentList, rewardList);
+        _pledgeAgent().addRoundReward{ value: rewardSum }(agentList, rewardList);
     }
 
     function jailValidator(address operateAddress, uint256 round, uint256 fine) external {
-        safe_candidateHub().jailValidator(operateAddress, round, fine);
+        _candidateHub().jailValidator(operateAddress, round, fine);
     }
 
     function getValidatorByConsensus(address consensus) external view returns(Validator memory) {

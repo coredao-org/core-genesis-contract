@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
+import {Address} from "./lib/Address.sol";
 import {Registry} from "./registry/Registry.sol";
 import {AllContracts} from "./registry/AllContracts.sol";
 
@@ -59,27 +60,27 @@ contract System is Registry {
   }
 
   modifier onlySlash() {
-    require(msg.sender == address(safe_slashIndicator()), "the msg sender must be slash contract");
+    require(msg.sender == address(_slashIndicator()), "the msg sender must be slash contract");
     _;
   }
 
   modifier onlyGov() {
-    require(msg.sender == safe_govHubAddr(), "the msg sender must be governance contract");
+    require(msg.sender == _govHubAddr(), "the msg sender must be governance contract");
     _;
   }
 
   modifier onlyCandidate() {
-    require(msg.sender == address(safe_candidateHub()), "the msg sender must be candidate contract");
+    require(msg.sender == address(_candidateHub()), "the msg sender must be candidate contract");
     _;
   }
 
   modifier onlyValidator() {
-    require(msg.sender == address(safe_validatorSet()), "the msg sender must be validatorSet contract");
+    require(msg.sender == address(_validatorSet()), "the msg sender must be validatorSet contract");
     _;
   }
 
   modifier onlyRelayer() {
-    require(safe_relayerHub().isRelayer(msg.sender), "the msg sender is not a relayer");
+    require(_relayerHub().isRelayer(msg.sender), "the msg sender is not a relayer");
     _;
   }
 
@@ -106,20 +107,34 @@ contract System is Registry {
   } 
 
   function govHub() external returns (address) {
-    return safe_govHubAddr();
+    return _govHubAddr();
   }
   // -------
 
-  function _secureSend(address sendTo, uint256 amount) internal returns (bool) {
+  function _send(address sendTo, uint256 amount) internal returns (bool) {
     if (!_sufficientBalance(amount)) {
       return false;
     }
     return payable(sendTo).send(amount);
   }
 
-  function _secureTransfer(address sendTo, uint256 amount) internal {
+  function _unsafeSend(address sendTo, uint256 amount) internal returns (bool) {
+    // internally invokes call() with no gas limit! should always be reentrancy safe
+    if (!_sufficientBalance(amount)) {
+      return false;
+    }
+    (bool success, ) = payable(sendTo).call{value: amount}("");
+    return success;
+  }
+
+  function _transfer(address sendTo, uint256 amount) internal {
     require(_sufficientBalance(amount), "insufficient balance");
     payable(sendTo).transfer(amount);
+  }
+
+  function _unsafeTransfer(address sendTo, uint256 amount) internal {
+    // internally invokes call() with no gas limit! should always be reentrancy safe
+    Address.sendValue(payable(sendTo), amount);
   }
 
   function _sufficientBalance(uint256 amount) private view returns (bool) {
@@ -131,58 +146,58 @@ contract System is Registry {
 
   // --- Registry functions below are platform-contracts that are safe to access ---
 
-  function safe_foundationPayable() internal returns(address payable) {
+  function _foundationPayable() internal returns(address payable) {
     _cacheAllContractsLocally();
     return payable(s_allContracts.foundationAddr);
   }
 
-  function safe_systemReward() internal returns(ISystemReward) {
+  function _systemReward() internal returns(ISystemReward) {
     _cacheAllContractsLocally();
     return s_allContracts.systemReward;
   }
 
-  function safe_systemRewardPayable() internal returns(address payable) {
+  function _systemRewardPayable() internal returns(address payable) {
     _cacheAllContractsLocally();
     address _systemRewardAddr = address(s_allContracts.systemReward);
     return payable(_systemRewardAddr);
   }
 
-  function safe_lightClient() internal returns(ILightClient) {
+  function _lightClient() internal returns(ILightClient) {
     _cacheAllContractsLocally();
     return s_allContracts.lightClient;
   }  
 
-  function safe_relayerHub() internal returns(IRelayerHub) {
+  function _relayerHub() internal returns(IRelayerHub) {
     _cacheAllContractsLocally();
     return s_allContracts.relayerHub;
   }
 
-  function safe_candidateHub() internal returns(ICandidateHub) {
+  function _candidateHub() internal returns(ICandidateHub) {
     _cacheAllContractsLocally();
     return s_allContracts.candidateHub;
   }  
 
-  function safe_pledgeAgent() internal returns(IPledgeAgent) {
+  function _pledgeAgent() internal returns(IPledgeAgent) {
     _cacheAllContractsLocally();
     return s_allContracts.pledgeAgent;
   }
 
-  function safe_burnContract() internal returns(IBurn) {
+  function _burnContract() internal returns(IBurn) {
     _cacheAllContractsLocally();
     return s_allContracts.burn;
   }
 
-  function safe_validatorSet() internal returns(IValidatorSet) {
+  function _validatorSet() internal returns(IValidatorSet) {
     _cacheAllContractsLocally();
     return s_allContracts.validatorSet;
   }  
 
-  function safe_slashIndicator() internal returns(ISlashIndicator) {
+  function _slashIndicator() internal returns(ISlashIndicator) {
     _cacheAllContractsLocally();
     return s_allContracts.slashIndicator;
   }  
 
-  function safe_govHubAddr() internal returns(address) {
+  function _govHubAddr() internal returns(address) {
     _cacheAllContractsLocally();
     return s_allContracts.govHubAddr;
   }

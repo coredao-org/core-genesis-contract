@@ -78,7 +78,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   /// This method is called by other validators from golang consensus engine.
   /// @param validator The consensus address of validator
   function slash(address validator) public virtual onlyCoinbase onlyInit oncePerBlock onlyZeroGasPrice{
-    if (!safe_validatorSet().isValidator(validator)) {
+    if (!_validatorSet().isValidator(validator)) {
       return;
     }
     Indicator memory indicator = indicators[validator];
@@ -92,9 +92,9 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     indicator.height = block.number;
     if (indicator.count % felonyThreshold == 0) {
       indicator.count = 0;
-      safe_validatorSet().felony(validator, felonyRound, felonyDeposit);
+      _validatorSet().felony(validator, felonyRound, felonyDeposit);
     } else if (indicator.count % misdemeanorThreshold == 0) {
-      safe_validatorSet().misdemeanor(validator);
+      _validatorSet().misdemeanor(validator);
     }
     indicators[validator] = indicator;
     emit validatorSlashed(validator);
@@ -115,9 +115,9 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     require(sigHash1 != sigHash2, "must be two different blocks");
     require(validator1 != address(0x00), "validator is illegal");
     require(validator1 == validator2, "must be the same validator");
-    require(safe_validatorSet().isValidator(validator1), "not a validator");
-    safe_validatorSet().felony(validator1, INFINITY_ROUND, felonyDeposit);
-    safe_systemReward().claimRewards(payable(msg.sender), rewardForReportDoubleSign);
+    require(_validatorSet().isValidator(validator1), "not a validator");
+    _validatorSet().felony(validator1, INFINITY_ROUND, felonyDeposit);
+    _systemReward().claimRewards(payable(msg.sender), rewardForReportDoubleSign);
   }
 
   /// Clean slash record by felonyThreshold/DECREASE_RATE.

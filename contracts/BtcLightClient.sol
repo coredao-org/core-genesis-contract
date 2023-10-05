@@ -206,7 +206,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     // The mining power with rounds less than or equal to frozenRoundTag has been frozen 
     // and there is no need to continue staking, otherwise it may disrupt the reward 
     // distribution mechanism
-    uint256 frozenRoundTag = safe_candidateHub().getRoundTag() - POWER_ROUND_GAP;
+    uint256 frozenRoundTag = _candidateHub().getRoundTag() - POWER_ROUND_GAP;
     if (candidate != address(0) && blockRoundTag > frozenRoundTag) {
       address miner = getRewardAddress(blockHash);
       RoundPower storage r = roundPowerMap[blockRoundTag];
@@ -226,7 +226,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
      require(reward != 0, "no relayer reward");
      relayerRewardVault[relayerAddr] = 0;
      address payable recipient = payable(relayerAddr);
-     safe_systemReward().claimRewards(recipient, reward);
+     _systemReward().claimRewards(recipient, reward);
   }
 
   /// Distribute relayer rewards

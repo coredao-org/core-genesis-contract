@@ -3,7 +3,6 @@ pragma solidity 0.8.4;
 
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
-import "./lib/Address.sol";
 import "./interface/IRelayerHub.sol";
 import "./interface/IParamSubscriber.sol";
 import "./System.sol";
@@ -67,8 +66,8 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     delete relayers[msg.sender];
     uint256 relayerCut = r.deposit - r.dues;
     uint256 systemCut = r.dues;
-    _secureTransfer(msg.sender, relayerCut);
-    _secureTransfer(safe_systemRewardPayable(), systemCut);
+    _transfer(msg.sender, relayerCut);
+    _transfer(_systemRewardPayable(), systemCut);
     emit relayerUnRegister(msg.sender);
   }
 

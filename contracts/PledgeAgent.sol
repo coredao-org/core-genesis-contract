@@ -5,9 +5,9 @@ import "./interface/IPledgeAgent.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/ICandidateHub.sol";
 import "./interface/ISystemReward.sol";
-import "./lib/Address.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
+import {ReentrancyGuard} from "./lib/ReentrancyGuard.sol";
 import "./System.sol";
 import "./registry/Registry.sol";
 
@@ -21,7 +21,7 @@ import "./registry/Registry.sol";
 /// `effective transfer` only contains the amount of CORE tokens transferred 
 /// which are eligible for claiming rewards in the acting round
 
-contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
+contract PledgeAgent is IPledgeAgent, System, IParamSubscriber, ReentrancyGuard {
   uint256 public constant INIT_REQUIRED_COIN_DEPOSIT = 1e18;
   uint256 public constant INIT_HASH_POWER_FACTOR = 20000;
 
@@ -121,7 +121,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param target Address of the target candidate
   error SameCandidate(address source, address target);
 
-  constructor(Registry registry, uint256 powerBlockFactor_) System(registry) { //@openissue on mainnet: powerBlockFactor_ = 1e18
+  constructor(Registry registry, uint256 powerBlockFactor_) System(registry) { 
+    //@openissue:deploy : note that on mainnet initial powerBlockFactor_ shoiuld be = 1e18
     POWER_BLOCK_FACTOR = powerBlockFactor_;    
     requiredCoinDeposit = INIT_REQUIRED_COIN_DEPOSIT;
     powerFactor = INIT_HASH_POWER_FACTOR;
@@ -261,7 +262,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
 
     if (undelegateCoinReward != 0) {
-      safe_systemReward().receiveRewards{ value: undelegateCoinReward }();
+      _systemReward().receiveRewards{ value: undelegateCoinReward }();
     }
   }
 
@@ -280,7 +281,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Delegate coin to a validator
   /// @param agent The operator address of validator
   function delegateCoin(address agent) external payable {
-    if (!safe_candidateHub().canDelegate(agent)) {
+    if (!_candidateHub().canDelegate(agent)) {
       revert InactiveAgent(agent);
     }
     uint256 newDeposit = delegateCoin(agent, msg.sender, msg.value, 0);
@@ -296,9 +297,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Undelegate coin from a validator
   /// @param agent The operator address of validator
   /// @param amount The amount of CORE to undelegate
-  function undelegateCoin(address agent, uint256 amount) public {
+  function undelegateCoin(address agent, uint256 amount) public nonReentrant {
     (uint256 deposit, ) = undelegateCoin(agent, msg.sender, amount, false);
-    _secureTransfer(msg.sender, deposit);
+    _unsafeTransfer(msg.sender, deposit);
     emit undelegatedCoin(agent, msg.sender, deposit);
   }
 
@@ -314,7 +315,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param targetAgent The validator to transfer coin stake to
   /// @param amount The amount of CORE to transfer
   function transferCoin(address sourceAgent, address targetAgent, uint256 amount) public {
-    if (!safe_candidateHub().canDelegate(targetAgent)) {
+    if (!_candidateHub().canDelegate(targetAgent)) {
       revert InactiveAgent(targetAgent);
     }
     if (sourceAgent == targetAgent) {
@@ -368,8 +369,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   }
 
   /*********************** Internal methods ***************************/
-  function distributeReward(address payable delegator, uint256 reward) internal {
-    _secureTransfer(delegator, reward);
+  function distributeReward(address payable delegator, uint256 reward) internal nonReentrant {
+    _unsafeTransfer(delegator, reward);
     emit claimedReward(delegator, msg.sender, reward, true);
   }
 
@@ -540,7 +541,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
           if (r.coin == 0) {
             delete a.rewardSet[rewardIndex];
           }
-          safe_systemReward().receiveRewards{ value: undelegateReward }();
+          _systemReward().receiveRewards{ value: undelegateReward }();
         }
         deposit = d.deposit + transferOutDeposit;
         d.deposit = d.newDeposit;

@@ -136,7 +136,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       incentiveSum += incentiveValue;
       v.income -= incentiveValue;
     }
-    safe_systemReward().receiveRewards{ value: incentiveSum }();
+    _systemReward().receiveRewards{ value: incentiveSum }();
 
     operateAddressList = new address[](validatorSize);
     uint256[] memory rewardList = new uint256[](validatorSize);
@@ -155,7 +155,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
         }
 
         v.income = 0;
-        bool success = _secureSend(feeAddress, validatorReward);
+        bool success = _send(feeAddress, validatorReward);
         if (success) {
           emit directTransfer(v.operateAddress, feeAddress, validatorReward, tempIncome);
         } else {
@@ -164,7 +164,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       }
     }
 
-    safe_pledgeAgent().addRoundReward{ value: rewardSum }(operateAddressList, rewardList);
+    _pledgeAgent().addRoundReward{ value: rewardSum }(operateAddressList, rewardList);
     totalInCome = 0;
     return operateAddressList;
   } 
@@ -295,8 +295,8 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
         currentValidatorSet[i].income += averageDistribute;
       }
     }
-    safe_candidateHub().jailValidator(operateAddress, felonyRound, felonyDeposit);
-    safe_pledgeAgent().onFelony(operateAddress);
+    _candidateHub().jailValidator(operateAddress, felonyRound, felonyDeposit);
+    _pledgeAgent().onFelony(operateAddress);
   }
 
   /*********************** Param update ********************************/
