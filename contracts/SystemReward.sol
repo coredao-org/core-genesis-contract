@@ -42,7 +42,17 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     }
   }
 
-  /// Receive funds from system, burn the portion which exceeds cap
+/* @product Receive external funds - currently not limited to system-only invocation
+   @logic
+      1. Receive and stores in the contract an eth amount up to the total contract balance of 
+         incentiveBalanceCap (default value: 1e25)
+      2. If post-transfer balance exeeds incentiveBalanceCap then:
+          a. if in isBurn mode then burn the excess, see the Burn.burn() documentation
+              for details, especially the part detailing that if the total contract 
+              balance (i.e. the sum of all burned tokens) exceeds the burnCap then the 
+              excess (up to the limit of the current sum of tokens to burn) is returned to the SystemReward contract
+          b. if not in isBurn mode - transfer the excess to the FOUNDATION address
+*/
   function receiveRewards() external payable override onlyInit {
     if (msg.value != 0) {
       if (address(this).balance > incentiveBalanceCap) {
@@ -57,9 +67,14 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     }
   }
 
-  /// Claim rewards, this method can only be called by valid operator addresses
-  /// @param to The address to claim rewards to
-  /// @param amount The amount to claim
+/* @product Called by the Light BTC Client for relayers and by the SlashIndicator contracts 
+   to claim a reward for external verifiers (Note: the latter is currently not enforced!)  @openissue
+   @logic
+      1. The function transfers the eth amount specified by the caller to the destination 
+         address.@author.
+      2. If the current SystemReward balance is less than the amount specified by the caller, 
+         then no error is issued rather the amount gets slashed to the current balance.
+*/
   function claimRewards(address payable to, uint256 amount)
     external
     override(ISystemReward)
