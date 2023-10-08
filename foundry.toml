@@ -5,10 +5,31 @@ libs = ["lib"]
 test = "tests/foundry"
 cache_path = "forge-cache"
 no_match_contract = "TestLibMemory"
-
+#eth-rpc-url = "https://mainnet.infura.io"
 solc = "0.8.4"
+
 
 [fuzz]
 runs = 10_000
+#max_test_rejects = 65536
+#seed = '0x3e8'
+#dictionary_weight = 40
+#include_storage = true
+#include_push_bytes = true
+
+[invariant]
+runs = 10_000
+depth = 40
+fail_on_revert = false
+call_override = false
+dictionary_weight = 80
+include_storage = true
+include_push_bytes = true
+shrink_sequence = true
+
+[fmt]
+line_length = 100
+tab_width = 3
+bracket_spacing = true
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

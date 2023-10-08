@@ -33,22 +33,22 @@ contract Deployer is Script, ContractAddresses {
     uint public constant ANVIL_CHAINID = 31337;
     uint public constant GANACHE_CHAINID = 1337;
 
-    function run() external returns(AllContracts memory allContracts) {
-	    // vm.startBroadcast(); 
-
-        console.log("Deploying contracts to chainid: %d", block.chainid);
+    function run() external returns(AllContracts memory s_allContracts) {
+        console.log("Deploying contracts to chainid: ", block.chainid);
 
         bool isLocalTestnet = block.chainid == ANVIL_CHAINID || block.chainid == GANACHE_CHAINID;
         
+	    // vm.startBroadcast(); 
         if (isLocalTestnet) {
-            allContracts = deployToLocalTestnet();            
+            s_allContracts = deployOnLocalTestnet();            
         } else {
-            allContracts = returnPredeployedContracts();
+            s_allContracts = returnPredeployedContracts();
         }
         // vm.stopBroadcast();
     }
 
-    function deployToLocalTestnet() private returns(AllContracts memory) {
+    function deployOnLocalTestnet() private returns(AllContracts memory) {
+        
         Registry registry = new Registry();
 
         IBurn burn = new Burn(registry);
@@ -63,7 +63,7 @@ contract Deployer is Script, ContractAddresses {
         address foundationAddr = address(new Foundation(registry));
         address govHubAddr = address(new GovHub(registry));
 
-        AllContracts memory allContracts = AllContracts({
+        AllContracts memory s_allContracts = AllContracts({
             burn: burn,
             lightClient: lightClient,
             slashIndicator: slashIndicator,
@@ -76,9 +76,9 @@ contract Deployer is Script, ContractAddresses {
             govHubAddr: govHubAddr
         });
 
-        registry.setAll(allContracts);
+        registry.setAll(s_allContracts);
 
-        return allContracts;
+        return s_allContracts;
     }
 
     function returnPredeployedContracts() private pure returns(AllContracts memory) {      

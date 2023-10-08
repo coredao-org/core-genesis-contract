@@ -16,7 +16,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   uint256 public incentiveBalanceCap;
   uint256 public numOperator;
   mapping(address => bool) operators;
-  bool isBurn;
+  bool public isBurn;
 
   constructor(Registry registry, address lightClientAddr, address slashIndicatorAddr) System(registry) {
     assert(lightClientAddr != address(0));
