@@ -72,8 +72,8 @@ contract Registry is ImmutableOwner, SetOnce {
         s_contractMap[address(allContracts.pledgeAgent)] = true;
         s_contractMap[address(allContracts.validatorSet)] = true;
         s_contractMap[address(allContracts.relayerHub)] = true;
-        s_contractMap[address(allContracts.foundationAddr)] = true;
-        s_contractMap[address(allContracts.govHubAddr)] = true;
+        s_contractMap[allContracts.foundationAddr] = true;
+        s_contractMap[allContracts.govHubAddr] = true;
     }
 
     function _setAllWasCalled() private view returns(bool) {
