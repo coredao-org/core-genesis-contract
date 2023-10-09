@@ -152,7 +152,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber, ReentrancyGuar
   /********************* External methods  ****************************/
   /// The `turn round` workflow
   /// @dev this method is called by Golang consensus engine at the end of a round
-  function turnRound() public virtual onlyCoinbase onlyInit onlyZeroGasPrice {
+  function turnRound() public virtual onlyCoinbase onlyZeroGasPrice {
     // distribute rewards for the about to end round
     address[] memory lastCandidates = _validatorSet().distributeReward();
 
@@ -252,9 +252,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber, ReentrancyGuar
   /// @param feeAddr Fee address set to collect system rewards
   /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths
   function register(address consensusAddr, address payable feeAddr, uint32 commissionThousandths)
-    external payable
-    onlyInit
-  {
+    external payable {
     require(candidateSet.length <= CANDIDATE_COUNT_LIMIT, "maximum candidate size reached");
     require(operateMap[msg.sender] == 0, "candidate already exists");
     require(msg.value >= requiredMargin, "deposit is not enough");
@@ -275,7 +273,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber, ReentrancyGuar
   }
 
   /// Unregister the validator candidate role on Core blockchain
-  function unregister() external onlyInit exist nonReentrant {
+  function unregister() external exist nonReentrant {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     require(c.status == (c.status & UNREGISTER_STATUS), "candidate status is not cleared");
@@ -296,7 +294,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber, ReentrancyGuar
   /// @param consensusAddr Consensus address configured on the validator node
   /// @param feeAddr Fee address set to collect system rewards
   /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths  
-  function update(address consensusAddr, address payable feeAddr, uint32 commissionThousandths) external onlyInit exist{
+  function update(address consensusAddr, address payable feeAddr, uint32 commissionThousandths) external exist{
     require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should in range (0, 1000)");
     require(consensusAddr != address(0), "consensus address should not be zero");
     require(feeAddr != address(0), "fee address should not be zero");
@@ -327,7 +325,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber, ReentrancyGuar
 
   /// Refuse to accept delegate from others
   /// @dev Candidate will not be elected in this state
-  function refuseDelegate() external onlyInit exist {
+  function refuseDelegate() external exist {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     uint256 status = c.status | SET_INACTIVE;
@@ -335,7 +333,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber, ReentrancyGuar
   }
 
   /// Accept delegate from others
-  function acceptDelegate() external onlyInit exist {
+  function acceptDelegate() external exist {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     uint256 status = c.status & DEL_INACTIVE;
@@ -344,7 +342,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber, ReentrancyGuar
 
   /// Add refundable deposits
   /// @dev Candidate will not be elected if there are not enough deposits
-  function addMargin() external payable onlyInit exist {
+  function addMargin() external payable exist {
     require(msg.value != 0, "value should not be zero");
     uint256 index = operateMap[msg.sender];
     uint256 totalMargin = candidateSet[index - 1].margin + msg.value;
@@ -437,7 +435,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber, ReentrancyGuar
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov {
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }

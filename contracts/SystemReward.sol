@@ -39,7 +39,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   }
 
   /// Receive funds from system, burn the portion which exceeds cap
-  function receiveRewards() external payable override onlyInit {
+  function receiveRewards() external payable override {
     if (msg.value != 0) {
       if (address(this).balance > incentiveBalanceCap) {
         uint256 value = address(this).balance - incentiveBalanceCap;
@@ -59,7 +59,6 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   function claimRewards(address payable to, uint256 amount)
     external
     override(ISystemReward)
-    onlyInit
     onlyOperator
     returns (uint256)
   {
@@ -84,7 +83,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov {
     if (Memory.compareStrings(key, "incentiveBalanceCap")) {
       require(value.length == 32, "length of incentiveBalanceCap mismatch");
       uint256 newIncentiveBalanceCap = BytesToTypes.bytesToUint256(32, value);

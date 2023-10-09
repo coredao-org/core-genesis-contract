@@ -138,7 +138,7 @@ contract CandidateHubMock is CandidateHub {
     address consensusAddr,
     address payable feeAddr,
     uint32 commissionThousandths
-  ) external payable onlyInit {
+  ) external payable {
     uint256 status = SET_CANDIDATE;
     candidateSet.push(
       Candidate(

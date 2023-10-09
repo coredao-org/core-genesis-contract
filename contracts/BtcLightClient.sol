@@ -221,7 +221,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
   /// Claim relayer rewards
   /// @param relayerAddr The relayer address
-  function claimRelayerReward(address relayerAddr) external onlyInit {
+  function claimRelayerReward(address relayerAddr) external {
      uint256 reward = relayerRewardVault[relayerAddr];
      require(reward != 0, "no relayer reward");
      relayerRewardVault[relayerAddr] = 0;
@@ -526,7 +526,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov{
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov{
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }

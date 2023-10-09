@@ -49,16 +49,6 @@ contract System is Registry {
     _;
   }
 
-  modifier onlyNotInit() { //@openissue remove modifier
-    //require(!s_alreadyInit, "the contract already init");
-    _;
-  }
-
-  modifier onlyInit() { //@openissue remove modifier
-    //require(s_alreadyInit, "the contract not init yet");
-    _;
-  }
-
   modifier onlySlash() {
     require(msg.sender == address(_slashIndicator()), "the msg sender must be slashIndicator contract");
     _;
@@ -96,7 +86,7 @@ contract System is Registry {
   /// @param upperBound requested upper bound of the param
   error OutOfBounds(string name, uint256 given, uint256 lowerBound, uint256 upperBound);
 
-  function init() external onlyNotInit {} // placeholder
+  function init() external {} //@openissue remove function
 
   function _gasprice() internal virtual view returns (uint) {
     return tx.gasprice;
@@ -199,6 +189,10 @@ contract System is Registry {
   function _govHubAddr() internal returns(address) {
     _cacheAllContractsLocally();
     return s_allContracts.govHubAddr;
+  }
+
+  function _onlyPlatformContracts(address[] memory targets) internal view returns(bool) {
+    return s_registry.onlyPlatformContracts(targets);
   }
 
   function _cacheAllContractsLocally() private {

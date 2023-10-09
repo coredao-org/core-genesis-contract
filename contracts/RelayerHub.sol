@@ -52,7 +52,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   }
 
   /// Register as a BTC relayer on Core blockchain
-  function register() external payable noExist onlyInit noProxy{
+  function register() external payable noExist noProxy{
     require(msg.value == requiredDeposit, "deposit value does not match requirement");
     relayers[msg.sender] = Relayer(requiredDeposit, dues);
     relayersExistMap[msg.sender] = true;
@@ -60,7 +60,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   }
 
   /// Unregister the BTC relayer role on Core blockchain
-  function  unregister() external exist onlyInit{
+  function  unregister() external exist {
     Relayer memory r = relayers[msg.sender];
     delete relayersExistMap[msg.sender];
     delete relayers[msg.sender];
@@ -75,7 +75,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov{
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov{
     if (Memory.compareStrings(key,"requiredDeposit")) {
       require(value.length == 32, "length of requiredDeposit mismatch");
       uint256 newRequiredDeposit = BytesToTypes.bytesToUint256(32, value);

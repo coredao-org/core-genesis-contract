@@ -119,16 +119,14 @@ contract GovHub is System, IParamSubscriber, ReentrancyGuard {
     string[] memory signatures,
     bytes[] memory calldatas,
     string memory description
-  ) public onlyInit onlyMember returns (uint256) {
+  ) public onlyMember returns (uint256) {
     require(
       targets.length == values.length && targets.length == signatures.length && targets.length == calldatas.length,
       "proposal function information arity mismatch"
     );
     require(targets.length != 0, "must provide actions");
     require(targets.length <= proposalMaxOperations, "too many actions");
-
-    //@openissue:is_platform: verify that all targets are platform contracts (and assume safety) 
-    // else document the fact that that's not the case and assume unsafe
+    require(_onlyPlatformContracts(targets), "only platform contracts are allowed as targets"); //@openissue:verify
 
     uint256 proposalId = latestProposalIds[msg.sender];
     if (proposalId != 0) {
@@ -183,7 +181,7 @@ contract GovHub is System, IParamSubscriber, ReentrancyGuard {
   /// Cast vote on a proposal
   /// @param proposalId The proposal Id
   /// @param support Support or not
-  function castVote(uint256 proposalId, bool support) public onlyInit onlyMember {
+  function castVote(uint256 proposalId, bool support) public onlyMember {
     require(getState(proposalId) == ProposalState.Active, "voting is closed");
     Proposal storage proposal = proposals[proposalId];
     Receipt storage receipt = proposal.receipts[msg.sender];
@@ -201,7 +199,7 @@ contract GovHub is System, IParamSubscriber, ReentrancyGuard {
 
   /// Cancel the proposal, can only be done by the proposer
   /// @param proposalId The proposal Id
-  function cancel(uint256 proposalId) public onlyInit {
+  function cancel(uint256 proposalId) public {
     ProposalState state = getState(proposalId);
     require(state == ProposalState.Pending || state == ProposalState.Active, "cannot cancel finished proposal");
 
@@ -214,7 +212,7 @@ contract GovHub is System, IParamSubscriber, ReentrancyGuard {
 
   /// Execute the proposal
   /// @param proposalId The proposal Id
-  function execute(uint256 proposalId) public payable nonReentrant onlyInit { 
+  function execute(uint256 proposalId) public payable nonReentrant { 
     require(getState(proposalId) == ProposalState.Succeeded, "proposal can only be executed if it is succeeded");
     Proposal storage proposal = proposals[proposalId];
     proposal.executed = true;
@@ -230,8 +228,6 @@ contract GovHub is System, IParamSubscriber, ReentrancyGuard {
         callData = abi.encodePacked(functionSelector, proposal.calldatas[i]);
       }
 
-      //@openissue: is it guaranteed that all proposal targets will be platform contracts?
-      //if so: it needs to be checked. If not: reentrancy should be protected against (which I added)
       (bool success,) = proposal.targets[i].call{ value: proposal.values[i] }(callData);
       require(success, "Transaction execution reverted.");
       emit ExecuteTransaction(proposal.targets[i], proposal.values[i], proposal.signatures[i], proposal.calldatas[i]);
@@ -270,7 +266,7 @@ contract GovHub is System, IParamSubscriber, ReentrancyGuard {
 
   /// Add a member
   /// @param member The new member address
-  function addMember(address member) external onlyInit onlyGov {
+  function addMember(address member) external onlyGov {
     require(members[member] == 0, "member already exists");
     memberSet.push(member);
     members[member] = memberSet.length;
@@ -279,7 +275,7 @@ contract GovHub is System, IParamSubscriber, ReentrancyGuard {
 
   /// Remove a member
   /// @param member The address of the member to remove
-  function removeMember(address member) external onlyInit onlyGov {
+  function removeMember(address member) external onlyGov {
     require(memberSet.length > 5, "at least five members in DAO");
     uint256 index = members[member];
     require(index != 0, "member does not exist");
@@ -302,7 +298,7 @@ contract GovHub is System, IParamSubscriber, ReentrancyGuard {
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov {
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }

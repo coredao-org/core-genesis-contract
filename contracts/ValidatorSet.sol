@@ -98,7 +98,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// Add block reward on a validator 
   /// @dev This method is called by the golang consensus engine every block
   /// @param valAddr The validator address
-  function deposit(address valAddr) public virtual payable onlyCoinbase onlyInit onlyZeroGasPrice {
+  function deposit(address valAddr) public virtual payable onlyCoinbase onlyZeroGasPrice {
     if (block.number % subsidyReduceInterval() == 0) {
       blockReward = blockReward * REDUCE_FACTOR / 10000;
     }
@@ -303,7 +303,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov {
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }

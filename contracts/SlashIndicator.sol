@@ -77,7 +77,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   /// Slash the validator because of unavailability
   /// This method is called by other validators from golang consensus engine.
   /// @param validator The consensus address of validator
-  function slash(address validator) public virtual onlyCoinbase onlyInit oncePerBlock onlyZeroGasPrice{
+  function slash(address validator) public virtual onlyCoinbase oncePerBlock onlyZeroGasPrice{
     if (!_validatorSet().isValidator(validator)) {
       return;
     }
@@ -104,7 +104,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   /// This method is called by external verifiers
   /// @param header1 A block header submitted by the validator
   /// @param header2 Another block header submitted by the validator with same height and parent
-  function doubleSignSlash(bytes calldata header1, bytes calldata header2) external onlyInit {
+  function doubleSignSlash(bytes calldata header1, bytes calldata header2) external {
     RLPDecode.RLPItem[] memory items1 = header1.toRLPItem().toList();
     RLPDecode.RLPItem[] memory items2 = header2.toRLPItem().toList();
 
@@ -124,7 +124,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   /// @dev To prevent validator misbehaving and leaving, do not clean slash record
   /// @dev to zero, but decrease by felonyThreshold/DECREASE_RATE.
   /// @dev Clean is an effective implement to reorganize "validators" and "indicators".
-  function clean() external override(ISlashIndicator) onlyCandidate onlyInit{
+  function clean() external override(ISlashIndicator) onlyCandidate {
     if(validators.length == 0){
       return;
     }
@@ -180,7 +180,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov{
+  function updateParam(string calldata key, bytes calldata value) external override onlyGov{
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }
