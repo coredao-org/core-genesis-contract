@@ -17,7 +17,7 @@ contract BurnTest is BaseTest  {
 
     event burned(address indexed to, uint256 amount);
 
-    constructor() BaseTest(ACCEPT_ETH) {} // accept eth else burn() will fail on transfering the remaining funds back to the caller
+    constructor() BaseTest(ACCEPT_PAYMENT) {} // accept eth else burn() will fail on transfering the remaining funds back to the caller
 
 	function setUp() public override {
 	    BaseTest.setUp();

@@ -12,24 +12,25 @@ abstract contract BaseTest is Test {
     uint constant private MAX_ETH_VALUE = 10_000_000 ether; // or any other reasonable cap
     uint constant private REQUIRED_GAS = 500_000; // increase if needed
 
-    bool constant internal ACCEPT_ETH = true; // test EOAs/eth-accepting contracts
-    bool constant internal NO_ETH = false;  // test eth-rejecting (hostile?) contracts
-
+    bool constant internal ACCEPT_PAYMENT = true; // test EOAs/eth-accepting contracts
+    bool constant internal REJECT_PAYMENT = false;  // test eth-rejecting (hostile?) contracts
 
     AllContracts internal s_allContracts;
+    Deployer internal s_deployer;
     
-    bool internal s_acceptsEth; // mutable by design. can be set by a derived test where needed
+    bool internal s_acceptPayment; // mutable by design. can be set by a derived test where needed
 
-    constructor(bool acceptsEth) {
-        s_acceptsEth = acceptsEth;
+    constructor(bool accept) {
+        s_acceptPayment = accept;
     }
 
     function setUp() public virtual {
-        s_allContracts = new Deployer().run();
+        s_deployer = new Deployer();
+        s_allContracts = s_deployer.run();
     }
 
     receive() external payable {
-        if (!s_acceptsEth) {
+        if (!s_acceptPayment) { 
             revert("payment rejected");
         }
     } 

@@ -15,7 +15,7 @@ contract FoundationTest is BaseTest  {
     event fundSuccess(address indexed payee, uint256 amount);
     event fundFailed(address indexed payee, uint256 amount, uint256 balance);
 
-    constructor() BaseTest(NO_ETH) {} 
+    constructor() BaseTest(REJECT_PAYMENT) {} 
 
 	function setUp() public override {
         BaseTest.setUp();

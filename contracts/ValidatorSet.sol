@@ -12,6 +12,15 @@ import "./interface/ISystemReward.sol";
 import "./interface/ICandidateHub.sol";
 import "./lib/RLPDecode.sol";
 
+
+struct Validator {
+  address operateAddress;
+  address consensusAddress;
+  address payable feeAddress;
+  uint256 commissionThousandths;
+  uint256 income;
+}
+
 /// This contract manages elected validators in each round
 /// All rewards for validators on Core blockchain are minted in genesis block and stored in this contract
 contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
@@ -36,13 +45,6 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   // value is the index of the element in `currentValidatorSet`.
   mapping(address => uint256) public currentValidatorSetMap;
 
-  struct Validator {
-    address operateAddress;
-    address consensusAddress;
-    address payable feeAddress;
-    uint256 commissionThousandths;
-    uint256 income;
-  }
 
   /*********************** events **************************/
   event validatorSetUpdated();
@@ -411,4 +413,13 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
     return (validator, success);
   }
+
+  function numValidators() external view returns (uint256) {
+    return currentValidatorSet.length;
+  }
+
+  function getValidator(uint i) external view returns (Validator memory) {
+    return currentValidatorSet[i];
+  }
+
 }

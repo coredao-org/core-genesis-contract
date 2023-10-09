@@ -10,14 +10,14 @@ import {SystemReward} from "../../contracts/SystemReward.sol";
 contract SystemRewardTest is BaseTest  {
     string private constant IS_BURN_KEY = "isBurn";
 
-    SystemReward private s_systemReward;
+    SystemReward internal s_systemReward;
 
     event rewardTo(address indexed to, uint256 amount);
     event rewardEmpty();
     event receiveDeposit(address indexed from, uint256 amount);
     event paramChange(string key, bytes value);
 
-    constructor() BaseTest(NO_ETH) {}
+    constructor() BaseTest(REJECT_PAYMENT) {}
 
 	function setUp() public override {
         BaseTest.setUp();

@@ -12,7 +12,7 @@ contract CandidateHubTest is BaseTest  {
 
     CandidateHub private s_candidateHub;
 
-    constructor() BaseTest(NO_ETH) {} 
+    constructor() BaseTest(REJECT_PAYMENT) {} 
 
 	function setUp() public override {
 	    BaseTest.setUp();
