@@ -30,7 +30,6 @@ contract ValidatorSetMock is ValidatorSet {
       return blockcoinbase;
     }  
 
-
     function developmentInit() external {
         blockReward = blockReward / 1e14;
 

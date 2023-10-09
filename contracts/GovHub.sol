@@ -127,6 +127,9 @@ contract GovHub is System, IParamSubscriber, ReentrancyGuard {
     require(targets.length != 0, "must provide actions");
     require(targets.length <= proposalMaxOperations, "too many actions");
 
+    //@openissue:is_platform: verify that all targets are platform contracts (and assume safety) 
+    // else document the fact that that's not the case and assume unsafe
+
     uint256 proposalId = latestProposalIds[msg.sender];
     if (proposalId != 0) {
       ProposalState proposersLatestProposalState = getState(proposalId);

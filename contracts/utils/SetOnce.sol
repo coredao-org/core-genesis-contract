@@ -13,5 +13,4 @@ abstract contract SetOnce {
     function _markAsSet() internal virtual {
         s_wasSet = true;
     }
-
 }

@@ -49,18 +49,18 @@ contract System is Registry {
     _;
   }
 
-  modifier onlyNotInit() { //placeholder
+  modifier onlyNotInit() { //@openissue remove modifier
     //require(!s_alreadyInit, "the contract already init");
     _;
   }
 
-  modifier onlyInit() { //placeholder
+  modifier onlyInit() { //@openissue remove modifier
     //require(s_alreadyInit, "the contract not init yet");
     _;
   }
 
   modifier onlySlash() {
-    require(msg.sender == address(_slashIndicator()), "the msg sender must be slash contract");
+    require(msg.sender == address(_slashIndicator()), "the msg sender must be slashIndicator contract");
     _;
   }
 
@@ -70,7 +70,7 @@ contract System is Registry {
   }
 
   modifier onlyCandidate() {
-    require(msg.sender == address(_candidateHub()), "the msg sender must be candidate contract");
+    require(msg.sender == address(_candidateHub()), "the msg sender must be candidateHub contract");
     _;
   }
 
@@ -109,7 +109,9 @@ contract System is Registry {
   function govHub() external returns (address) {
     return _govHubAddr();
   }
-  // -------
+
+
+  // ------- eth-send methods --------
 
   function _send(address sendTo, uint256 amount) internal returns (bool) {
     if (!_sufficientBalance(amount)) {
@@ -140,9 +142,6 @@ contract System is Registry {
   function _sufficientBalance(uint256 amount) private view returns (bool) {
     return address(this).balance >= amount;
   }
-
-
-
 
   // --- Registry functions below are platform-contracts that are safe to access ---
 
@@ -204,7 +203,8 @@ contract System is Registry {
 
   function _cacheAllContractsLocally() private {
     //@correlate-registry.cache
-    if (s_allContracts.burn == IBurn(address(0))) { 
+    bool alreadyCached = s_allContracts.burn != IBurn(address(0)); // or any other platform contract
+    if (!alreadyCached) { 
       s_allContracts = s_registry.getAllContracts();
     }
   }

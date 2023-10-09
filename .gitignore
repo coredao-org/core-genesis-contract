@@ -1,5 +1,9 @@
 node_modules/
 build/
+out/
+lib/
+.vscode/
+forge-cache/
 .idea
 pids
 logs
