@@ -86,8 +86,6 @@ contract System is Registry {
   /// @param upperBound requested upper bound of the param
   error OutOfBounds(string name, uint256 given, uint256 lowerBound, uint256 upperBound);
 
-  function init() external {} //@openissue remove function
-
   function _gasprice() internal virtual view returns (uint) {
     return tx.gasprice;
   }

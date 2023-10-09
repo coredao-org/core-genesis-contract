@@ -35,7 +35,6 @@ def candidate_hub(accounts, deployed_registry):
     roundInterval = 100
     validatorCount = 0
     c = accounts[0].deploy(CandidateHubMock, deployed_registry, roundInterval, validatorCount) 
-    c.init()
     if is_development:
         c.developmentInit()
     return c
@@ -47,7 +46,6 @@ def btc_light_client(accounts, deployed_registry):
     chainHeight = 1 
     roundInterval = 1
     c = accounts[0].deploy(BtcLightClientMock, deployed_registry, consensusState, chainHeight, roundInterval) 
-    c.init()
     if is_development:
         c.developmentInit()
     return c
@@ -59,7 +57,6 @@ def gov_hub(accounts, deployed_registry):
     executingPeriod = 1000 
     membersBytes = ''
     c = accounts[0].deploy(GovHubMock, deployed_registry, votingPeriod, executingPeriod, membersBytes) 
-    c.init()
     if is_development:
         c.developmentInit()
     return c
@@ -68,7 +65,6 @@ def gov_hub(accounts, deployed_registry):
 @pytest.fixture(scope="module")
 def relay_hub(accounts, deployed_registry):
     c = accounts[0].deploy(RelayerHubMock, deployed_registry) 
-    c.init()
     if is_development:
         c.developmentInit()
     return c
@@ -78,7 +74,6 @@ def relay_hub(accounts, deployed_registry):
 def slash_indicator(accounts, deployed_registry):
     chainID = 1
     c = accounts[0].deploy(SlashIndicatorMock, deployed_registry, chainID) 
-    c.init()
     if is_development:
         c.developmentInit()
     return c
@@ -87,14 +82,12 @@ def slash_indicator(accounts, deployed_registry):
 @pytest.fixture(scope="module")
 def system_reward(accounts, deployed_registry):
     c = accounts[0].deploy(SystemRewardMock, deployed_registry) 
-    c.init()
     return c
 
 
 @pytest.fixture(scope="module")
 def validator_set(accounts, deployed_registry):
     c = accounts[0].deploy(ValidatorSetMock, deployed_registry) 
-    c.init()
     if is_development:
         c.developmentInit()
     return c
@@ -104,7 +97,6 @@ def validator_set(accounts, deployed_registry):
 def pledge_agent(accounts, deployed_registry):
     powerBlockFactor = 1
     c = accounts[0].deploy(PledgeAgentMock, deployed_registry, powerBlockFactor) 
-    c.init()
     if is_development:
         c.developmentInit()
     return c
@@ -113,14 +105,12 @@ def pledge_agent(accounts, deployed_registry):
 @pytest.fixture(scope="module")
 def burn(accounts, deployed_registry):
     c = accounts[0].deploy(Burn, deployed_registry) 
-    c.init()
     return c
 
 
 @pytest.fixture(scope="module")
 def foundation(accounts, deployed_registry):
     c = accounts[0].deploy(Foundation, deployed_registry) 
-    c.init()
     return c
 
 
