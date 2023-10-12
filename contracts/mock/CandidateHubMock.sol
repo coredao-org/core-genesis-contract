@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
 import "../CandidateHub.sol";
@@ -74,7 +75,7 @@ contract CandidateHubMock is CandidateHub {
   }
 
   function getScoreMock(address[] memory candidates, uint256[] memory powers) external {
-    (scores, totalPower, totalCoin) = IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(
+    (scores, totalPower, totalCoin) = _pledgeAgent().getHybridScore(
       candidates,
       powers
     );
@@ -93,7 +94,7 @@ contract CandidateHubMock is CandidateHub {
   }
 
   function cleanMock() public {
-    ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
+    _slashIndicator().clean();
   }
 
   function registerMock(

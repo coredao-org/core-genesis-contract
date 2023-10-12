@@ -8,11 +8,13 @@ import "./interface/ICandidateHub.sol";
 import "./interface/ISystemReward.sol";
 import "./interface/IParamSubscriber.sol";
 import "./System.sol";
+import {Updatable} from "./util/Updatable.sol";
+import {AllContracts} from "./util/TestnetUtils.sol";
 
 /// This contract implements a BTC light client on Core blockchain
 /// Relayers store BTC blocks to Core blockchain by calling this contract
 /// Which is used to calculate hybrid score and reward distribution
-contract BtcLightClient is ILightClient, System, IParamSubscriber{
+contract BtcLightClient is ILightClient, System, IParamSubscriber, Updatable {
 
   // error codes for storeBlockHeader
   int256 public constant ERR_DIFFICULTY = 10010; // difficulty didn't match current difficulty
@@ -80,6 +82,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
   uint256 public storeBlockGasPrice;
 
+  uint public storageLayoutSentinel = LIGHT_CLIENT_SENTINEL; 
+
   /*********************** events **************************/
   event StoreHeaderFailed(bytes32 indexed blockHash, int256 indexed returnCode);
   event StoreHeader(bytes32 indexed blockHash, address candidate, address indexed rewardAddr, uint32 indexed height, bytes32 bindingHash);
@@ -111,12 +115,27 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     alreadyInit = true;
   }
 
-  /// Store a BTC block in Core blockchain
-  /// @dev This method is called by relayers
-  /// @param blockBytes BTC block bytes
+  function debug_init(AllContracts allContracts, uint256 roundInterval_) external override canCallDebugInit {
+    _setLocalNodeAddresses(allContracts);
+    // INIT_CHAIN_HEIGHT = chainHeight_;zzzz
+    // INIT_ROUND_INTERVAL = roundInterval_;
+    roundInterval = roundInterval_;
+  }
+
+/* @product Called by a BTC relayer to store a BTC block on the Core blockchain
+   @param blockBytes: BTC block bytes
+   @logic
+      1. Extracts the header bytes from the blockBytes
+      2. Calculates the blockHash from the header bytes
+      3. Check PoW of a relayed BTC block and exit function (but do not revert) if PoW is invalid
+      4. Verify that the block is no older than 5 days ago and revert if that is not the case. The calculation:
+          blockHeight + 720 > getHeight(heaviestBlock)
+      5. Verify MerkleRoot & pickup candidate address, reward address and bindingHash.
+      6. Save & update rewards
+  */
   function storeBlockHeader(bytes calldata blockBytes) external onlyRelayer {
     require(
-      tx.gasprice == (storeBlockGasPrice == 0 ? INIT_STORE_BLOCK_GAS_PRICE : storeBlockGasPrice), 
+      _gasprice() == (storeBlockGasPrice == 0 ? INIT_STORE_BLOCK_GAS_PRICE : storeBlockGasPrice), 
       "must use limited gasprice");
     bytes memory headerBytes = slice(blockBytes, 0, 80);
     bytes32 blockHash = doubleShaFlip(headerBytes);
@@ -198,7 +217,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     // The mining power with rounds less than or equal to frozenRoundTag has been frozen 
     // and there is no need to continue staking, otherwise it may disrupt the reward 
     // distribution mechanism
-    uint256 frozenRoundTag = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag() - POWER_ROUND_GAP;
+    uint256 frozenRoundTag = _candidateHub().getRoundTag() - POWER_ROUND_GAP;
     if (candidate != address(0) && blockRoundTag > frozenRoundTag) {
       address miner = getRewardAddress(blockHash);
       RoundPower storage r = roundPowerMap[blockRoundTag];
@@ -211,14 +230,21 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     }
   }
 
-  /// Claim relayer rewards
-  /// @param relayerAddr The relayer address
+  /* @product Claim relayer rewards
+     @param relayerAddr: The relayer address
+     @logic Called by relayers to claim their rewards for storing BTC blocks
+      - Reverts if the provided address is not a relayer or if the relayer currently has no reward to claim
+      - Else:  invokes SystemReward's claimRewards() to transfer the reward to the relayer.
+     Note that claimReward() may slash the reward to the current SystemReward balance if the latter is smaller than the reward without reverting the Tx
+     @openissue: This function may be called by any party (not only a relayer) with a relayer address to which the funds will be transferred
+     this might prove problematic for relayers that prefer to choose their own dates of reward reclaiming
+  */
   function claimRelayerReward(address relayerAddr) external onlyInit {
      uint256 reward = relayerRewardVault[relayerAddr];
      require(reward != 0, "no relayer reward");
      relayerRewardVault[relayerAddr] = 0;
      address payable recipient = payable(relayerAddr);
-     ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(recipient, reward);
+     _systemReward().claimRewards(recipient, reward);
   }
 
   /// Distribute relayer rewards
@@ -257,9 +283,15 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     return callerReward;
   }
 
-  /// Calculate relayer weight based number of BTC blocks relayed
-  /// @param count The number of BTC blocks relayed by a specific validator
-  /// @return The relayer weight
+
+  /* @product Calculate relayer weight based number of BTC blocks relayed
+     @param count: The number of BTC blocks relayed by a specific validator
+     @logic Weight calculation  (maxWeight default value = 20):
+          1. if count <= maxWeight (default: 20) => return count
+          2. else if count in half-open interval (maxWeight, 2*maxWeight] => return maxWeight
+          3. else if count in half-open interval (2*maxWeight, 2.75*maxWeight] => return 3*maxWeight - count
+          4. else return count/4
+   */  
   function calculateRelayerWeight(uint256 count) public view returns(uint256) {
     if (count <= maxWeight) {
       return count;

@@ -5,17 +5,25 @@ import "./interface/IParamSubscriber.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./interface/IBurn.sol";
+import {Updatable} from "./util/Updatable.sol";
+import {AllContracts} from "./util/TestnetUtils.sol";
 
 /// This contract burns CORE tokens up to pre defined CAP
-contract Burn is System, IBurn, IParamSubscriber {
+contract Burn is System, IBurn, IParamSubscriber, Updatable {
   uint256 public constant BURN_CAP = 105e25;
 
   uint256 public burnCap;
+
+  uint public storageLayoutSentinel = BURN_SENTINEL; 
 
   /*********************** init **************************/
   function init() external onlyNotInit {
     burnCap = BURN_CAP;
     alreadyInit = true;
+  }
+
+  function debug_init(AllContracts allContracts) external override canCallDebugInit {
+    _setLocalNodeAddresses(allContracts);
   }
 
   /*********************** events **************************/
@@ -41,7 +49,7 @@ contract Burn is System, IBurn, IParamSubscriber {
       } else {
         v = msg.value - remain;
       }
-      payable(msg.sender).transfer(remain);
+      _transfer(payable(msg.sender), remain);
     }
     if (v != 0) emit burned(msg.sender, v);
   }

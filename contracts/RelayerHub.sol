@@ -6,9 +6,11 @@ import "./lib/Memory.sol";
 import "./interface/IRelayerHub.sol";
 import "./interface/IParamSubscriber.sol";
 import "./System.sol";
+import {AllContracts} from "./util/TestnetUtils.sol";
+import {Updatable} from "./util/Updatable.sol";
 
 /// This contract manages BTC relayers on Core blockchain
-contract RelayerHub is IRelayerHub, System, IParamSubscriber{
+contract RelayerHub is IRelayerHub, System, IParamSubscriber, Updatable {
   uint256 public constant INIT_REQUIRED_DEPOSIT =  1e20;
   uint256 public constant INIT_DUES =  1e18;
 
@@ -19,6 +21,8 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
 
   mapping(address =>Relayer) relayers;
   mapping(address =>bool) relayersExistMap;
+
+  uint public storageLayoutSentinel = RELAYER_HUB_SENTINEL; 
 
   struct Relayer{
     uint256 deposit;
@@ -51,6 +55,10 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     alreadyInit = true;
   }
 
+  function debug_init(AllContracts allContracts) external override canCallDebugInit {
+    _setLocalNodeAddresses(allContracts);
+  }
+
   /// Register as a BTC relayer on Core blockchain
   function register() external payable noExist onlyInit noProxy{
     require(msg.value == requiredDeposit, "deposit value does not match requirement");
@@ -69,8 +77,10 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     Relayer memory r = relayers[msg.sender];
     delete relayersExistMap[msg.sender];
     delete relayers[msg.sender];
-    payable(msg.sender).transfer(r.deposit - r.dues);
-    payable(SYSTEM_REWARD_ADDR).transfer(r.dues);
+    uint256 relayerCut = r.deposit - r.dues;
+    uint256 platformCut = r.dues;
+    _transfer(msg.sender, relayerCut);
+    _transfer(_systemRewardPayable(), platformCut);
     emit relayerUnRegister(msg.sender);
   }
 

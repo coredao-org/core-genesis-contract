@@ -6,9 +6,11 @@ import "./interface/IParamSubscriber.sol";
 import "./interface/IBurn.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
+import {AllContracts} from "./util/TestnetUtils.sol";
+import {Updatable} from "./util/Updatable.sol";
 
 /// This smart contract manages funds for relayers and verifiers
-contract SystemReward is System, ISystemReward, IParamSubscriber {
+contract SystemReward is System, ISystemReward, IParamSubscriber, Updatable {
   uint256 public constant INCENTIVE_BALANCE_CAP = 1e25;
 
   uint256 public incentiveBalanceCap;
@@ -16,13 +18,19 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   mapping(address => bool) operators;
   bool isBurn;
 
+  uint public storageLayoutSentinel = SYSTEM_REWARD_SENTINEL; 
+
   /*********************** init **************************/
   function init() external onlyNotInit {
-    operators[LIGHT_CLIENT_ADDR] = true;
-    operators[SLASH_CONTRACT_ADDR] = true;
+    operators[LIGHT_CLIENT_ADDR] = true;zzzzz;
+    operators[SLASH_CONTRACT_ADDR] = true;zzzz;
     numOperator = 2;
     incentiveBalanceCap = INCENTIVE_BALANCE_CAP;
     alreadyInit = true;
+  }
+
+  function debug_init(AllContracts allContracts) external override canCallDebugInit {
+    _setLocalNodeAddresses(allContracts);
   }
 
   modifier onlyOperator() {
@@ -58,9 +66,9 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
       if (address(this).balance > incentiveBalanceCap) {
         uint256 value = address(this).balance - incentiveBalanceCap;
         if (isBurn) {
-          IBurn(BURN_ADDR).burn{ value: value }();
+          _burnContract().burn{ value: value }();
         } else {
-          payable(FOUNDATION_ADDR).transfer(value);
+          _transfer(_foundationPayable(), value);
         }
       }
       emit receiveDeposit(msg.sender, msg.value);
@@ -84,7 +92,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   {
     uint256 actualAmount = amount < address(this).balance ? amount : address(this).balance;
     if (to != address(0) && actualAmount != 0) {
-      to.transfer(actualAmount);
+      _transfer(to, actualAmount);
       emit rewardTo(to, actualAmount);
     } else {
       emit rewardEmpty();
