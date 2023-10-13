@@ -82,7 +82,9 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber, Updatable {
 
   uint256 public storeBlockGasPrice;
 
-  uint public storageLayoutSentinel = LIGHT_CLIENT_SENTINEL; 
+  uint public s_storageSentinel = LIGHT_CLIENT_SENTINEL_V1; 
+
+  address public immutable s_deployer = msg.sender; 
 
   /*********************** events **************************/
   event StoreHeaderFailed(bytes32 indexed blockHash, int256 indexed returnCode);
@@ -90,7 +92,9 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber, Updatable {
   event paramChange(string key, bytes value);
 
   /*********************** init **************************/
-  /// Initialize 
+  /* @dev a non-callable function that was invoked once on contract initial 
+     deployment, see @dev:init for details
+  */
   function init() external onlyNotInit {
     bytes32 blockHash = doubleShaFlip(INIT_CONSENSUS_STATE_BYTES);
     address rewardAddr;
@@ -115,7 +119,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber, Updatable {
     alreadyInit = true;
   }
 
-  function debug_init(AllContracts allContracts, uint256 roundInterval_) external override canCallDebugInit {
+  function debug_init(AllContracts allContracts, uint256 roundInterval_) external override canCallDebugInit(s_deployer) {
     _setLocalNodeAddresses(allContracts);
     // INIT_CHAIN_HEIGHT = chainHeight_;zzzz
     // INIT_ROUND_INTERVAL = roundInterval_;

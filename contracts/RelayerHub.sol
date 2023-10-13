@@ -22,7 +22,9 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber, Updatable {
   mapping(address =>Relayer) relayers;
   mapping(address =>bool) relayersExistMap;
 
-  uint public storageLayoutSentinel = RELAYER_HUB_SENTINEL; 
+  uint public s_storageSentinel = RELAYER_HUB_SENTINEL_V1; 
+
+  address public immutable s_deployer = msg.sender; 
 
   struct Relayer{
     uint256 deposit;
@@ -49,13 +51,16 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber, Updatable {
   event paramChange(string key, bytes value);
 
 
+  /* init() is a non-callable function that was invoked once on contract initial 
+     deployment, see @dev:init for details
+  */
   function init() external onlyNotInit{
     requiredDeposit = INIT_REQUIRED_DEPOSIT;
     dues = INIT_DUES;
     alreadyInit = true;
   }
 
-  function debug_init(AllContracts allContracts) external override canCallDebugInit {
+  function debug_init(AllContracts allContracts) external override canCallDebugInit(s_deployer) {
     _setLocalNodeAddresses(allContracts);
   }
 

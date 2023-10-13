@@ -41,7 +41,9 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber, Updatable {
   uint256 public felonyDeposit;
   uint256 public felonyRound;
 
-  uint public storageLayoutSentinel = SLASH_INDICATOR_SENTINEL; 
+  uint public s_storageSentinel = SLASH_INDICATOR_SENTINEL_V1; 
+
+  address public immutable s_deployer = msg.sender; 
 
   uint32 public CHAINID = 1116;
 
@@ -63,6 +65,9 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber, Updatable {
   event paramChange(string key, bytes value);
 
   
+  /* init() is a non-callable function that was invoked once on contract initial 
+     deployment, see @dev:init for details
+  */
   function init() external onlyNotInit{
     misdemeanorThreshold = MISDEMEANOR_THRESHOLD;
     felonyThreshold = FELONY_THRESHOLD;
@@ -72,7 +77,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber, Updatable {
     alreadyInit = true;
   }
 
-  function debug_init(AllContracts allContracts, uint32 chainID_) external override canCallDebugInit {
+  function debug_init(AllContracts allContracts, uint32 chainID_) external override canCallDebugInit(s_deployer) {
     _setLocalNodeAddresses(allContracts);
     CHAINID = chainID_;
   }

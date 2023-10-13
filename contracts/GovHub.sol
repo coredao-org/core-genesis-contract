@@ -9,10 +9,9 @@ import "./lib/RLPDecode.sol";
 import "./interface/IParamSubscriber.sol";
 import {Updatable} from "./util/Updatable.sol";
 import {AllContracts} from "./util/TestnetUtils.sol";
-import {ReentrancyGuard} from "./lib/ReentrancyGuard.sol";
 
 /// This is the smart contract to manage governance votes
-contract GovHub is System, IParamSubscriber, ReentrancyGuard, Updatable {
+contract GovHub is System, IParamSubscriber, Updatable {
   using RLPDecode for bytes;
   using RLPDecode for RLPDecode.RLPItem;
 
@@ -20,6 +19,7 @@ contract GovHub is System, IParamSubscriber, ReentrancyGuard, Updatable {
   uint256 public constant VOTING_PERIOD = 201600;
   uint256 public constant EXECUTING_PERIOD = 201600;
   bytes public constant INIT_MEMBERS = hex"f86994548e6acce441866674e04ab84587af2d394034c094bb06d463bc143eecc4a0cfa35e0346d5690fa9f694e2fe60f349c6e1a85caad1d22200c289da40dc1294b198db68258f06e79d415a0998be7f9b38ea722694dd173b85f306128f1b10d7d7219059c28c6d6c09";
+  uint private constant NUM_PLATFORM_CONTRACTS = 10;
 
   uint256 public proposalMaxOperations;
   uint256 public votingPeriod;
@@ -33,7 +33,13 @@ contract GovHub is System, IParamSubscriber, ReentrancyGuard, Updatable {
 
   uint256 public executingPeriod;
 
-  uint public storageLayoutSentinel = GOVHUB_SENTINEL; 
+  uint public s_storageSentinel = GOVHUB_SENTINEL_V1; 
+
+  address public immutable s_deployer = msg.sender; 
+
+  bool private s_mapWasInitialized;
+  address private mapping(address => bool) s_contractMap;  
+
 
   event paramChange(string key, bytes value);
   event receiveDeposit(address indexed from, uint256 amount);
@@ -115,6 +121,9 @@ contract GovHub is System, IParamSubscriber, ReentrancyGuard, Updatable {
     _;
   }
 
+  /* init() is a non-callable function that was invoked once on contract initial 
+     deployment, see @dev:init for details
+  */
   function init() external onlyNotInit {
     proposalMaxOperations = PROPOSAL_MAX_OPERATIONS;
     votingPeriod = VOTING_PERIOD;
@@ -129,7 +138,7 @@ contract GovHub is System, IParamSubscriber, ReentrancyGuard, Updatable {
     alreadyInit = true;
   }
 
-  function debug_init(Registry registry, uint256 votingPeriod_, uint256 executingPeriod_) external override canCallDebugInit {
+  function debug_init(Registry registry, uint256 votingPeriod_, uint256 executingPeriod_) external override canCallDebugInit(s_deployer) {
     _setLocalNodeAddresses(allContracts);
     votingPeriod = votingPeriod_;
     executingPeriod = executingPeriod_;
@@ -384,5 +393,64 @@ contract GovHub is System, IParamSubscriber, ReentrancyGuard, Updatable {
       require(false, "unknown param");
     }
     emit paramChange(key, value);
+  }
+
+  // ------- only.platform.contracts validation code -------
+
+  function _onlyPlatformContracts(address[] memory targets) private returns(bool) {
+    _initContractMapIfNeeded();
+    uint len = targets.length;
+    for (uint i = 0; i < len; i++) {
+        if (!s_contractMap[targets[i]]) {
+            return false; // not a platform contract
+        }
+    }
+    return true;  
+  }  
+
+  function _initContractMapIfNeeded() private onlyIfMapNotInitialized {
+    address _burn;
+    address _lightClient;
+    address _slashIndicator;
+    address _systemReward;
+    address _candidateHub;         
+    address _pledgeAgent;
+    address _validatorSet;
+    address _relayerHub;
+    address _foundationAddr;
+    address _govHubAddr;
+
+    if (_isLocalTestNode()) {
+      _verifyLocalNodeAddresses();
+      _burn = address(s_localNodeAddresses.burn);
+      _lightClient = address(s_localNodeAddresses.lightClient);
+      _slashIndicator = address(s_localNodeAddresses.slashIndicator);
+      _systemReward = address(s_localNodeAddresses.systemReward);
+      _candidateHub = address(s_localNodeAddresses.candidateHub);
+      _pledgeAgent = address(s_localNodeAddresses.pledgeAgent);
+      _validatorSet = address(s_localNodeAddresses.validatorSet);
+      _relayerHub = address(s_localNodeAddresses.relayerHub);
+      _foundationAddr = s_localNodeAddresses.foundationAddr;
+      _govHubAddr = s_localNodeAddresses.govHubAddr;
+    } else {
+      _burn = BURN_ADDR;
+      _lightClient = LIGHT_CLIENT_ADDR;
+      _slashIndicator = SLASH_CONTRACT_ADDR;
+      _systemReward = SYSTEM_REWARD_ADDR;
+      _candidateHub = CANDIDATE_HUB_ADDR;
+      _pledgeAgent = PLEDGE_AGENT_ADDR;
+      _validatorSet = VALIDATOR_CONTRACT_ADDR;
+      _relayerHub = RELAYER_HUB_ADDR;
+      _foundationAddr = FOUNDATION_ADDR;
+      _govHubAddr = GOV_HUB_ADDR;
+    }
+    _setMapEntries([_burn, _lightClient, _slashIndicator, _systemReward, _candidateHub, 
+                    _pledgeAgent, _validatorSet, _relayerHub, _foundationAddr, _govHubAddr]);
+  }
+
+  function _setMapEntries(address[NUM_PLATFORM_CONTRACTS] memory addresses) private {
+    for (uint i = 0; i < addresses.length; i++) {
+      s_contractMap[addresses[i]] = true;
+    }
   }
 }

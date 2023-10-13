@@ -12,12 +12,11 @@ import "./interface/ILightClient.sol";
 import "./System.sol";
 import {Updatable} from "./util/Updatable.sol";
 import {AllContracts} from "./util/TestnetUtils.sol";
-import {ReentrancyGuard} from "./lib/ReentrancyGuard.sol";
 
 
 /// This contract manages all validator candidates on Core blockchain
 /// It also exposes the method `turnRound` for the consensus engine to execute the `turn round` workflow
-contract CandidateHub is ICandidateHub, System, IParamSubscriber, ReentrancyGuard, Updatable {
+contract CandidateHub is ICandidateHub, System, IParamSubscriber, Updatable {
 
   uint256 public constant INIT_REQUIRED_MARGIN = 1e22;
   uint256 public constant INIT_DUES = 1e20;
@@ -64,7 +63,11 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber, ReentrancyGuar
   uint256 public roundTag;
   
 
-  uint public storageLayoutSentinel = CANDIDATE_HUB_SENTINEL; 
+  uint public s_storageSentinel = CANDIDATE_HUB_SENTINEL_V1; 
+
+  address public immutable s_deployer = msg.sender; //zzzzzz will it work on update???;
+
+  uint256 public s_reentrancyGuard = GUARD_NOT_ENTERED; // zzzz verify correctly set after update
 
   struct Candidate {
     address operateAddr;
@@ -102,6 +105,13 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber, ReentrancyGuar
     _;
   }
 
+  modifier nonReentrant() { //zzzz need to add for all contratcts!!
+    require(s_reentrancyGuard != GUARD_ENTERED, "reentrancy detected");
+    s_reentrancyGuard = GUARD_ENTERED;
+    _;
+    s_reentrancyGuard = GUARD_NOT_ENTERED;
+  }
+
   /*********************** events **************************/
   event registered(address indexed operateAddr, address indexed consensusAddr, address indexed feeAddress, uint256 commissionThousandths, uint256 margin);
   event unregistered(address indexed operateAddr, address indexed consensusAddr);
@@ -112,6 +122,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber, ReentrancyGuar
   event paramChange(string key, bytes value);
 
   /*********************** init **************************/
+  /* init() is a non-callable function that was invoked once on contract initial 
+     deployment, see @dev:init for details
+  */
   function init() external onlyNotInit {
     requiredMargin = INIT_REQUIRED_MARGIN;
     dues = INIT_DUES;
@@ -122,7 +135,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber, ReentrancyGuar
     alreadyInit = true;
   }
   
-  function debug_init(AllContracts allContracts, uint256 roundInterval_, uint256 validatorCount_) external override canCallDebugInit {
+  function debug_init(AllContracts allContracts, uint256 roundInterval_, uint256 validatorCount_) external override canCallDebugInit(s_deployer) {
     _setLocalNodeAddresses(allContracts);
     roundInterval = roundInterval_;
     validatorCount = validatorCount_;
@@ -310,7 +323,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber, ReentrancyGuar
     roundTag = roundTimestamp;
   }
 
-  function _incRoundTag() internal { // for test zzzzz: used?
+  function _incRoundTag() internal { // for test zzzz: used?
     roundTag++;
   }
 

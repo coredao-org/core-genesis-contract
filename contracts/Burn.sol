@@ -14,15 +14,20 @@ contract Burn is System, IBurn, IParamSubscriber, Updatable {
 
   uint256 public burnCap;
 
-  uint public storageLayoutSentinel = BURN_SENTINEL; 
+  uint public s_storageSentinel = BURN_SENTINEL_V1; 
+
+  address public immutable s_deployer = msg.sender; 
 
   /*********************** init **************************/
+  /* init() is a non-callable function that was invoked once on contract initial 
+     deployment, see @dev:init for details
+  */
   function init() external onlyNotInit {
     burnCap = BURN_CAP;
     alreadyInit = true;
   }
 
-  function debug_init(AllContracts allContracts) external override canCallDebugInit {
+  function debug_init(AllContracts allContracts) external override canCallDebugInit(s_deployer) {
     _setLocalNodeAddresses(allContracts);
   }
 

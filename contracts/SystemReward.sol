@@ -14,27 +14,29 @@ contract SystemReward is System, ISystemReward, IParamSubscriber, Updatable {
   uint256 public constant INCENTIVE_BALANCE_CAP = 1e25;
 
   uint256 public incentiveBalanceCap;
-  uint256 public numOperator;
-  mapping(address => bool) operators;
+  uint256 public _unused_numOperator;
+  mapping(address => bool) _unused_operators;
   bool isBurn;
 
-  uint public storageLayoutSentinel = SYSTEM_REWARD_SENTINEL; 
+  uint public s_storageSentinel = SYSTEM_REWARD_SENTINEL_V1; 
+
+  address public immutable s_deployer = msg.sender; 
 
   /*********************** init **************************/
+  /* init() is a non-callable function that was invoked once on contract initial 
+     deployment, see @dev:init for details
+  */
   function init() external onlyNotInit {
-    operators[LIGHT_CLIENT_ADDR] = true;zzzzz;
-    operators[SLASH_CONTRACT_ADDR] = true;zzzz;
-    numOperator = 2;
     incentiveBalanceCap = INCENTIVE_BALANCE_CAP;
     alreadyInit = true;
   }
 
-  function debug_init(AllContracts allContracts) external override canCallDebugInit {
+  function debug_init(AllContracts allContracts) external override canCallDebugInit(s_deployer) {
     _setLocalNodeAddresses(allContracts);
   }
 
   modifier onlyOperator() {
-    require(operators[msg.sender], "only operator is allowed to call the method");
+    require(isOperator(msg.sender), "only operator is allowed to call the method");
     _;
   }
 
@@ -103,8 +105,8 @@ contract SystemReward is System, ISystemReward, IParamSubscriber, Updatable {
   /// Whether the given address is a valid operator
   /// @param addr The address to check
   /// @return true/false
-  function isOperator(address addr) external view returns (bool) {
-    return operators[addr];
+  function isOperator(address addr) public view returns (bool) {
+    return addr == address(_lightClient()) || addr == address(_slashIndicator());
   }
 
   /*********************** Param update ********************************/

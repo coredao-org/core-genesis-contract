@@ -61,7 +61,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber, Updatable {
   // debtDepositMap keeps delegator's amount of CORE which should be deducted when claiming rewards in every round
   mapping(uint256 => mapping(address => uint256)) public debtDepositMap;
 
-  uint public storageLayoutSentinel = PLEDGER_SENTINEL; 
+  uint public s_storageSentinel = PLEDGER_SENTINEL_V1; 
+
+  address public immutable s_deployer = msg.sender; 
 
   struct CoinDelegator {
     uint256 deposit;
@@ -121,6 +123,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber, Updatable {
   /// @param target Address of the target candidate
   error SameCandidate(address source, address target);
 
+  /* init() is a non-callable function that was invoked once on contract initial 
+     deployment, see @dev:init for details
+  */
   function init() external onlyNotInit {
     requiredCoinDeposit = INIT_REQUIRED_COIN_DEPOSIT;
     powerFactor = INIT_HASH_POWER_FACTOR;
@@ -128,7 +133,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber, Updatable {
     alreadyInit = true;
   }
 
-  function debug_init(AllContracts allContracts, uint256 powerBlockFactor_) external override canCallDebugInit {
+  function debug_init(AllContracts allContracts, uint256 powerBlockFactor_) external override canCallDebugInit(s_deployer) {
     _setLocalNodeAddresses(allContracts);
     powerFactor = powerBlockFactor_;
   }

@@ -4,14 +4,17 @@ pragma solidity 0.8.4;
 import "./System.sol";
 import {Updatable} from "./util/Updatable.sol";
 import {AllContracts} from "./util/TestnetUtils.sol";
-import {ReentrancyGuard} from "./lib/ReentrancyGuard.sol";
 
 /// This is the DAO Treasury smart contract
 /// The funds in this contract can only be moved through governance vote
-contract Foundation is System, ReentrancyGuard, Updatable {
+contract Foundation is System, Updatable {
   event received(address indexed from, uint256 amount);
   event fundSuccess(address indexed payee, uint256 amount);
   event fundFailed(address indexed payee, uint256 amount, uint256 balance);
+
+  uint public s_storageSentinel = FOUNDATION_SENTINEL_V1; 
+
+  address public immutable s_deployer = msg.sender; 
 
   receive() external payable {
     if (msg.value != 0) {
@@ -19,7 +22,7 @@ contract Foundation is System, ReentrancyGuard, Updatable {
     }
   }
 
-  function debug_init(AllContracts allContracts) external override canCallDebugInit {//zzzzzz call from tests
+  function debug_init(AllContracts allContracts) external override canCallDebugInit(s_deployer) {//zzzz call from tests
     _setLocalNodeAddresses(allContracts);
   }
 

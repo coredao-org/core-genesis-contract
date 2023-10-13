@@ -37,7 +37,9 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber, Updatable {
   // value is the index of the element in `currentValidatorSet`.
   mapping(address => uint256) public currentValidatorSetMap;
 
-  uint public storageLayoutSentinel = VALIDATOR_SET_SENTINEL; 
+  uint public s_storageSentinel = VALIDATOR_SET_SENTINEL_V1; 
+
+  address public immutable s_deployer = msg.sender; 
 
   struct Validator {
     address operateAddress;
@@ -75,6 +77,9 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber, Updatable {
   }
 
   /*********************** init **************************/
+  /* init() is a non-callable function that was invoked once on contract initial 
+     deployment, see @dev:init for details
+  */
   function init() external onlyNotInit {
     (Validator[] memory validatorSet, bool valid) = decodeValidatorSet(INIT_VALIDATORSET_BYTES);
     require(valid, "failed to parse init validatorSet");
@@ -88,7 +93,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber, Updatable {
     alreadyInit = true;
   }
 
-  function debug_init(AllContracts allContracts) external override canCallDebugInit {
+  function debug_init(AllContracts allContracts) external override canCallDebugInit(s_deployer) {
     _setLocalNodeAddresses(allContracts);
   }
 

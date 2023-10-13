@@ -7,13 +7,9 @@ import {AllContracts} from "./util/TestnetUtils.sol";
 abstract contract System {
 
   bool public alreadyInit;
-  uint public storageLayoutSentinel = SYSTEM_SENTINEL; zzzzz not sure if i can update base contract??
 
-  address public immutable s_deployer = msg.sender;
-  address public mapping(string => bool) s_funcWasCalled;
-  AllContracts private s_localNodeAddresses;
-  bool private s_contractMapInitialized;
-  address private mapping(address => bool) s_contractMap;  
+  //@dev: no additional state variables can be added to this contract else 
+  // the storage layout of all derived contratcs will break!
 
   address private constant VALIDATOR_CONTRACT_ADDR = 0x0000000000000000000000000000000000001000;
   address private constant SLASH_CONTRACT_ADDR = 0x0000000000000000000000000000000000001001;
@@ -34,18 +30,20 @@ abstract contract System {
   uint public constant GANACHE_ID = 1337;
   uint public constant ANVIL_ID = 31337;
   
-  uint public constant SYSTEM_SENTINEL = 1e18 + 1;
-  uint public constant LIGHT_CLIENT_SENTINEL = 1e18 + 2;
-  uint public constant BURN_SENTINEL = 1e18 + 3;
-  uint public constant CANDIDATE_HUB_SENTINEL = 1e18 + 4;
-  uint public constant GOVHUB_SENTINEL = 1e18 + 5;
-  uint public constant PLEDGER_SENTINEL = 1e18 + 6;
-  uint public constant RELAYER_HUB_SENTINEL = 1e18 + 7;
-  uint public constant SLASH_INDICATOR_SENTINEL = 1e18 + 8;
-  uint public constant SYSTEM_REWARD_SENTINEL = 1e18 + 9;
-  uint public constant VALIDATOR_SET_SENTINEL = 1e18 + 10;
+  uint public constant STORAGE_LAYOUT_V1 = 1e12;
 
-  string public constant DEBUG_INIT_CALL = "debug_init";
+  uint public constant LIGHT_CLIENT_SENTINEL_V1 = STORAGE_LAYOUT_V1 + 2;
+  uint public constant BURN_SENTINEL_V1 = STORAGE_LAYOUT_V1 + 3;
+  uint public constant CANDIDATE_HUB_SENTINEL_V1 = STORAGE_LAYOUT_V1 + 4;
+  uint public constant GOVHUB_SENTINEL_V1 = STORAGE_LAYOUT_V1 + 5;
+  uint public constant PLEDGER_SENTINEL_V1 = STORAGE_LAYOUT_V1 + 6;
+  uint public constant RELAYER_HUB_SENTINEL_V1 = STORAGE_LAYOUT_V1 + 7;
+  uint public constant SLASH_INDICATOR_SENTINEL_V1 = STORAGE_LAYOUT_V1 + 8;
+  uint public constant SYSTEM_REWARD_SENTINEL_V1 = STORAGE_LAYOUT_V1 + 9;
+  uint public constant VALIDATOR_SET_SENTINEL_V1 = STORAGE_LAYOUT_V1 + 10;
+
+  uint256 internal constant GUARD_NOT_ENTERED = 1;
+  uint256 internal constant GUARD_ENTERED = 2;
 
   modifier onlyCoinbase() {  
     require(msg.sender == _coinbase(), "the message sender must be the block producer");  
@@ -104,8 +102,8 @@ abstract contract System {
 
   modifier openForAll() {_;}
   
-  modifier onlyDeployer() {
-    require(msg.sender == s_deployer, "not deployer address"); 
+  modifier onlyDeployer(address deployer) {
+    require(msg.sender == deployer, "not deployer address"); 
     _;
   }
 
@@ -114,22 +112,22 @@ abstract contract System {
     _;
   }
 
-  modifier calledOnlyOnce(string calldata funcName) {
-    require(!s_funcWasCalled[funcName], "function already called"); 
-    s_funcWasCalled[funcName] = true;
+  modifier canCallDebugInit(address deployer) {
+    _verifyDebugInitMayBeCalled(deployer);
     _;
   }
 
-  modifier canCallDebugInit() {
-    _verifyDebugInitMayBeCalled();
-    _;
+  modifier onlyIfMapNotInitialized() {
+    if (!s_mapWasInitialized) {
+      s_mapWasInitialized = true;
+      _; // enter function
+    }
   }
 
-  function _verifyDebugInitMayBeCalled() private view 
-                onlyInit // avoid debug_init() getting override by later calling init() 
+  function _verifyDebugInitMayBeCalled(address deployer) private view 
                 onlyIfLocalTestNode // can be called only on a *local* test node
-                onlyDeployer // can only be called by the deployer
-                calledOnlyOnce(DEBUG_INIT_CALL) // and only once
+                onlyInit // avoid debug_init() getting override by later calling init() 
+                onlyDeployer(deployer) // can only be called by the deployer
   { 
   }
 
@@ -185,7 +183,7 @@ abstract contract System {
     return address(this).balance >= amount;
   }
 
-  // --- Registry functions below are platform-contracts that are safe to access ---
+  // ------- Registry functions below are platform-contracts that are safe to access ------- 
 
   function _foundationPayable() internal returns(address payable) contractAddressesWereSet {
     return _isLocalTestNode() ? 
@@ -257,62 +255,7 @@ abstract contract System {
     s_localNodeAddresses = localNodeContractAddresses;
   }
 
-  function _onlyPlatformContracts(address[] memory targets) internal returns(bool) {
-    _initContractMapIfNeeded();
-    uint len = targets.length;
-    for (uint i = 0; i < len; i++) {
-        if (!s_contractMap[targets[i]]) {
-            return false; // not a platform contract
-        }
-    }
-    return true;  
-  }  
-
-  function _initContractMapIfNeeded() private {
-    if (s_contractMapInitialized) {
-      return; 
-    }
-    s_contractMapInitialized = true;
-
-    address _burn, _lightClient, _slashIndicator, _systemReward, _candidateHub, 
-            _pledgeAgent, _validatorSet, _relayerHub, _foundationAddr, _govHubAddr;
-    if (_isLocalTestNode()) {
-      _verifyAllLocalNodeAddressesWereSet();
-      _burn = address(s_localNodeAddresses.burn);
-      _lightClient = address(s_localNodeAddresses.lightClient);
-      _slashIndicator = address(s_localNodeAddresses.slashIndicator);
-      _systemReward = address(s_localNodeAddresses.systemReward);
-      _candidateHub = address(s_localNodeAddresses.candidateHub);
-      _pledgeAgent = address(s_localNodeAddresses.pledgeAgent);
-      _validatorSet = address(s_localNodeAddresses.validatorSet);
-      _relayerHub = address(s_localNodeAddresses.relayerHub);
-      _foundationAddr = s_localNodeAddresses.foundationAddr;
-      _govHubAddr = s_localNodeAddresses.govHubAddr;
-    } else {
-      _burn = BURN_ADDR;
-      _lightClient = LIGHT_CLIENT_ADDR;
-      _slashIndicator = SLASH_CONTRACT_ADDR;
-      _systemReward = SYSTEM_REWARD_ADDR;
-      _candidateHub = CANDIDATE_HUB_ADDR;
-      _pledgeAgent = PLEDGE_AGENT_ADDR;
-      _validatorSet = VALIDATOR_CONTRACT_ADDR;
-      _relayerHub = RELAYER_HUB_ADDR;
-      _foundationAddr = FOUNDATION_ADDR;
-      _govHubAddr = GOV_HUB_ADDR;
-    }
-    s_contractMap[_burn] = true;
-    s_contractMap[_lightClient] = true;
-    s_contractMap[_slashIndicator] = true;
-    s_contractMap[_systemReward] = true;
-    s_contractMap[_candidateHub] = true;
-    s_contractMap[_pledgeAgent] = true;
-    s_contractMap[_validatorSet] = true;
-    s_contractMap[_relayerHub] = true;
-    s_contractMap[_foundationAddr] = true;
-    s_contractMap[_govHubAddr] = true;  
-  }
-
-  function _verifyAllLocalNodeAddressesWereSet() private view {
+  function _verifyLocalNodeAddresses() private view {
     assert(s_localNodeAddresses.burn != IBurn(address(0)));
     assert(s_localNodeAddresses.lightClient != ILightClient(address(0)));
     assert(s_localNodeAddresses.slashIndicator != ISlashIndicator(address(0)));
@@ -326,10 +269,16 @@ abstract contract System {
   }
 
   function _isLocalTestNode() private pure returns(bool) {
-    // let's be extra cautious
+    // sanity check - should never apply to a global network
     if (block.chainid == CORE_MAINNET_ID || block.chainid == CORE_TESTNET_ID) {
-      return false; // all global networks use fixed contract addresses
+      return false; // main/test global networks use fixed contract addresses
     }     
     return block.chainid == GANACHE_ID || block.chainid == ANVIL_ID;
   }
+
+  /* @dev:init init() is an 'historical' function. It was oiginally called upon the initial 
+     platform contracts deployment effectively replacing a constructor. 
+     It will not be called on any future updates of the contracts. In fact, since 'onlyNotInit' 
+     will always be false, should be considered as a non-callable function
+  */
 }
