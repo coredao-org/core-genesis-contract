@@ -17,6 +17,8 @@ contract GovHub is System, IParamSubscriber {
   uint256 public constant VOTING_PERIOD = 201600;
   uint256 public constant EXECUTING_PERIOD = 201600;
   bytes public constant INIT_MEMBERS = hex"f86994548e6acce441866674e04ab84587af2d394034c094bb06d463bc143eecc4a0cfa35e0346d5690fa9f694e2fe60f349c6e1a85caad1d22200c289da40dc1294b198db68258f06e79d415a0998be7f9b38ea722694dd173b85f306128f1b10d7d7219059c28c6d6c09";
+  
+  bytes32 public constant _EXTDATA = keccak256("GovHub.extended.data.position");
 
   uint256 public proposalMaxOperations;
   uint256 public votingPeriod;
@@ -117,6 +119,9 @@ contract GovHub is System, IParamSubscriber {
     bytes[] memory calldatas,
     string memory description
   ) public onlyInit onlyMember returns (uint256) {
+
+    _workWithExtData(_EXTDATA, 12 ether); // zzz sample usage 
+
     require(
       targets.length == values.length && targets.length == signatures.length && targets.length == calldatas.length,
       "proposal function information arity mismatch"
