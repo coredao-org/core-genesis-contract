@@ -62,12 +62,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber, Updatable {
 
   uint256 public roundTag;
   
-
   uint public s_storageSentinel = CANDIDATE_HUB_SENTINEL_V1; 
 
-  address public immutable s_deployer = msg.sender; //zzzzzz will it work on update???;
-
-  uint256 public s_reentrancyGuard = GUARD_NOT_ENTERED; // zzzz verify correctly set after update
+  address public immutable s_deployer = msg.sender; //zzzz will it work on update??? check for all other new state variables
 
   struct Candidate {
     address operateAddr;
@@ -103,13 +100,6 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber, Updatable {
   modifier onlyIfValueExceedsMargin() {
     require(msg.value >= requiredMargin, "deposit is not enough");
     _;
-  }
-
-  modifier nonReentrant() { //zzzz need to add for all contratcts!!
-    require(s_reentrancyGuard != GUARD_ENTERED, "reentrancy detected");
-    s_reentrancyGuard = GUARD_ENTERED;
-    _;
-    s_reentrancyGuard = GUARD_NOT_ENTERED;
   }
 
   /*********************** events **************************/

@@ -4,9 +4,25 @@ pragma solidity 0.8.4;
 import "./interface/IRelayerHub.sol";
 import {AllContracts} from "./util/TestnetUtils.sol";
 
+contract Gateway {
+  address govhub;
+  address govhub;
+  address govhub;
+  address govhub;
+  address govhub;
+  
+  init() {
+    //curr addr
+  }
+  
+}
+
 abstract contract System {
 
+
+
   bool public alreadyInit;
+  //--- end of old layout ----  
 
   //@dev: no additional state variables can be added to this contract else 
   // the storage layout of all derived contratcs will break!
@@ -41,9 +57,6 @@ abstract contract System {
   uint public constant SLASH_INDICATOR_SENTINEL_V1 = STORAGE_LAYOUT_V1 + 8;
   uint public constant SYSTEM_REWARD_SENTINEL_V1 = STORAGE_LAYOUT_V1 + 9;
   uint public constant VALIDATOR_SET_SENTINEL_V1 = STORAGE_LAYOUT_V1 + 10;
-
-  uint256 internal constant GUARD_NOT_ENTERED = 1;
-  uint256 internal constant GUARD_ENTERED = 2;
 
   modifier onlyCoinbase() {  
     require(msg.sender == _coinbase(), "the message sender must be the block producer");  
@@ -275,6 +288,41 @@ abstract contract System {
     }     
     return block.chainid == GANACHE_ID || block.chainid == ANVIL_ID;
   }
+
+  modifier nonReentrant() {
+    require(!s_reentryGuard, "reentrancy detected");
+    s_reentryGuard = true;
+    _;
+    s_reentryGuard = false;
+  }
+
+  function _baseData(bytes32 slotPos) internal pure returns (BaseData storage baseData) {
+    assembly {
+        baseData.slot := slotPos
+    }
+  }
+
+  function _basePostUpdate() internal  { // zzzz how to protect this?
+    s_reentryGuard = false;
+  }
+  /* zzzz in childsay Gov:
+      bytes32 constant KEY = keccak256("zzzzname-of-contract");
+
+      modifier onlyDeployer() {
+        if (!_isLocalTstNode()) {
+          //zzzz figure out how to detect _deployer()!!
+          require(msg.sender == _deployer(), "not deployer address"); 
+        }
+        _;
+      }
+
+      function postUpdate() external override onlyDeployer { //cannot be onlyOnce!
+        _basePostUpdate();
+        BaseData storage sref_base = _baseData(KEY);
+      }
+
+  */
+
 
   /* @dev:init init() is an 'historical' function. It was oiginally called upon the initial 
      platform contracts deployment effectively replacing a constructor. 
