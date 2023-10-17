@@ -9,7 +9,7 @@ import {System} from "./System.sol";
 /* @dev storing latest platform-contract addresses thus allowing a community process 
     (rather than 'node voting') to determine the platform-contracts to be used
 */
-contract Gateway is System, IParamSubscriber { //zzz
+contract Gateway is System, IParamSubscriber { 
 
   uint constant private VALUE_LENGTH = 32;
 
@@ -32,7 +32,9 @@ contract Gateway is System, IParamSubscriber { //zzz
 
   PlatformAddresses public s_addresses;
 
-  // zzz pass current addresses in constructor (alternative: issue a community proposal to initialize gateway to current addresses)
+  // @dev using this approach we need to somehow pass the current addresses to the Gateway,
+  //  preferrably in the constructor. An alternative would be to issue a community 
+  //  proposal for the Gateway initialize and use the updateParam() route
   constructor(PlatformAddresses memory addresses) { 
     s_addresses = addresses;
   }

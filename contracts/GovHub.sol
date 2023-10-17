@@ -120,7 +120,7 @@ contract GovHub is System, IParamSubscriber {
     string memory description
   ) public onlyInit onlyMember returns (uint256) {
 
-    _workWithExtData(_EXTDATA, 12 ether); // zzz sample usage 
+    _workWithExtData(_EXTDATA, 12 ether); // @dev sample usage 
 
     require(
       targets.length == values.length && targets.length == signatures.length && targets.length == calldatas.length,
