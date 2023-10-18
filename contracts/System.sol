@@ -7,29 +7,89 @@ contract System {
 
   bool public alreadyInit;
 
+  struct ContractAddresses {
+      address validatorSet;
+      address slashIndicator;
+      address systemReward;
+      address lightClient;
+      address relayerHub;
+      address candidateHub;
+      address govHub;
+      address pledgeAgent;
+      address burn;
+      address foundation;
+  }
 
-  address public constant VALIDATOR_CONTRACT_ADDR = 0x0000000000000000000000000000000000001000;
-  address public constant SLASH_CONTRACT_ADDR = 0x0000000000000000000000000000000000001001;
-  address public constant SYSTEM_REWARD_ADDR = 0x0000000000000000000000000000000000001002;
-  address public constant LIGHT_CLIENT_ADDR = 0x0000000000000000000000000000000000001003;
-  address public constant RELAYER_HUB_ADDR = 0x0000000000000000000000000000000000001004;
-  address public constant CANDIDATE_HUB_ADDR = 0x0000000000000000000000000000000000001005;
-  address public constant GOV_HUB_ADDR = 0x0000000000000000000000000000000000001006;
-  address public constant PLEDGE_AGENT_ADDR = 0x0000000000000000000000000000000000001007;
-  address public constant BURN_ADDR = 0x0000000000000000000000000000000000001008;
-  address public constant FOUNDATION_ADDR = 0x0000000000000000000000000000000000001009;
+  function _allAddressesWereSet(ContractAddresses memory _all) internal pure returns (bool) {
+      if (_all.validatorSet == address(0)) return false;
+      if (_all.slashIndicator == address(0)) return false;
+      if (_all.systemReward == address(0)) return false;
+      if (_all.lightClient == address(0)) return false;
+      if (_all.relayerHub == address(0)) return false;
+      if (_all.candidateHub == address(0)) return false;
+      if (_all.govHub == address(0)) return false;
+      if (_all.pledgeAgent == address(0)) return false;
+      if (_all.burn == address(0)) return false;
+      if (_all.foundation == address(0)) return false;
 
+      return true;
+  }
+
+
+  address public VALIDATOR_CONTRACT_ADDR;
+  address public SLASH_CONTRACT_ADDR;
+  address public SYSTEM_REWARD_ADDR;
+  address public LIGHT_CLIENT_ADDR;
+  address public RELAYER_HUB_ADDR;
+  address public CANDIDATE_HUB_ADDR;
+  address public GOV_HUB_ADDR;
+  address public PLEDGE_AGENT_ADDR;
+  address public BURN_ADDR;
+  address public FOUNDATION_ADDR;
+
+  function updateContractAddr(ContractAddresses memory addresses) external {
+    VALIDATOR_CONTRACT_ADDR = addresses.validatorSet;
+    SLASH_CONTRACT_ADDR = addresses.slashIndicator;
+    SYSTEM_REWARD_ADDR = addresses.systemReward;
+    LIGHT_CLIENT_ADDR = addresses.lightClient;
+    RELAYER_HUB_ADDR = addresses.relayerHub;
+    CANDIDATE_HUB_ADDR = addresses.candidateHub;
+    GOV_HUB_ADDR = addresses.govHub;
+    PLEDGE_AGENT_ADDR = addresses.pledgeAgent;
+    BURN_ADDR = addresses.burn;
+    FOUNDATION_ADDR = addresses.foundation;
+  }
+
+  function updateContractAddr(
+    address valAddr,
+    address slashAddr,
+    address rewardAddr,
+    address lightAddr,
+    address relayerHubAddr,
+    address candidateHubAddr,
+    address govHubAddr,
+    address pledgeAgentAddr,
+    address burnAddr,
+    address foundationAddr
+  ) external {
+    VALIDATOR_CONTRACT_ADDR = valAddr;
+    SLASH_CONTRACT_ADDR = slashAddr;
+    SYSTEM_REWARD_ADDR = rewardAddr;
+    LIGHT_CLIENT_ADDR = lightAddr;
+    RELAYER_HUB_ADDR = relayerHubAddr;
+    CANDIDATE_HUB_ADDR = candidateHubAddr;
+    GOV_HUB_ADDR = govHubAddr;
+    PLEDGE_AGENT_ADDR = pledgeAgentAddr;
+    BURN_ADDR = burnAddr;
+    FOUNDATION_ADDR = foundationAddr;
+  }
 
   modifier onlyCoinbase() {
-  
-    require(msg.sender == block.coinbase, "the message sender must be the block producer");
   
     _;
   }
 
   modifier onlyZeroGasPrice() {
-    
-    require(tx.gasprice == 0 , "gasprice is not zero");
     
     _;
   }
@@ -68,6 +128,13 @@ contract System {
     require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender), "the msg sender is not a relayer");
     _;
   }
+
+  modifier onlyIfPositiveValue() {
+    require(msg.value > 0, "value should be greater than zero"); 
+    _;
+  }
+
+  modifier openForAll() {_;}
 
   /// The length of param mismatch. Default is 32 bytes.
   /// @param name the name of param.

@@ -3,6 +3,8 @@ build/
 .idea
 pids
 logs
+forge-cache/
+out/
 .idea/
 contracts/flattened/*.sol
 contracts/artifacts/*.json

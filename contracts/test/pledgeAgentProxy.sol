@@ -6,18 +6,19 @@ contract PledgeAgentProxy {
 
     event delegate(bool success);
     event claim(uint256 reward, bool allClaimed);
-    constructor(address pledgeAgentAddress) public {
+    constructor(address pledgeAgentAddress) {
         pledgeAgent = pledgeAgentAddress;
     }
 
     function delegateCoin(address agent) external payable {
         bytes memory payload = abi.encodeWithSignature("delegateCoin(address)", agent);
-        (bool success, bytes memory returnData) = pledgeAgent.call{value: msg.value}(payload);
+        (bool success,) = pledgeAgent.call{value: msg.value}(payload);
         emit delegate(success);
     }
 
     function claimReward(address[] calldata agentList) external returns(uint256) {
         bytes4 funcSelector = bytes4(keccak256("claimReward(address[])"));
+        funcSelector; // silence compiler warning
         bytes memory payload = abi.encodeWithSignature("claimReward(address[])", agentList);
         (bool success, bytes memory returnData) = pledgeAgent.call(payload);
         require(success, "call to claimReward failed");

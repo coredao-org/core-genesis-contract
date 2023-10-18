@@ -7,6 +7,34 @@ contract System {
 
   bool public alreadyInit;
 
+  struct ContractAddresses {
+      address validatorSet;
+      address slashIndicator;
+      address systemReward;
+      address lightClient;
+      address relayerHub;
+      address candidateHub;
+      address govHub;
+      address pledgeAgent;
+      address burn;
+      address foundation;
+  }
+
+  function _allAddressesWereSet(ContractAddresses memory _all) internal pure returns (bool) {
+      if (_all.validatorSet == address(0)) return false;
+      if (_all.slashIndicator == address(0)) return false;
+      if (_all.systemReward == address(0)) return false;
+      if (_all.lightClient == address(0)) return false;
+      if (_all.relayerHub == address(0)) return false;
+      if (_all.candidateHub == address(0)) return false;
+      if (_all.govHub == address(0)) return false;
+      if (_all.pledgeAgent == address(0)) return false;
+      if (_all.burn == address(0)) return false;
+      if (_all.foundation == address(0)) return false;
+
+      return true;
+  }
+
 {% if mock %}
   address public VALIDATOR_CONTRACT_ADDR;
   address public SLASH_CONTRACT_ADDR;
@@ -18,6 +46,19 @@ contract System {
   address public PLEDGE_AGENT_ADDR;
   address public BURN_ADDR;
   address public FOUNDATION_ADDR;
+
+  function updateContractAddr(ContractAddresses memory addresses) external {
+    VALIDATOR_CONTRACT_ADDR = addresses.validatorSet;
+    SLASH_CONTRACT_ADDR = addresses.slashIndicator;
+    SYSTEM_REWARD_ADDR = addresses.systemReward;
+    LIGHT_CLIENT_ADDR = addresses.lightClient;
+    RELAYER_HUB_ADDR = addresses.relayerHub;
+    CANDIDATE_HUB_ADDR = addresses.candidateHub;
+    GOV_HUB_ADDR = addresses.govHub;
+    PLEDGE_AGENT_ADDR = addresses.pledgeAgent;
+    BURN_ADDR = addresses.burn;
+    FOUNDATION_ADDR = addresses.foundation;
+  }
 
   function updateContractAddr(
     address valAddr,

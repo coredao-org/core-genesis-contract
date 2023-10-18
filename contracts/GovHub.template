@@ -255,7 +255,7 @@ contract GovHub is System, IParamSubscriber {
         callData = abi.encodePacked(bytes4(keccak256(bytes(proposal.signatures[i]))), proposal.calldatas[i]);
       }
 
-      (bool success, bytes memory returnData) = proposal.targets[i].call{ value: proposal.values[i] }(callData);
+      (bool success,) = proposal.targets[i].call{ value: proposal.values[i] }(callData);
       require(success, "Transaction execution reverted.");
       emit ExecuteTransaction(proposal.targets[i], proposal.values[i], proposal.signatures[i], proposal.calldatas[i]);
     }
