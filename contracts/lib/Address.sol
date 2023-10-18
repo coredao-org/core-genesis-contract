@@ -207,6 +207,7 @@ library Address {
             return returndata;
         } else {
             _revert(returndata, errorMessage);
+            revert("avoid compiler warning");
         }
     }
 
@@ -225,6 +226,7 @@ library Address {
             return returndata;
         } else {
             _revert(returndata, errorMessage);
+            revert("avoid compiler warning");
         }
     }
 

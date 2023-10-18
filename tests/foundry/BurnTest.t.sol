@@ -4,7 +4,6 @@ pragma solidity 0.8.4;
 import "forge-std/console.sol";
 
 import {BaseTest} from "./common/BaseTest.t.sol";
-import {System} from "../../contracts/System.sol";
 import {Burn} from "../../contracts/Burn.sol";
 
 contract BurnTest is BaseTest  {
