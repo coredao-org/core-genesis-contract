@@ -391,6 +391,14 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
   }
 
+  function numValidators() external view returns(uint) {
+    return currentValidatorSet.length;
+  }
+
+  function getValidator(uint ind) external view returns(Validator memory) {
+    return currentValidatorSet[ind];
+  }
+
   //rlp encode & decode function
   function decodeValidatorSet(bytes memory msgBytes) internal pure returns (Validator[] memory, bool) {
     RLPDecode.RLPItem[] memory items = msgBytes.toRLPItem().toList();

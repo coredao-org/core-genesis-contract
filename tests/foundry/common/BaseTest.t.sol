@@ -66,4 +66,8 @@ abstract contract BaseTest is System, Test {
         return bound(value, 0, MAX_ETH_VALUE); // avoiding OutOfFund error
         //vm.assume( value < MAX_ETH_VALUE); 
     }
+
+    function _streq(string memory str1, string memory str2) internal pure returns (bool) {
+        return keccak256(abi.encodePacked(str1)) == keccak256(abi.encodePacked(str2));
+    }
 }		

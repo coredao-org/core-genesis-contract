@@ -19,7 +19,6 @@ contract BurnTest is BaseTest  {
 	function setUp() public override {
 	    BaseTest.setUp();
         s_burn = Burn(s_addresses.burn);
-        //zzzz;
 	}
 
 
@@ -101,6 +100,7 @@ contract BurnTest is BaseTest  {
     }
 
     function testFuzz_updateParams_bad_paramName(string memory paramName, uint addedBalance) public {
+        vm.assume(!_streq(paramName,"burnCap")); // else no BAD_PARAM_ERROR_MSG revert
         addedBalance = _limitFunds(addedBalance); 
         uint origBurnCap = s_burn.burnCap();
         vm.deal(address(s_burn), addedBalance);                

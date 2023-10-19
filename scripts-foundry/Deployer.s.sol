@@ -13,7 +13,8 @@ import {GovHub} from "../contracts/GovHub.sol";
 import {PledgeAgent} from "../contracts/PledgeAgent.sol";
 import {RelayerHub} from "../contracts/RelayerHub.sol";
 import {SlashIndicator} from "../contracts/SlashIndicator.sol";
-import {SystemReward} from "../contracts/SystemReward.sol";
+// import {SystemReward} from "../contracts/SystemReward.sol";
+import {SystemRewardMock} from "../contracts/mock/SystemRewardMock.sol";
 import {ValidatorSet} from "../contracts/ValidatorSet.sol";
 
 
@@ -42,7 +43,8 @@ contract Deployer is System, Script {
         lightClient.init();
         SlashIndicator slashIndicator = new SlashIndicator();  
         slashIndicator.init();
-        SystemReward systemReward = new SystemReward();        
+        //SystemReward systemReward = new SystemReward(); -- use mock else onlyOperator() will fail
+        SystemRewardMock systemReward = new SystemRewardMock();        
         systemReward.init();      
         CandidateHub candidateHub = new CandidateHub();        
         candidateHub.init();
