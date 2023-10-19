@@ -2,6 +2,7 @@
 pragma solidity 0.8.4;
 
 import "forge-std/Script.sol";
+import {console} from "forge-std/console.sol";
 
 import {System} from "../contracts/System.sol";
 import {BtcLightClient} from "../contracts/BtcLightClient.sol";
@@ -22,10 +23,8 @@ contract Deployer is System, Script {
     uint public constant GANACHE_CHAINID = 1337;
 
     function run() external returns(ContractAddresses memory addresses) {
-        console.log("Deploying contracts to chainid: ", block.chainid);
-        bool isLocalTestnet = block.chainid == ANVIL_CHAINID || block.chainid == GANACHE_CHAINID;
 	    // vm.startBroadcast(); 
-        if (isLocalTestnet) {
+        if (_isLocalTestnet()) {
             addresses = _deployOnLocalTestnet();            
         } else {
             addresses = _returnPredeployedContracts();
@@ -35,6 +34,7 @@ contract Deployer is System, Script {
     }
 
     function _deployOnLocalTestnet() private returns(ContractAddresses memory) {        
+        console.log("deploying on local testnet %s", block.chainid);
         Burn burn = new Burn();                                
         burn.init();
         BtcLightClient lightClient = new BtcLightClient();        
@@ -71,6 +71,7 @@ contract Deployer is System, Script {
     }
 
     function _returnPredeployedContracts() private view returns(ContractAddresses memory) {      
+        console.log("using pre-deployed contracts on Core network %s", block.chainid);
         return System.ContractAddresses({
             burn: BURN_ADDR,
             lightClient: LIGHT_CLIENT_ADDR,
@@ -83,5 +84,9 @@ contract Deployer is System, Script {
             foundation: FOUNDATION_ADDR,
             govHub: GOV_HUB_ADDR 
         });
+    }
+
+    function _isLocalTestnet() private view returns(bool) {
+        return block.chainid == ANVIL_CHAINID || block.chainid == GANACHE_CHAINID; // add more local testnet ids if needed
     }
 }
