@@ -100,7 +100,7 @@ contract BurnTest is BaseTest  {
     }
 
     function testFuzz_updateParams_bad_paramName(string memory paramName, uint addedBalance) public {
-        vm.assume(!_streq(paramName,"burnCap")); // else no BAD_PARAM_ERROR_MSG revert
+        vm.assume(!_streq(paramName, s_burn.BURN_CAP_KEY())); // else no BAD_PARAM_ERROR_MSG revert
         addedBalance = _limitFunds(addedBalance); 
         uint origBurnCap = s_burn.burnCap();
         vm.deal(address(s_burn), addedBalance);                

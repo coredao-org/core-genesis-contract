@@ -9,6 +9,7 @@ import "./interface/IBurn.sol";
 /// This contract burns CORE tokens up to pre defined CAP
 contract Burn is System, IBurn, IParamSubscriber {
   uint256 public constant BURN_CAP = 105e25;
+  string public constant BURN_CAP_KEY = "burnCap";
 
   uint256 public burnCap;
 
@@ -54,7 +55,7 @@ contract Burn is System, IBurn, IParamSubscriber {
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }
-    if (Memory.compareStrings(key, "burnCap")) {
+    if (Memory.compareStrings(key, BURN_CAP_KEY)) {
       uint256 newBurnCap = BytesToTypes.bytesToUint256(32, value);
       if (newBurnCap < address(this).balance) {
         revert OutOfBounds(key, newBurnCap, address(this).balance, type(uint256).max);
