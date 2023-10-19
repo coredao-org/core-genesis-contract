@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
-import "forge-std/console.sol";
+import {console} from "forge-std/console.sol";
 
 import {System} from "../../../contracts/System.sol";
 import {Test} from "forge-std/Test.sol";

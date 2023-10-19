@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
-import "forge-std/Script.sol";
+import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 
 import {System} from "../contracts/System.sol";
@@ -25,16 +25,17 @@ contract Deployer is System, Script {
     function run() external returns(ContractAddresses memory addresses) {
 	    // vm.startBroadcast(); 
         if (_isLocalTestnet()) {
-            addresses = _deployOnLocalTestnet();            
+            addresses = _performActualDeployment();            
         } else {
-            addresses = _returnPredeployedContracts();
+            addresses = _usePredeployedContracts();
         }
         require(_allAddressesWereSet(addresses), "failed to deploy all contracts");
         // vm.stopBroadcast();
     }
 
-    function _deployOnLocalTestnet() private returns(ContractAddresses memory) {        
-        console.log("deploying on local testnet %s", block.chainid);
+    function _performActualDeployment() private returns(ContractAddresses memory) {        
+        console.log("deploying on network %s", block.chainid);
+        
         Burn burn = new Burn();                                
         burn.init();
         BtcLightClient lightClient = new BtcLightClient();        
@@ -52,7 +53,7 @@ contract Deployer is System, Script {
         RelayerHub relayerHub = new RelayerHub();              
         relayerHub.init();
         Foundation foundation = new Foundation();               
-        //foundation.init(); -- nope
+        //foundation.init(); -- not exist
         GovHub govHub = new GovHub();                           
         govHub.init();
 
@@ -70,8 +71,8 @@ contract Deployer is System, Script {
         });
     }
 
-    function _returnPredeployedContracts() private view returns(ContractAddresses memory) {      
-        console.log("using pre-deployed contracts on Core network %s", block.chainid);
+    function _usePredeployedContracts() private view returns(ContractAddresses memory) {      
+        console.log("using pre-deployed contracts on network %s", block.chainid);
         return System.ContractAddresses({
             burn: BURN_ADDR,
             lightClient: LIGHT_CLIENT_ADDR,
