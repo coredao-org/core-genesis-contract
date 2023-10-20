@@ -1,0 +1,11 @@
+[H[2J| Name                  | Type                                       | Slot | Offset | Bytes | Contract                    |
+|-----------------------|--------------------------------------------|------|--------|-------|-----------------------------|
+| alreadyInit           | bool                                       | 0    | 0      | 1     | contracts/GovHub.sol:GovHub |
+| proposalMaxOperations | uint256                                    | 1    | 0      | 32    | contracts/GovHub.sol:GovHub |
+| votingPeriod          | uint256                                    | 2    | 0      | 32    | contracts/GovHub.sol:GovHub |
+| members               | mapping(address => uint256)                | 3    | 0      | 32    | contracts/GovHub.sol:GovHub |
+| memberSet             | address[]                                  | 4    | 0      | 32    | contracts/GovHub.sol:GovHub |
+| proposals             | mapping(uint256 => struct GovHub.Proposal) | 5    | 0      | 32    | contracts/GovHub.sol:GovHub |
+| latestProposalIds     | mapping(address => uint256)                | 6    | 0      | 32    | contracts/GovHub.sol:GovHub |
+| proposalCount         | uint256                                    | 7    | 0      | 32    | contracts/GovHub.sol:GovHub |
+| executingPeriod       | uint256                                    | 8    | 0      | 32    | contracts/GovHub.sol:GovHub |

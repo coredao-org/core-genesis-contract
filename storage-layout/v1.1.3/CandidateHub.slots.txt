@@ -1,0 +1,13 @@
+[H[2J| Name                | Type                            | Slot | Offset | Bytes | Contract                                |
+|---------------------|---------------------------------|------|--------|-------|-----------------------------------------|
+| alreadyInit         | bool                            | 0    | 0      | 1     | contracts/CandidateHub.sol:CandidateHub |
+| requiredMargin      | uint256                         | 1    | 0      | 32    | contracts/CandidateHub.sol:CandidateHub |
+| dues                | uint256                         | 2    | 0      | 32    | contracts/CandidateHub.sol:CandidateHub |
+| roundInterval       | uint256                         | 3    | 0      | 32    | contracts/CandidateHub.sol:CandidateHub |
+| validatorCount      | uint256                         | 4    | 0      | 32    | contracts/CandidateHub.sol:CandidateHub |
+| maxCommissionChange | uint256                         | 5    | 0      | 32    | contracts/CandidateHub.sol:CandidateHub |
+| candidateSet        | struct CandidateHub.Candidate[] | 6    | 0      | 32    | contracts/CandidateHub.sol:CandidateHub |
+| operateMap          | mapping(address => uint256)     | 7    | 0      | 32    | contracts/CandidateHub.sol:CandidateHub |
+| consensusMap        | mapping(address => uint256)     | 8    | 0      | 32    | contracts/CandidateHub.sol:CandidateHub |
+| jailMap             | mapping(address => uint256)     | 9    | 0      | 32    | contracts/CandidateHub.sol:CandidateHub |
+| roundTag            | uint256                         | 10   | 0      | 32    | contracts/CandidateHub.sol:CandidateHub |

@@ -1,0 +1,11 @@
+[H[2J| Name                | Type                                              | Slot | Offset | Bytes | Contract                              |
+|---------------------|---------------------------------------------------|------|--------|-------|---------------------------------------|
+| alreadyInit         | bool                                              | 0    | 0      | 1     | contracts/PledgeAgent.sol:PledgeAgent |
+| requiredCoinDeposit | uint256                                           | 1    | 0      | 32    | contracts/PledgeAgent.sol:PledgeAgent |
+| powerFactor         | uint256                                           | 2    | 0      | 32    | contracts/PledgeAgent.sol:PledgeAgent |
+| agentsMap           | mapping(address => struct PledgeAgent.Agent)      | 3    | 0      | 32    | contracts/PledgeAgent.sol:PledgeAgent |
+| rewardMap           | mapping(address => uint256)                       | 4    | 0      | 32    | contracts/PledgeAgent.sol:PledgeAgent |
+| btc2ethMap          | mapping(bytes20 => address)                       | 5    | 0      | 32    | contracts/PledgeAgent.sol:PledgeAgent |
+| stateMap            | mapping(uint256 => struct PledgeAgent.RoundState) | 6    | 0      | 32    | contracts/PledgeAgent.sol:PledgeAgent |
+| roundTag            | uint256                                           | 7    | 0      | 32    | contracts/PledgeAgent.sol:PledgeAgent |
+| debtDepositMap      | mapping(uint256 => mapping(address => uint256))   | 8    | 0      | 32    | contracts/PledgeAgent.sol:PledgeAgent |

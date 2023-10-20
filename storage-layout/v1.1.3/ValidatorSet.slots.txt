@@ -1,0 +1,8 @@
+[H[2J| Name                        | Type                            | Slot | Offset | Bytes | Contract                                |
+|-----------------------------|---------------------------------|------|--------|-------|-----------------------------------------|
+| alreadyInit                 | bool                            | 0    | 0      | 1     | contracts/ValidatorSet.sol:ValidatorSet |
+| blockReward                 | uint256                         | 1    | 0      | 32    | contracts/ValidatorSet.sol:ValidatorSet |
+| blockRewardIncentivePercent | uint256                         | 2    | 0      | 32    | contracts/ValidatorSet.sol:ValidatorSet |
+| currentValidatorSet         | struct ValidatorSet.Validator[] | 3    | 0      | 32    | contracts/ValidatorSet.sol:ValidatorSet |
+| totalInCome                 | uint256                         | 4    | 0      | 32    | contracts/ValidatorSet.sol:ValidatorSet |
+| currentValidatorSetMap      | mapping(address => uint256)     | 5    | 0      | 32    | contracts/ValidatorSet.sol:ValidatorSet |
