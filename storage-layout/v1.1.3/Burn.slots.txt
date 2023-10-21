@@ -1,0 +1,4 @@
+[H[2J| Name        | Type    | Slot | Offset | Bytes | Contract                |
+|-------------|---------|------|--------|-------|-------------------------|
+| alreadyInit | bool    | 0    | 0      | 1     | contracts/Burn.sol:Burn |
+| burnCap     | uint256 | 1    | 0      | 32    | contracts/Burn.sol:Burn |

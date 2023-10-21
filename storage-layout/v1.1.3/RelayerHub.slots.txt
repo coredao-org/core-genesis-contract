@@ -1,0 +1,7 @@
+[H[2J| Name             | Type                                          | Slot | Offset | Bytes | Contract                            |
+|------------------|-----------------------------------------------|------|--------|-------|-------------------------------------|
+| alreadyInit      | bool                                          | 0    | 0      | 1     | contracts/RelayerHub.sol:RelayerHub |
+| requiredDeposit  | uint256                                       | 1    | 0      | 32    | contracts/RelayerHub.sol:RelayerHub |
+| dues             | uint256                                       | 2    | 0      | 32    | contracts/RelayerHub.sol:RelayerHub |
+| relayers         | mapping(address => struct RelayerHub.Relayer) | 3    | 0      | 32    | contracts/RelayerHub.sol:RelayerHub |
+| relayersExistMap | mapping(address => bool)                      | 4    | 0      | 32    | contracts/RelayerHub.sol:RelayerHub |

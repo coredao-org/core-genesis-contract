@@ -1,0 +1,3 @@
+[H[2J| Name        | Type | Slot | Offset | Bytes | Contract                            |
+|-------------|------|------|--------|-------|-------------------------------------|
+| alreadyInit | bool | 0    | 0      | 1     | contracts/Foundation.sol:Foundation |

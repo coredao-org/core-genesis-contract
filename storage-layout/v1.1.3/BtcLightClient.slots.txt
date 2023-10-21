@@ -1,0 +1,21 @@
+[H[2J| Name                            | Type                                                 | Slot | Offset | Bytes | Contract                                    |
+|---------------------------------|------------------------------------------------------|------|--------|-------|---------------------------------------------|
+| alreadyInit                     | bool                                                 | 0    | 0      | 1     | contracts/BtcLightClient.sol:BtcLightClient |
+| highScore                       | uint256                                              | 1    | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| heaviestBlock                   | bytes32                                              | 2    | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| initBlockHash                   | bytes32                                              | 3    | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| callerCompensationMolecule      | uint256                                              | 4    | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| rewardForSyncHeader             | uint256                                              | 5    | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| roundSize                       | uint256                                              | 6    | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| maxWeight                       | uint256                                              | 7    | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| countInRound                    | uint256                                              | 8    | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| collectedRewardForHeaderRelayer | uint256                                              | 9    | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| roundInterval                   | uint256                                              | 10   | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| headerRelayerAddressRecord      | address payable[]                                    | 11   | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| headerRelayersSubmitCount       | mapping(address => uint256)                          | 12   | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| relayerRewardVault              | mapping(address => uint256)                          | 13   | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| roundPowerMap                   | mapping(uint256 => struct BtcLightClient.RoundPower) | 14   | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| blockChain                      | mapping(bytes32 => bytes)                            | 15   | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| adjustmentHashes                | mapping(uint32 => bytes32)                           | 16   | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| submitters                      | mapping(bytes32 => address payable)                  | 17   | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
+| storeBlockGasPrice              | uint256                                              | 18   | 0      | 32    | contracts/BtcLightClient.sol:BtcLightClient |
