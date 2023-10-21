@@ -2,7 +2,7 @@
 pragma solidity 0.8.4;
 
 import {console} from "forge-std/console.sol";
-import {BaseTest} from "./common/BaseTest.t.sol";
+import {BaseTest} from "../common/BaseTest.t.sol";
 import {Burn} from "../../contracts/Burn.sol";
 
 contract BurnTest is BaseTest  {
@@ -48,28 +48,23 @@ contract BurnTest is BaseTest  {
         s_burn.burn{value: value}();
     }
 
-    function testFuzz_burn_with_balance_lesser_than_burnCap(uint value, uint burnCap) public {
-        value = _limitFunds(value);
-        burnCap = _limitFunds(burnCap); 
+    function testFuzz_burn_with_burnCap_lesser_than_balance_results_in_no_eth_transfer(uint burnCap) public {
+        burnCap = _limitFunds(burnCap);
 
-        if (burnCap < address(s_burn).balance) {
-            // here we only test the burnCap >= balance scenario
-            burnCap = address(s_burn).balance;
+        if (address(s_burn).balance <= burnCap) {
+            vm.deal(address(s_burn), burnCap+1); 
         }
-        _updateBurnCap(burnCap);        
+        
+        _updateBurnCap(burnCap); zzzzzz OutOfBounds(burnCap, 2851217494792020368862436 [2.851e24], 2851217494792020368862437 
 
         assertTrue( burnCap >= address(s_burn).balance, "bad burnCap value");
 
         address sender = makeAddr("Joe");
         
+        uint value = burnCap; 
         _hoaxWithGas(sender, value); // internally adds ADDITIONAL_GAS_FEES to value
 
         uint preSenderBalance = address(sender).balance;
-
-        // if (value != 0) {
-        //     vm.expectEmit();
-        //     emit burned(sender, value);
-        // }zzzzz
 
         s_burn.burn{value: value}();
 
@@ -77,7 +72,7 @@ contract BurnTest is BaseTest  {
 
         console.log("preSenderBalance: %s, postSenderBalance: %s", preSenderBalance, postSenderBalance);
 
-        // zzzz assertTrue(postSenderBalance > preSenderBalance - ADDITIONAL_GAS_FEES , "sender balance should not change");
+        assertTrue(postSenderBalance > preSenderBalance - ADDITIONAL_GAS_FEES , "no eth should have been transferred to sender");
     }
 
 

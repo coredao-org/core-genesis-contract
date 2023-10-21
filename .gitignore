@@ -4,6 +4,7 @@ build/
 pids
 logs
 forge-cache/
+cache/
 out/
 .idea/
 contracts/flattened/*.sol

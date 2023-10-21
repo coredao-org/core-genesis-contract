@@ -2,7 +2,7 @@
 pragma solidity 0.8.4;
 
 import {console} from "forge-std/console.sol";
-import {BaseTest} from "./common/BaseTest.t.sol";
+import {BaseTest} from "../common/BaseTest.t.sol";
 import {Foundation} from "../../contracts/Foundation.sol";
 
 contract FoundationTest is BaseTest  {

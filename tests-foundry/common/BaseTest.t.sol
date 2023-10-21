@@ -3,9 +3,9 @@ pragma solidity 0.8.4;
 
 import {console} from "forge-std/console.sol";
 
-import {System} from "../../../contracts/System.sol";
+import {System} from "../../contracts/System.sol";
 import {Test} from "forge-std/Test.sol";
-import {Deployer} from "../../../scripts-foundry/Deployer.s.sol";
+import {Deployer} from "../../scripts-foundry/Deployer.s.sol";
 
 abstract contract BaseTest is System, Test {
     

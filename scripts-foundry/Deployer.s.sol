@@ -13,9 +13,8 @@ import {GovHub} from "../contracts/GovHub.sol";
 import {PledgeAgent} from "../contracts/PledgeAgent.sol";
 import {RelayerHub} from "../contracts/RelayerHub.sol";
 import {SlashIndicator} from "../contracts/SlashIndicator.sol";
-// import {SystemReward} from "../contracts/SystemReward.sol";
-import {SystemRewardMock} from "../contracts/mock/SystemRewardMock.sol";
 import {ValidatorSet} from "../contracts/ValidatorSet.sol";
+import {SystemRewardMock} from "../contracts/mock/SystemRewardMock.sol";
 
 
 contract Deployer is System, Script {
@@ -26,7 +25,7 @@ contract Deployer is System, Script {
     function run() external returns(ContractAddresses memory addresses) {
 	    // vm.startBroadcast(); 
         if (_isLocalTestnet()) {
-            addresses = _performActualDeployment();            
+            addresses = _performActualDeployment();
         } else {
             addresses = _usePredeployedContracts();
         }
@@ -43,8 +42,7 @@ contract Deployer is System, Script {
         lightClient.init();
         SlashIndicator slashIndicator = new SlashIndicator();  
         slashIndicator.init();
-        //SystemReward systemReward = new SystemReward(); -- use mock else onlyOperator() will fail
-        SystemRewardMock systemReward = new SystemRewardMock();        
+        SystemRewardMock systemReward = new SystemRewardMock(); // must use mock else onlyOperator() will fail        
         systemReward.init();      
         CandidateHub candidateHub = new CandidateHub();        
         candidateHub.init();
@@ -55,7 +53,7 @@ contract Deployer is System, Script {
         RelayerHub relayerHub = new RelayerHub();              
         relayerHub.init();
         Foundation foundation = new Foundation();               
-        //foundation.init(); -- not exist
+        //foundation.init(); -- non existent 
         GovHub govHub = new GovHub();                           
         govHub.init();
 

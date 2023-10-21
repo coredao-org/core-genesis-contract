@@ -2,7 +2,7 @@
 pragma solidity 0.8.4;
 
 import {console} from "forge-std/console.sol";
-import {BaseTest} from "./common/BaseTest.t.sol";
+import {BaseTest} from "../common/BaseTest.t.sol";
 import {SystemRewardMock} from "../../contracts/mock/SystemRewardMock.sol";
 
 contract SystemRewardTest is BaseTest  {
