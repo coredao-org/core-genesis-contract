@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
+import "./lib/Address.sol";
+import "./lib/BytesLib.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./interface/IValidatorSet.sol";
@@ -9,7 +11,6 @@ import "./interface/IPledgeAgent.sol";
 import "./interface/ISlashIndicator.sol";
 import "./interface/ILightClient.sol";
 import "./System.sol";
-import "./lib/Address.sol";
 
 /// This contract manages all validator candidates on Core blockchain
 /// It also exposes the method `turnRound` for the consensus engine to execute the `turn round` workflow
@@ -69,6 +70,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     uint256 status;
     uint256 commissionLastChangeRound;
     uint256 commissionLastRoundValue;
+    bytes voteAddr;
   }
 
   modifier exist() {
@@ -77,9 +79,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   /*********************** events **************************/
-  event registered(address indexed operateAddr, address indexed consensusAddr, address indexed feeAddress, uint256 commissionThousandths, uint256 margin);
+  event registered(address indexed operateAddr, address indexed consensusAddr, address indexed feeAddress, uint256 commissionThousandths, uint256 margin, bytes voteAddr);
   event unregistered(address indexed operateAddr, address indexed consensusAddr);
-  event updated(address indexed operateAddr, address indexed consensusAddr, address indexed feeAddress, uint256 commissionThousandths);
+  event updated(address indexed operateAddr, address indexed consensusAddr, address indexed feeAddress, uint256 commissionThousandths, bytes voteAddr);
   event addedMargin(address indexed operateAddr, uint256 margin, uint256 totalMargin);
   event deductedMargin(address indexed operateAddr, uint256 margin, uint256 totalMargin);
   event statusChanged(address indexed operateAddr, uint256 oldStatus, uint256 newStatus);
@@ -201,16 +203,17 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     address[] memory validatorList = getValidators(candidates, scores, validatorCount);
 
     // prepare arguments, and notify ValidatorSet contract
-    uint256 totalCount = validatorList.length;
-    address[] memory consensusAddrList = new address[](totalCount);
-    address payable[] memory feeAddrList = new address payable[](totalCount);
-    uint256[] memory commissionThousandthsList = new uint256[](totalCount);
+    address[] memory consensusAddrList = new address[](validatorList.length);
+    address payable[] memory feeAddrList = new address payable[](validatorList.length);
+    uint256[] memory commissionThousandthsList = new uint256[](validatorList.length);
+    bytes[] memory voteAddrList = new bytes[](validatorList.length);
 
-    for (uint256 i = 0; i < totalCount; ++i) {
+    for (uint256 i = 0; i < validatorList.length; ++i) {
       uint256 index = operateMap[validatorList[i]];
       Candidate storage c = candidateSet[index - 1];
       consensusAddrList[i] = c.consensusAddr;
       feeAddrList[i] = c.feeAddr;
+      voteAddrList[i] = c.voteAddr;
       if (scores[i] == 0) {
         commissionThousandthsList[i] = 1000;
       } else {
@@ -219,7 +222,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       statusList[index - 1] |= SET_VALIDATOR;
     }
 
-    IValidatorSet(VALIDATOR_CONTRACT_ADDR).updateValidatorSet(validatorList, consensusAddrList, feeAddrList, commissionThousandthsList);
+    IValidatorSet(VALIDATOR_CONTRACT_ADDR).updateValidatorSet(validatorList, consensusAddrList, feeAddrList, commissionThousandthsList, voteAddrList);
 
     // clean slash contract
     ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
@@ -247,27 +250,33 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @param consensusAddr Consensus address configured on the validator node
   /// @param feeAddr Fee address set to collect system rewards
   /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths
-  function register(address consensusAddr, address payable feeAddr, uint32 commissionThousandths)
+  function register(address consensusAddr, address payable feeAddr, uint32 commissionThousandths, bytes calldata voteAddr)
     external payable
     onlyInit
   {
-    require(candidateSet.length <= CANDIDATE_COUNT_LIMIT, "maximum candidate size reached");
+    uint256 candidateSize = candidateSet.length;
+    require(candidateSize <= CANDIDATE_COUNT_LIMIT, "maximum candidate size reached");
     require(operateMap[msg.sender] == 0, "candidate already exists");
     require(msg.value >= requiredMargin, "deposit is not enough");
     require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should be in (0, 1000)");
     require(consensusMap[consensusAddr] == 0, "consensus already exists");
     require(consensusAddr != address(0), "consensus address should not be zero");
     require(feeAddr != address(0), "fee address should not be zero");
+  
     // check jail status
     require(jailMap[msg.sender] < roundTag, "it is in jail");
 
-    uint256 status = SET_CANDIDATE;
-    candidateSet.push(Candidate(msg.sender, consensusAddr, feeAddr, commissionThousandths, msg.value, status, roundTag, commissionThousandths));
-    uint256 index = candidateSet.length;
-    operateMap[msg.sender] = index;
-    consensusMap[consensusAddr] = index;
+    require(voteAddr.length == 48, "vote address length should be 48");
+    for (uint256 i = 0; i < candidateSize; i++) {
+      require(!BytesLib.equal(candidateSet[i].voteAddr,  voteAddr), "vote address already exists");
+    }
 
-    emit registered(msg.sender, consensusAddr, feeAddr, commissionThousandths, msg.value);
+    uint256 status = SET_CANDIDATE;
+    candidateSet.push(Candidate(msg.sender, consensusAddr, feeAddr, commissionThousandths, msg.value, status, roundTag, commissionThousandths, voteAddr));
+    operateMap[msg.sender] = candidateSize + 1;
+    consensusMap[consensusAddr] = candidateSize + 1;
+
+    emit registered(msg.sender, consensusAddr, feeAddr, commissionThousandths, msg.value, voteAddr);
   }
 
   /// Unregister the validator candidate role on Core blockchain
@@ -292,10 +301,17 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @param consensusAddr Consensus address configured on the validator node
   /// @param feeAddr Fee address set to collect system rewards
   /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths  
-  function update(address consensusAddr, address payable feeAddr, uint32 commissionThousandths) external onlyInit exist{
+  function update(address consensusAddr, address payable feeAddr, uint32 commissionThousandths, bytes calldata voteAddr) external onlyInit exist{
     require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should in range (0, 1000)");
     require(consensusAddr != address(0), "consensus address should not be zero");
     require(feeAddr != address(0), "fee address should not be zero");
+
+    require(voteAddr.length == 48, "vote address length should be 48");
+    uint256 candidateSize = candidateSet.length;
+    for (uint256 i = 0; i < candidateSize; i++) {
+      require(candidateSet[i].operateAddr != msg.sender && !BytesLib.equal(candidateSet[i].voteAddr,  voteAddr), "vote address already exists");
+    }
+
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     uint256 commissionLastRoundValue = roundTag == c.commissionLastChangeRound
@@ -318,7 +334,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     }
     c.feeAddr = feeAddr;
     c.commissionThousandths = commissionThousandths;
-    emit updated(msg.sender, consensusAddr, feeAddr, commissionThousandths);
+    c.voteAddr = voteAddr;
+    emit updated(msg.sender, consensusAddr, feeAddr, commissionThousandths, voteAddr);
   }
 
   /// Refuse to accept delegate from others
