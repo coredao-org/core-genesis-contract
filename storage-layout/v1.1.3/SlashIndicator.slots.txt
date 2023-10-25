@@ -1,0 +1,11 @@
+[H[2J| Name                      | Type                                                | Slot | Offset | Bytes | Contract                                    |
+|---------------------------|-----------------------------------------------------|------|--------|-------|---------------------------------------------|
+| alreadyInit               | bool                                                | 0    | 0      | 1     | contracts/SlashIndicator.sol:SlashIndicator |
+| validators                | address[]                                           | 1    | 0      | 32    | contracts/SlashIndicator.sol:SlashIndicator |
+| indicators                | mapping(address => struct SlashIndicator.Indicator) | 2    | 0      | 32    | contracts/SlashIndicator.sol:SlashIndicator |
+| previousHeight            | uint256                                             | 3    | 0      | 32    | contracts/SlashIndicator.sol:SlashIndicator |
+| misdemeanorThreshold      | uint256                                             | 4    | 0      | 32    | contracts/SlashIndicator.sol:SlashIndicator |
+| felonyThreshold           | uint256                                             | 5    | 0      | 32    | contracts/SlashIndicator.sol:SlashIndicator |
+| rewardForReportDoubleSign | uint256                                             | 6    | 0      | 32    | contracts/SlashIndicator.sol:SlashIndicator |
+| felonyDeposit             | uint256                                             | 7    | 0      | 32    | contracts/SlashIndicator.sol:SlashIndicator |
+| felonyRound               | uint256                                             | 8    | 0      | 32    | contracts/SlashIndicator.sol:SlashIndicator |

@@ -1,0 +1,451 @@
+/* @product Called by the current block producer to add block reward to a validator
+   @logic
+      1. The caller passes with this call eth value that is not tested for min/max caps @openissue
+      2. If the current block number is a multiplier of SUBSIDY_REDUCE_INTERVAL (=10512000) 
+         the blockReward is reduced - from this operation henceforth - by a factor of 0.9639
+      3. if the validator address is valid, the validator's income is increased by a value 
+         calculated as follows:
+            a. start with the eth value passed by the block producer with the call
+            b. if the ValidatorSet balance (not including current transfer) is equal
+               or larger than the global totalInCome + blockReward then add blockReward eth 
+               to the value
+      4. ..And the global totalInCome value is increased by the same value
+      5. Else - a deprecatedDeposit() event is emitted
+*/
+  function deposit(address valAddr) external payable onlyCoinbase onlyInit onlyZeroGasPrice {
+
+
+/* @product Called by the CandidateHub contract at the beginning of turn round to distribute 
+    rewards to all validators (and delegators through PledgeAgent)
+   
+   @logic
+      1. all validators are iterated and for each an incentive value value is calculated 
+         to be 1% of the sum of the current validator income plus a global
+         blockRewardIncentivePercent value
+      2. Each validator's income gets reduce by the validator's incentive values
+      3. The sum of all validator's incentive values is stored as incentiveSum
+      4. After that the SystemReward's receiveRewards function is invoked with eth value
+         set to incentiveSum, read its doc for the details of its action
+      5. Once done, the validators are iterated over again and, for each validator:
+         if the validator's fee is positive that the validator reward is sent to the validator's 
+         fee address, after which the validator's income is zeroed the validator reward is 
+         calculated as a single promile (1/1000) of the validator's income times the 
+         validator's commissionThousandths value and the rewardSum of all validators is set 
+         to be the sum of all validators' (income - reward) values
+      6. After that, the PledgeAgent contract addRoundReward() function is invoked with eth value set 
+         to rewardSum and with operateAddressList and rewardList as params. Read its documentation for details.
+      7. Finally the global totalInCome value is set to zero
+*/
+  function distributeReward() external override onlyCandidate returns (address[] memory operateAddressList) {
+
+
+/* @product Called by the CandidateHub contract as part of the turn round flow to update validator 
+       set of the new round with elected validators
+   @param operateAddrList: List of validator operator addresses
+   @param consensusAddrList: List of validator consensus addresses
+   @param feeAddrList: List of validator fee addresses
+   @param commissionThousandthsList: List of validator commission fees in promils (=thousandth)
+
+   @logic
+      1. The function validates that all list parameters are of the same length and that
+         each element commissionThousandthsList is less than 1000
+      2. It then replaces the current validators with the newly passed ones, each validator containing
+         an operate address, a consensus addrress, a fee address and a commissionThousandths count
+*/
+  function updateValidatorSet(
+    address[] calldata operateAddrList,
+    address[] calldata consensusAddrList,
+    address payable[] calldata feeAddrList,
+    uint256[] calldata commissionThousandthsList
+  ) external override onlyCandidate {
+
+
+/* @product Called by the Slash contract (only) to slash validators for felony behaviors
+   @param validator: The validator to slash
+   @param felonyRound: The number of rounds to jail the validator
+   @param felonyDeposit: The amount of deposits to slash
+
+   @logic
+        1. If the 'bad' validator is the only validator then he will not be jailed, but 
+           his income will be zeroed
+        2. Else the validator will be removed from the current.validators list
+        3. And a sum equal to the 'bad' validator income will be equally divided between the 
+           rest of the validators without clearing of the 'bad' validator's income @openissue
+        4. Finally the CandidateHub's jailValidator() function will be invoked to place the 
+           validator in jail for felonyRound and slash some amount of deposits. Read its 
+           documentation for more details
+*/
+  function felony(address validator, uint256 felonyRound, uint256 felonyDeposit) 
+            external override onlySlash onlyIfCurrentValidator(validator) {
+
+
+/* @product Called by the block producer once per-block to slash the validator 
+    because of unavailability
+   @param validator: validator to slash
+   @logic
+      1. increase the count of the validator's slash.indicator record by 1 and sets its 
+         height to the current block number
+      2. If the slash.indicator count has reached the felonyThreshold jump (default = 150), 
+         then zero it and call the felony method for the validator
+      3. Else, if the slash.indicator count has reached the misdemeanorThreshold 
+         jump (default = 50), then leave its value unchanged and call the misdemeanor 
+         method for the validator
+*/
+  function slash(address validator) external onlyCoinbase onlyInit oncePerBlock onlyZeroGasPrice{
+
+
+/* @product Slash the validator because of double sign
+   @param header1: A block header submitted by the validator
+   @param header2: Another block header submitted by the validator with same height and parent
+
+  @logic
+    1. This method is called by external verifiers, with no verifications are done to enfore it. @openissue
+       It receives header1 and header2 parameters, and verifies that:
+          a. the headers refer to to distinct blocks i.e. 'double sign'
+          b. that the validators inside each header are identical and legal validators
+    2. it then continues to apply a felony on the validator using the global felonyDeposit value
+       and to pass the global rewardForReportDoubleSign value to the caller of this method
+    3. Note that if the current SystemReward's balance is less than the reward amount then the 
+      latter will be slashed to the balance value without reverting
+    4. Note2 that nowhere is a check made to verify that the method caller is himself not the 
+       'bad' validator
+*/
+  function doubleSignSlash(bytes calldata header1, bytes calldata header2) external onlyInit {
+
+
+  /* @product Called by the ValidatorSet contract (only) at the beginning of turn round to 
+              receive round rewards
+     @param agentList: List of validator operator addresses
+     @param rewardList: List of reward amounts
+     @logic
+          For each validator - if the roundScore of the agent's last reward is positive and its (new) 
+          reward value is positive then set the agent's last reward's total and remain.reward 
+          values to the agent's new reward value
+*/
+  function addRoundReward(address[] calldata agentList, uint256[] calldata rewardList)
+    external
+    payable
+    override
+    onlyValidator
+  {
+
+
+/* @product Called by the CandidateHub contract from the turn round flow to calculate hybrid scores for all candidates
+   @param candidates: List of candidate operator addresses
+   @param powers: List of power values in this round
+   @return scores List of hybrid scores of all validator candidates in this round
+   @return totalPower Total power delegated in this round
+   @return totalCoin Total coin delegated in this round
+
+   @logic
+        1. assigns, for each candidate, its power to be the new power value times 
+           POWER_BLOCK_FACTOR (=1e18) and its coin value to be its totalDeposit
+        2. Calculates the totalPower of all candidates as the sum of all of their (new) power 
+           values PLUS ONE @openissue
+        3. Calculates the totalCoin of all candidates as the sum of all of their (new) coin 
+           values PLUS ONE @openissue
+        4. Use these values to calculates the hybrid score for each candidate as follows:
+              agent.score = (agent.power * totalCoin * powerFactor / 10000) +  (agent.coin * totalPower)
+*/
+  function getHybridScore(address[] calldata candidates, uint256[] calldata powers
+  ) external override onlyCandidate
+      returns (uint256[] memory scores, uint256 totalPower, uint256 totalCoin) {
+
+
+/* @product Called by the CandidateHub contract as part of the turn round flow to to start new round
+   @param validators: List of elected validators in this round
+   @param totalPower: Total power delegated in this round as calculated in getHybridScore()
+   @param totalCoin: Total coin delegated in this round as calculated in getHybridScore()
+   @param round: The new round tag
+
+   @logic
+        1. adds a new round record for the new round with power set to the totalPower value, 
+           coin to the totalCoin value, and powerFactor set to the global powerFactor
+        2. Sets the global roundTag value to be that of the new round
+        3. For each validator calculates a score as follows:
+               new.agent.score = (agent.power * totalCoin * powerFactor / 10000)  +  (agent.coin * totalPower)
+           
+           and adds a new reward to the agent's list for the new round with the new.agent.score 
+           and the agent's coin value
+*/
+  function setNewRound(address[] calldata validators, uint256 totalPower,
+      uint256 totalCoin, uint256 round) external override onlyCandidate {
+
+
+/* @product Called by the CandidateHub contract from the turn round flow to distribute rewards for delegated hash 
+    power for a single validator candidate
+   @param candidate: The operator address of the validator candidate
+   @param miners: List of BTC miners who delegated hash power to the candidate
+   
+   @logic
+        1. Find the candidate.round.reward record i.e. the reward for the current round 
+           and verify its totalReward value is positive
+        2. Calculate a reward.value = 
+              current.round.coin * 1e18 * current.round.powerFactor / 10000 * agent.reward.totalReward / agent.reward.score
+        3. Increase the reward of all the miners in the miners list by reward.value
+        4. Calculate a powerReward value  = reward.value * number.of.candidate.miners
+        5. Calculate a undelegated.coin.reward initial value as follows:
+            if (candidate.coin > candidate.round.reward.coin)
+                undelegated.coin.reward = candidate.round.reward.totalReward * (candidate.coin - candidate.round.reward.coin) * this.round.power / candidate.round.reward.score;
+            else
+                undelegated.coin.reward = 0
+
+        6. If candidate.round.reward.coin = 0 then delete the candidate.round.reward record and
+            set undelegated.coin.reward = candidate.round.remainReward - powerReward
+        7. Else, if either powerReward or undelegated.coin.reward are positive, subtract their 
+           sum from candidate.round.reward.remainReward:
+        8. Finally, if undelegated.coin.reward is positive, call the SystemReward's receiveRewards() 
+           service with eth value of undelegated.coin.reward to store the rewards
+*/
+  function distributePowerReward(address candidate, address[] calldata miners) external override onlyCandidate {
+
+
+  /* @product Invoked by a member to create a new proposal
+     @param targets: List of addresses to interact with
+     @param values: List of values (CORE amount) to send
+     @param signatures: List of signatures
+     @param calldatas: List of calldata
+     @param description: Description of the proposal
+     @return The proposal id
+     @logic
+        1. the targets, values, signatures and calldatas arrays are verified to be of the 
+           same (positive) length but no larger than proposalMaxOperations
+        2. 'one live proposal per proposer' rule:  if a prior proposal by the same proposer 
+           is still active or pending, the proposal is rejected
+        3. Else a proposal record is created with the supplied params with the msg.sender 
+           as the proposer
+  */
+  function propose(
+    address[] memory targets,
+    uint256[] memory values,
+    string[] memory signatures,
+    bytes[] memory calldatas,
+    string memory description
+  ) public onlyInit onlyMember returns (uint256) {
+
+
+/* @product Cast vote on a proposal
+   @param proposalId: The proposal ID
+   @param support: True if the voter supports the proposal
+   @return The receipt of the vote
+   @logic
+      1. the Tx sender is verified to be a registered member else the Tx reverts
+      2. the proposal is verified to be in an Active state else the Tx reverts
+      3. the sender's vote is verified to be not yet cast yet else the Tx reverts
+      4. the sender's vote is executed by incrementing the proposal's for or against counter
+      5. the sender is marked as having voted
+*/
+  function castVote(uint256 proposalId, bool support) 
+        public onlyInit onlyMember onlyIfActiveProposal(proposalId) {    
+
+
+/* @product Obtains the current state of a proposal 
+   @param proposalId: The proposal Id
+   @return The state of the proposal
+   @logic: proposal lifecycle state traversal  
+      1. starts off as pending and continues to be pending until the startBlock+1 is reached,
+         when pending no voting may take place
+      2. moved from pending to active when proposal's startBlock+1 is reached and as long as 
+         proposal's endBlock+1 is not reached voting may take place only when active
+      3. at any point during states Pending or Active, the proposal can be canceled 
+         by the proposer, effectively making the proposal inoperable
+   
+   => AFTER active time:
+
+      4. if proposal.forVotes <= proposal.againstVotes OR proposal.forVotes <= proposal.totalVotes / 2
+         proposal is marked as defeated
+      5. if not defeated AND if block.number <= proposal's endBlock + executingPeriod
+         proposal is marked as succeeded
+      6. if not defeated AND if block.number > proposal's endBlock + executingPeriod
+         proposal is marked as expired
+      7. when the proposal is marked succeeded, it is alledged for execution WITHOUT ADDITIONAL WAIT TIME REQUIREMENT (aka Time-Lock) @openissue
+         on successful execution it will be marked as executed
+*/
+  function getState(uint256 proposalId) public view returns (ProposalState) {
+
+
+/* @product Jail a validator for some rounds and slash some amount of deposits
+   @param operateAddress: The operator address of the validator
+   @param round: The number of rounds to jail
+   @param fine: The amount of deposits to slash
+   @logic
+      1. if the candidate's margin is greater or equal to the sum of the candidate's fine plus 
+         the global dues
+          a. set the release round of the candidate to be the current round plus the 
+             'round' parameter (if the candidate has prior jail period - add to it 
+             the current 'round' parameter)
+          b. subtract the fine's value from the candidate's margin
+          c. and transfer the fine value to the SystemReward contarct
+
+      2. Else:
+          a. remove the candidate from internal structures, and
+          b. transfer the candidate's margin eth value to the SystemReward contract
+  */    
+  function jailValidator(address operateAddress, uint256 round, uint256 fine) 
+        external override onlyValidator onlyIfCandidateAddress {
+
+
+/* @product The `turn round` workflow function
+   @dev this method is called by Golang consensus engine at the end of a round
+   @logic
+      1. call ValidatorSet's distributeReward to distribute rewards for now-ending round
+      2. distribute rewards to all BTC miners who delegated hash power for the now-ending round
+      3. update the system's round tag to the current block.timestamp divided by roundInterval
+      4. reset validator flags for all candidates.
+      5. create a list of all valid candidates and use it to:
+          a. fetch hash power delegated on list of the valid candidates, which is used to 
+             calculate hybrid score for validators in the new round
+          b. calculate the hybrid score for all valid candidates and choose top ones to 
+             form the validator set of the new round. See the documentation of 
+             PledgeAgent.getHybridScore() for the details of the hybrid score calculation
+      6. if a validator's hybrid score is zero - correct its commissionThousandths value to be 1000
+      7. call ValidatorSet's updateValidatorSet() to set the new validators
+      8. clean slash contract decreasing validators' accrued slash indicator points by the system's 
+         per-round point reduction rate
+      9. notify PledgeAgent contract of the new round and the new validators
+      10. remove validators from jail if their jailedRound is <= than the new roundTag
+*/
+  function turnRound() external onlyCoinbase onlyInit onlyZeroGasPrice {
+
+
+/* @product Called by a non-validator address aiming to become a validator candidate on the Core blockchain
+   @param consensusAddr: Consensus address configured on the validator node
+   @param feeAddr: Fee address set to collect system rewards
+   @param commissionThousandths: The commission fee taken by the validator, measured in thousandths (=promils)
+   @logic:
+        1. Apply the following verifications:
+              a. Verify that the candidate limit of CANDIDATE_COUNT_LIMIT (=1000) was not reached
+              b. No double-booking: Verifies that the candidate is not already registered
+              c. Verify that the ether sum carried by this Tx is >= the global 
+                 requiredMargin value
+              d. Verify that the commissionThousandths value is in the open range (0, 1000)
+              e. Verify that the consensusAddr has not been registered before
+              f. Verify that the fee address is valid
+              g. Verify that the Tx sender is not jailed, or that his jail time has ended 
+                 before current roundTag
+        2. And, if all of these tests have passed - register the validator candidate into the system
+ */
+  function register(address consensusAddr, address payable feeAddr, uint32 commissionThousandths)
+    external payable
+    onlyInit onlyIfNotCandidate onlyIfValueExceedsMargin onlyIfConsensusAddrNotExist(consensusAddr)
+  {
+
+
+  /* @product Unregister the validator candidate role on Core blockchain
+     @logic
+      1. if candidate margin exceeds global dues value - transfer the difference to the 
+         candidate and the dues value to the system reward contract
+      2. if candidate margin does not exceed global dues value - only transfer the margin 
+         value to the system reward contract
+  */ 
+  function unregister() external onlyInit onlyIfCandidate {
+
+
+/* @product Called by a candidate to add refundable deposits
+   Motivation: Candidate will not be elected if there are not enough deposits 
+   @logic
+      1. Tx eth value (must be >0) will be appended to candidate's margin value
+      2. If the new candidate's margin value exceeds or is equal to the global requiredMargin 
+         value - the candidate will be promoted to be a validator
+*/
+  function addMargin() external payable onlyInit onlyIfCandidate {
+
+
+/* @product internal function for candidate removal, called by other CandidateHub 
+   functions in the flows of jailing or unregistering candidates
+   @logic
+      2. Candidate gets removed from contract internal structures
+      3. No eth transfer takes place as part of this function
+ */
+  function removeCandidate(uint256 index) internal {
+
+
+/* @product Called by a BTC relayer to store a BTC block on the Core blockchain
+   @param blockBytes: BTC block bytes
+   @logic
+      1. Extracts the header bytes from the blockBytes
+      2. Calculates the blockHash from the header bytes
+      3. Check PoW of a relayed BTC block and exit function (but do not revert) if PoW is invalid
+      4. Verify that the block is no older than 5 days ago and revert if that is not the case. The calculation:
+          blockHeight + 720 > getHeight(heaviestBlock)
+      5. Verify MerkleRoot & pickup candidate address, reward address and bindingHash.
+      6. Save & update rewards
+  */
+  function storeBlockHeader(bytes calldata blockBytes) external onlyRelayer {
+
+
+  /* @product Claim relayer rewards
+     @param relayerAddr: The relayer address
+     @logic Called by relayers to claim their rewards for storing BTC blocks
+      - Reverts if the provided address is not a relayer or if the relayer currently has no reward to claim
+      - Else:  invokes SystemReward's claimRewards() to transfer the reward to the relayer.
+     Note that claimReward() may slash the reward to the current SystemReward balance if the latter is smaller than the reward without reverting the Tx
+     @openissue: This function may be called by any party (not only a relayer) with a relayer address to which the funds will be transferred
+     this might prove problematic for relayers that prefer to choose their own dates of reward reclaiming
+  */
+  function claimRelayerReward(address relayerAddr) external onlyInit {
+
+
+  /* @product Calculate relayer weight based number of BTC blocks relayed
+     @param count: The number of BTC blocks relayed by a specific validator
+     @logic Weight calculation  (maxWeight default value = 20):
+          1. if count <= maxWeight (default: 20) => return count
+          2. else if count in half-open interval (maxWeight, 2*maxWeight] => return maxWeight
+          3. else if count in half-open interval (2*maxWeight, 2.75*maxWeight] => return 3*maxWeight - count
+          4. else return count/4
+   */  
+  function calculateRelayerWeight(uint256 count) public view returns(uint256) {
+
+
+/* @product Receive external funds - currently not limited to system-only invocation
+   @logic
+      1. Receive and stores in the contract an eth amount up to the total contract balance of 
+         incentiveBalanceCap (default value: 1e25)
+      2. If post-transfer balance exeeds incentiveBalanceCap then:
+          a. if in isBurn mode then burn the excess, see the Burn.burn() documentation
+              for details, especially the part detailing that if the total contract 
+              balance (i.e. the sum of all burned tokens) exceeds the burnCap then the 
+              excess (up to the limit of the current sum of tokens to burn) is returned to the SystemReward contract
+          b. if not in isBurn mode - transfer the excess to the FOUNDATION address
+*/
+  function receiveRewards() external payable override onlyInit {
+
+
+/* @product Called by the Light BTC Client for relayers and by the SlashIndicator contracts 
+   to claim a reward for external verifiers (Note: the latter is currently not enforced!)  @openissue
+   @logic
+      1. The function transfers the eth amount specified by the caller to the destination 
+         address.@author.
+      2. If the current SystemReward balance is less than the amount specified by the caller, 
+         then no error is issued rather the amount gets slashed to the current balance.
+*/
+  function claimRewards(address payable to, uint256 amount)
+    external
+    override(ISystemReward)
+    onlyInit
+    onlyOperator
+    returns (uint256)
+  {
+
+
+/* @product Called by a BTC relayer to unregister from the Core blockchain
+   @logic
+      1. Remove the relayer from internal structures
+      2. Transfer (relayer.deposit - relayer.dues) eth to the relayer
+      3. Transfer the relayer.dues eth to the SystemReward contract
+ */
+  function  unregister() external exist onlyInit{
+
+
+ /* @product Burn incoming CORE tokens by locking them inside the 'gated' contract
+     Can be called by anyone, and is currently called by the SystemReward contract as 
+     part of its receiveRewards flow
+     @logic
+        1. if the total contract balance (i.e. the sum of all burned tokens) exceeds 
+           the global burnCap then the excess (up to the limit of the current sum of 
+           tokens to burn) is returned back to the caller
+        2. The rest of the funds remain locked in the contract
+  */      
+  function burn() external payable override {
+
+

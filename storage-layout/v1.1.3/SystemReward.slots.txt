@@ -1,0 +1,7 @@
+[H[2J| Name                | Type                     | Slot | Offset | Bytes | Contract                                |
+|---------------------|--------------------------|------|--------|-------|-----------------------------------------|
+| alreadyInit         | bool                     | 0    | 0      | 1     | contracts/SystemReward.sol:SystemReward |
+| incentiveBalanceCap | uint256                  | 1    | 0      | 32    | contracts/SystemReward.sol:SystemReward |
+| numOperator         | uint256                  | 2    | 0      | 32    | contracts/SystemReward.sol:SystemReward |
+| operators           | mapping(address => bool) | 3    | 0      | 32    | contracts/SystemReward.sol:SystemReward |
+| isBurn              | bool                     | 4    | 0      | 1     | contracts/SystemReward.sol:SystemReward |
