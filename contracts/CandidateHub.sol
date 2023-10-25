@@ -86,7 +86,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   event paramChange(string key, bytes value);
 
   /*********************** init **************************/
-  function init() external onlyNotInit {
+  function init() external onlyNotInit { //@INIT_FUNC
     requiredMargin = INIT_REQUIRED_MARGIN;
     dues = INIT_DUES;
     roundInterval = INIT_ROUND_INTERVAL;

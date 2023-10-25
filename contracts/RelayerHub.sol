@@ -45,7 +45,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   event paramChange(string key, bytes value);
 
 
-  function init() external onlyNotInit{
+  function init() external onlyNotInit{ //@INIT_FUNC
     requiredDeposit = INIT_REQUIRED_DEPOSIT;
     dues = INIT_DUES;
     alreadyInit = true;

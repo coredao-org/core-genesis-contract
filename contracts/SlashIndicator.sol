@@ -57,7 +57,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   event paramChange(string key, bytes value);
 
   
-  function init() external onlyNotInit{
+  function init() external onlyNotInit{ //@INIT_FUNC
     misdemeanorThreshold = MISDEMEANOR_THRESHOLD;
     felonyThreshold = FELONY_THRESHOLD;
     rewardForReportDoubleSign = INIT_REWARD_FOR_REPORT_DOUBLE_SIGN;

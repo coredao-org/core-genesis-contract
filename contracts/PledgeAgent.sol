@@ -118,7 +118,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param target Address of the target candidate
   error SameCandidate(address source, address target);
 
-  function init() external onlyNotInit {
+  function init() external onlyNotInit { //@INIT_FUNC
     requiredCoinDeposit = INIT_REQUIRED_COIN_DEPOSIT;
     powerFactor = INIT_HASH_POWER_FACTOR;
     roundTag = 1;

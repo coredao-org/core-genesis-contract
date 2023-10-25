@@ -121,4 +121,12 @@ contract System {
   /// @param lowerBound requested lower bound of the param.
   /// @param upperBound requested upper bound of the param
   error OutOfBounds(string name, uint256 given, uint256 lowerBound, uint256 upperBound);
+
+  /* @INIT_FUNC: 
+        the init() functions are 'historical' in the sense that they were called one upon platform-contract's 
+        initial deployment and will never be called again including not upon updates. If maliciously called, 
+        the onlyNotInit() modifier should immediatley revert.
+        also, since they do not carry parameters the idetity of their original caller was irrelevant - hence no 
+        ownerOnly or similar access modifier was set
+   */
 }

@@ -89,7 +89,7 @@ contract GovHub is System, IParamSubscriber {
     _;
   }
 
-  function init() external onlyNotInit {
+  function init() external onlyNotInit { //@INIT_FUNC
     proposalMaxOperations = PROPOSAL_MAX_OPERATIONS;
     votingPeriod = VOTING_PERIOD;
     executingPeriod = EXECUTING_PERIOD;

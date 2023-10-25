@@ -17,7 +17,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   bool isBurn;
 
   /*********************** init **************************/
-  function init() external onlyNotInit {
+  function init() external onlyNotInit { //@INIT_FUNC
     operators[LIGHT_CLIENT_ADDR] = true;
     operators[SLASH_CONTRACT_ADDR] = true;
     numOperator = 2;
