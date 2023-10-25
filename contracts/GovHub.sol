@@ -89,7 +89,7 @@ contract GovHub is System, IParamSubscriber {
     _;
   }
 
-  function init() external onlyNotInit { //@INIT_FUNC
+  function init() external onlyNotInit { //see @INIT_FUNC
     proposalMaxOperations = PROPOSAL_MAX_OPERATIONS;
     votingPeriod = VOTING_PERIOD;
     executingPeriod = EXECUTING_PERIOD;
@@ -208,7 +208,7 @@ contract GovHub is System, IParamSubscriber {
 
   /// Execute the proposal
   /// @param proposalId The proposal Id
-  function execute(uint256 proposalId) public payable onlyInit {
+  function execute(uint256 proposalId) public payable nonReentrant onlyInit {
     require(getState(proposalId) == ProposalState.Succeeded, "proposal can only be executed if it is succeeded");
     Proposal storage proposal = proposals[proposalId];
     proposal.executed = true;

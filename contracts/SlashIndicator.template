@@ -60,7 +60,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   function getSlashValidators() external view returns (address[] memory) {
     return validators;
   }{% endif %}
-  function init() external onlyNotInit{
+  function init() external onlyNotInit{ //see @INIT_FUNC
     misdemeanorThreshold = MISDEMEANOR_THRESHOLD;
     felonyThreshold = FELONY_THRESHOLD;
     rewardForReportDoubleSign = INIT_REWARD_FOR_REPORT_DOUBLE_SIGN;

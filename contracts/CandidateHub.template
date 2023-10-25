@@ -108,7 +108,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   event paramChange(string key, bytes value);
 
   /*********************** init **************************/
-  function init() external onlyNotInit {
+  function init() external onlyNotInit { //see @INIT_FUNC
     requiredMargin = INIT_REQUIRED_MARGIN;
     dues = INIT_DUES;
     roundInterval = INIT_ROUND_INTERVAL;
@@ -354,7 +354,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       2. if candidate margin does not exceed global dues value - only transfer the margin 
          value to the system reward contract
   */ 
-  function unregister() external onlyInit onlyIfCandidate {
+  function unregister() external nonReentrant onlyInit onlyIfCandidate {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     require(c.status == (c.status & UNREGISTER_STATUS), "candidate status is not cleared");

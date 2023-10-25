@@ -13,7 +13,7 @@ contract Burn is System, IBurn, IParamSubscriber {
   uint256 public burnCap;
 
   /*********************** init **************************/
-  function init() external onlyNotInit { //@INIT_FUNC
+  function init() external onlyNotInit { //see @INIT_FUNC
     burnCap = BURN_CAP;
     alreadyInit = true;
   }

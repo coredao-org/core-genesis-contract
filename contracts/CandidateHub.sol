@@ -59,6 +59,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
   uint256 public roundTag;
   
+  bool public controlRoundTimeTag = false;
+  
 
   struct Candidate {
     address operateAddr;
@@ -71,8 +73,28 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     uint256 commissionLastRoundValue;
   }
 
-  modifier exist() {
+  modifier onlyIfCandidate() {
     require(operateMap[msg.sender] != 0, "candidate does not exist");
+    _;
+  }
+
+  modifier onlyIfCandidateAddress(address operateAddress) {
+    require(operateMap[operateAddress] > 0, "not a candidate");
+    _;
+  }
+
+  modifier onlyIfConsensusAddrNotExist(address consensusAddr) {
+    require(consensusMap[consensusAddr] == 0, "consensus already exists");
+    _;
+  }
+
+  modifier onlyIfNotCandidate() {
+    require(operateMap[msg.sender] == 0, "candidate already exists");
+    _;
+  }
+
+  modifier onlyIfValueExceedsMargin() {
+    require(msg.value >= requiredMargin, "deposit is not enough");
     _;
   }
 
@@ -86,7 +108,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   event paramChange(string key, bytes value);
 
   /*********************** init **************************/
-  function init() external onlyNotInit { //@INIT_FUNC
+  function init() external onlyNotInit { //see @INIT_FUNC
     requiredMargin = INIT_REQUIRED_MARGIN;
     dues = INIT_DUES;
     roundInterval = INIT_ROUND_INTERVAL;
@@ -94,6 +116,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     maxCommissionChange = MAX_COMMISSION_CHANGE;
     roundTag = 7;
     alreadyInit = true;
+  }
+  
+  function setControlRoundTimeTag(bool value) external {
+    controlRoundTimeTag = value;
   }
   
   /********************* ICandidateHub interface ****************************/
@@ -109,11 +135,26 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     return status == (status & ACTIVE_STATUS);
   }
 
-  /// Jail a validator for some rounds and slash some amount of deposits
-  /// @param operateAddress The operator address of the validator
-  /// @param round The number of rounds to jail
-  /// @param fine The amount of deposits to slash
-  function jailValidator(address operateAddress, uint256 round, uint256 fine) external override onlyValidator {
+
+/* @product Jail a validator for some rounds and slash some amount of deposits
+   @param operateAddress: The operator address of the validator
+   @param round: The number of rounds to jail
+   @param fine: The amount of deposits to slash
+   @logic
+      1. if the candidate's margin is greater or equal to the sum of the candidate's fine plus 
+         the global dues
+          a. set the release round of the candidate to be the current round plus the 
+             'round' parameter (if the candidate has prior jail period - add to it 
+             the current 'round' parameter)
+          b. subtract the fine's value from the candidate's margin
+          c. and transfer the fine value to the SystemReward contarct
+
+      2. Else:
+          a. remove the candidate from internal structures, and
+          b. transfer the candidate's margin eth value to the SystemReward contract
+  */    
+  function jailValidator(address operateAddress, uint256 round, uint256 fine) 
+        external override onlyValidator onlyIfCandidateAddress {
     uint256 index = operateMap[operateAddress];
     if (index == 0) return;
 
@@ -152,8 +193,27 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   /********************* External methods  ****************************/
-  /// The `turn round` workflow
-  /// @dev this method is called by Golang consensus engine at the end of a round
+  
+/* @product The `turn round` workflow function
+   @dev this method is called by Golang consensus engine at the end of a round
+   @logic
+      1. call ValidatorSet's distributeReward to distribute rewards for now-ending round
+      2. distribute rewards to all BTC miners who delegated hash power for the now-ending round
+      3. update the system's round tag to the current block.timestamp divided by roundInterval
+      4. reset validator flags for all candidates.
+      5. create a list of all valid candidates and use it to:
+          a. fetch hash power delegated on list of the valid candidates, which is used to 
+             calculate hybrid score for validators in the new round
+          b. calculate the hybrid score for all valid candidates and choose top ones to 
+             form the validator set of the new round. See the documentation of 
+             PledgeAgent.getHybridScore() for the details of the hybrid score calculation
+      6. if a validator's hybrid score is zero - correct its commissionThousandths value to be 1000
+      7. call ValidatorSet's updateValidatorSet() to set the new validators
+      8. clean slash contract decreasing validators' accrued slash indicator points by the system's 
+         per-round point reduction rate
+      9. notify PledgeAgent contract of the new round and the new validators
+      10. remove validators from jail if their jailedRound is <= than the new roundTag
+*/
   function turnRound() external onlyCoinbase onlyInit onlyZeroGasPrice {
     // distribute rewards for the about to end round
     address[] memory lastCandidates = IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward();
@@ -168,9 +228,15 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
     // update the system round tag; new round starts
     
+    if (controlRoundTimeTag == false) {
+    
     uint256 roundTimestamp = block.timestamp / roundInterval;
     require(roundTimestamp > roundTag, "not allowed to turn round, wait for more time");
     roundTag = roundTimestamp;
+    
+    } else {
+        roundTag++;
+    }
     
 
     // reset validator flags for all candidates.
@@ -243,19 +309,30 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   /****************** register/unregister ***************************/
-  /// Register as a validator candidate on Core blockchain
-  /// @param consensusAddr Consensus address configured on the validator node
-  /// @param feeAddr Fee address set to collect system rewards
-  /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths
+  
+/* @product Called by a non-validator address aiming to become a validator candidate on the Core blockchain
+   @param consensusAddr: Consensus address configured on the validator node
+   @param feeAddr: Fee address set to collect system rewards
+   @param commissionThousandths: The commission fee taken by the validator, measured in thousandths (=promils)
+   @logic:
+        1. Apply the following verifications:
+              a. Verify that the candidate limit of CANDIDATE_COUNT_LIMIT (=1000) was not reached
+              b. No double-booking: Verifies that the candidate is not already registered
+              c. Verify that the ether sum carried by this Tx is >= the global 
+                 requiredMargin value
+              d. Verify that the commissionThousandths value is in the open range (0, 1000)
+              e. Verify that the consensusAddr has not been registered before
+              f. Verify that the fee address is valid
+              g. Verify that the Tx sender is not jailed, or that his jail time has ended 
+                 before current roundTag
+        2. And, if all of these tests have passed - register the validator candidate into the system
+ */
   function register(address consensusAddr, address payable feeAddr, uint32 commissionThousandths)
     external payable
-    onlyInit
+    onlyInit onlyIfNotCandidate onlyIfValueExceedsMargin onlyIfConsensusAddrNotExist(consensusAddr)
   {
     require(candidateSet.length <= CANDIDATE_COUNT_LIMIT, "maximum candidate size reached");
-    require(operateMap[msg.sender] == 0, "candidate already exists");
-    require(msg.value >= requiredMargin, "deposit is not enough");
     require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should be in (0, 1000)");
-    require(consensusMap[consensusAddr] == 0, "consensus already exists");
     require(consensusAddr != address(0), "consensus address should not be zero");
     require(feeAddr != address(0), "fee address should not be zero");
     // check jail status
@@ -270,8 +347,14 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     emit registered(msg.sender, consensusAddr, feeAddr, commissionThousandths, msg.value);
   }
 
-  /// Unregister the validator candidate role on Core blockchain
-  function unregister() external onlyInit exist {
+  /* @product Unregister the validator candidate role on Core blockchain
+     @logic
+      1. if candidate margin exceeds global dues value - transfer the difference to the 
+         candidate and the dues value to the system reward contract
+      2. if candidate margin does not exceed global dues value - only transfer the margin 
+         value to the system reward contract
+  */ 
+  function unregister() external nonReentrant onlyInit onlyIfCandidate {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     require(c.status == (c.status & UNREGISTER_STATUS), "candidate status is not cleared");
@@ -292,7 +375,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @param consensusAddr Consensus address configured on the validator node
   /// @param feeAddr Fee address set to collect system rewards
   /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths  
-  function update(address consensusAddr, address payable feeAddr, uint32 commissionThousandths) external onlyInit exist{
+  function update(address consensusAddr, address payable feeAddr, uint32 commissionThousandths) external onlyInit onlyIfCandidate {
     require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should in range (0, 1000)");
     require(consensusAddr != address(0), "consensus address should not be zero");
     require(feeAddr != address(0), "fee address should not be zero");
@@ -323,7 +406,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
   /// Refuse to accept delegate from others
   /// @dev Candidate will not be elected in this state
-  function refuseDelegate() external onlyInit exist {
+  function refuseDelegate() external onlyInit onlyIfCandidate {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     uint256 status = c.status | SET_INACTIVE;
@@ -331,16 +414,21 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   /// Accept delegate from others
-  function acceptDelegate() external onlyInit exist {
+  function acceptDelegate() external onlyInit onlyIfCandidate {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
     uint256 status = c.status & DEL_INACTIVE;
     changeStatus(c, status);
   }
 
-  /// Add refundable deposits
-  /// @dev Candidate will not be elected if there are not enough deposits
-  function addMargin() external payable onlyInit exist {
+/* @product Called by a candidate to add refundable deposits
+   Motivation: Candidate will not be elected if there are not enough deposits 
+   @logic
+      1. Tx eth value (must be >0) will be appended to candidate's margin value
+      2. If the new candidate's margin value exceeds or is equal to the global requiredMargin 
+         value - the candidate will be promoted to be a validator
+*/
+  function addMargin() external payable onlyInit onlyIfCandidate {
     require(msg.value != 0, "value should not be zero");
     uint256 index = operateMap[msg.sender];
     uint256 totalMargin = candidateSet[index - 1].margin + msg.value;
@@ -363,6 +451,12 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     }
   }
 
+/* @product internal function for candidate removal, called by other CandidateHub 
+   functions in the flows of jailing or unregistering candidates
+   @logic
+      2. Candidate gets removed from contract internal structures
+      3. No eth transfer takes place as part of this function
+ */
   function removeCandidate(uint256 index) internal {
     Candidate storage c = candidateSet[index - 1];
 

@@ -110,7 +110,7 @@ contract GovHub is System, IParamSubscriber {
     _;
   }
 
-  function init() external onlyNotInit {
+  function init() external onlyNotInit { //see @INIT_FUNC
     proposalMaxOperations = PROPOSAL_MAX_OPERATIONS;
     votingPeriod = VOTING_PERIOD;
     executingPeriod = EXECUTING_PERIOD;
@@ -152,6 +152,7 @@ contract GovHub is System, IParamSubscriber {
     );
     require(targets.length != 0, "must provide actions");
     require(targets.length <= proposalMaxOperations, "too many actions");
+    require(_allPlatformContracts(targets), "not platform contracts");
 
     uint256 proposalId = latestProposalIds[msg.sender];
     if (proposalId != 0) {
@@ -243,11 +244,12 @@ contract GovHub is System, IParamSubscriber {
 
   /// Execute the proposal
   /// @param proposalId The proposal Id
-  function execute(uint256 proposalId) public payable onlyInit onlyIfSuccessfulProposal(proposalId) {
+  function execute(uint256 proposalId) public payable nonReentrant onlyInit onlyIfSuccessfulProposal(proposalId) {
     Proposal storage proposal = proposals[proposalId];
     proposal.executed = true;
     uint256 targetSize = proposal.targets.length;
     for (uint256 i = 0; i < targetSize; i++) {
+      address _target = proposal.targets[i];
       bytes memory callData;
       if (bytes(proposal.signatures[i]).length == 0) {
         callData = proposal.calldatas[i];
@@ -255,9 +257,9 @@ contract GovHub is System, IParamSubscriber {
         callData = abi.encodePacked(bytes4(keccak256(bytes(proposal.signatures[i]))), proposal.calldatas[i]);
       }
 
-      (bool success, bytes memory returnData) = proposal.targets[i].call{ value: proposal.values[i] }(callData);
+      (bool success, bytes memory returnData) = _target.call{ value: proposal.values[i] }(callData);
       require(success, "Transaction execution reverted.");
-      emit ExecuteTransaction(proposal.targets[i], proposal.values[i], proposal.signatures[i], proposal.calldatas[i]);
+      emit ExecuteTransaction(_target, proposal.values[i], proposal.signatures[i], proposal.calldatas[i]);
     }
     emit ProposalExecuted(proposalId);
   }

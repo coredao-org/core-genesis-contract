@@ -21,7 +21,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   uint256 public constant BLOCK_REWARD = 3e18;
   uint256 public constant BLOCK_REWARD_INCENTIVE_PERCENT = 10;
   uint256 public constant REDUCE_FACTOR = 9639;
-  uint256 public constant SUBSIDY_REDUCE_INTERVAL = 10512000;
+  uint256 public  SUBSIDY_REDUCE_INTERVAL = 10512000;
 
   bytes public constant INIT_VALIDATORSET_BYTES = hex"f90285ea944121f067b0f5135d77c29b2b329e8cb1bd96c96094f8b18cecc98d976ad253d38e4100a73d4e154726ea947f461f8a1c35edecd6816e76eb2e84eb661751ee94f8b18cecc98d976ad253d38e4100a73d4e154726ea94fd806ab93db5742944b7b50ce759e5eee5f6fe5094f8b18cecc98d976ad253d38e4100a73d4e154726ea947ef3a94ad1c443481fb3d86829355ca90477f8b594f8b18cecc98d976ad253d38e4100a73d4e154726ea9467d1ad48f91e131413bd0b04e823f3ae4f81e85394f8b18cecc98d976ad253d38e4100a73d4e154726ea943fb42cab4416024dc1b4c9e21b9acd0dfcef35f694f8b18cecc98d976ad253d38e4100a73d4e154726ea943511e3b8ac7336b99517d324145e9b5bb33e08a494f8b18cecc98d976ad253d38e4100a73d4e154726ea94729f39a54304fcc6ec279684c71491a385d7b9ae94f8b18cecc98d976ad253d38e4100a73d4e154726ea94f44a785fd9f23f0abd443541386e71356ce619dc94f8b18cecc98d976ad253d38e4100a73d4e154726ea942efd3cf0733421aec3e4202480d0a90bd157514994f8b18cecc98d976ad253d38e4100a73d4e154726ea94613b0f519ada008cb99b6130e89122ba416bf15994f8b18cecc98d976ad253d38e4100a73d4e154726ea94c0925eeb800ff6ba4695ded61562a10102152b5f94f8b18cecc98d976ad253d38e4100a73d4e154726ea9419e3c7d7e69f273f3f91c060bb438a007f6fc33c94f8b18cecc98d976ad253d38e4100a73d4e154726ea94e127f110d172a0c4c6209fe045dd71781e8fe9d494f8b18cecc98d976ad253d38e4100a73d4e154726ea94f778dc4a199a440dbe9f16d1e13e185bb179b3b794f8b18cecc98d976ad253d38e4100a73d4e154726";
 
@@ -65,8 +65,13 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   event paramChange(string key, bytes value);
   event received(address indexed from, uint256 amount);
 
+  modifier onlyIfCurrentValidator(address validator) {
+    require(currentValidatorSetMap[validator] > 0, "not a current validator");
+    _;
+  }
+
   /*********************** init **************************/
-  function init() external onlyNotInit { //@INIT_FUNC
+  function init() external onlyNotInit { //see @INIT_FUNC
     (Validator[] memory validatorSet, bool valid) = decodeValidatorSet(INIT_VALIDATORSET_BYTES);
     require(valid, "failed to parse init validatorSet");
     uint256 validatorSize = validatorSet.length;
@@ -93,9 +98,20 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
   }
 
-  /// Add block reward on a validator 
-  /// @dev This method is called by the golang consensus engine every block
-  /// @param valAddr The validator address
+/* @product Called by the current block producer to add block reward to a validator
+   @logic
+      1. The caller passes with this call eth value that is not tested for min/max caps @openissue
+      2. If the current block number is a multiplier of SUBSIDY_REDUCE_INTERVAL (=10512000) 
+         the blockReward is reduced - from this operation henceforth - by a factor of 0.9639
+      3. if the validator address is valid, the validator's income is increased by a value 
+         calculated as follows:
+            a. start with the eth value passed by the block producer with the call
+            b. if the ValidatorSet balance (not including current transfer) is equal
+               or larger than the global totalInCome + blockReward then add blockReward eth 
+               to the value
+      4. ..And the global totalInCome value is increased by the same value
+      5. Else - a deprecatedDeposit() event is emitted
+*/
   function deposit(address valAddr) external payable onlyCoinbase onlyInit onlyZeroGasPrice {
     if (block.number % SUBSIDY_REDUCE_INTERVAL == 0) {
       blockReward = blockReward * REDUCE_FACTOR / 10000;
@@ -115,9 +131,27 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
   }
 
-  /// Distribute rewards to validators (and delegators through PledgeAgent)
-  /// @dev this method is called by the CandidateHub contract at the beginning of turn round
-  /// @dev this is where we deal with reward distribution logics
+/* @product Called by the CandidateHub contract at the beginning of turn round to distribute 
+    rewards to all validators (and delegators through PledgeAgent)
+   
+   @logic
+      1. all validators are iterated and for each an incentive value value is calculated 
+         to be 1% of the sum of the current validator income plus a global
+         blockRewardIncentivePercent value
+      2. Each validator's income gets reduce by the validator's incentive values
+      3. The sum of all validator's incentive values is stored as incentiveSum
+      4. After that the SystemReward's receiveRewards function is invoked with eth value
+         set to incentiveSum, read its doc for the details of its action
+      5. Once done, the validators are iterated over again and, for each validator:
+         if the validator's fee is positive that the validator reward is sent to the validator's 
+         fee address, after which the validator's income is zeroed the validator reward is 
+         calculated as a single promile (1/1000) of the validator's income times the 
+         validator's commissionThousandths value and the rewardSum of all validators is set 
+         to be the sum of all validators' (income - reward) values
+      6. After that, the PledgeAgent contract addRoundReward() function is invoked with eth value set 
+         to rewardSum and with operateAddressList and rewardList as params. Read its documentation for details.
+      7. Finally the global totalInCome value is set to zero
+*/
   function distributeReward() external override onlyCandidate returns (address[] memory operateAddressList) {
     address payable feeAddress;
     uint256 validatorReward;
@@ -163,11 +197,19 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     return operateAddressList;
   } 
 
-  /// Update validator set of the new round with elected validators 
-  /// @param operateAddrList List of validator operator addresses
-  /// @param consensusAddrList List of validator consensus addresses
-  /// @param feeAddrList List of validator fee addresses
-  /// @param commissionThousandthsList List of validator commission fees in thousandth
+/* @product Called by the CandidateHub contract as part of the turn round flow to update validator 
+       set of the new round with elected validators
+   @param operateAddrList: List of validator operator addresses
+   @param consensusAddrList: List of validator consensus addresses
+   @param feeAddrList: List of validator fee addresses
+   @param commissionThousandthsList: List of validator commission fees in promils (=thousandth)
+
+   @logic
+      1. The function validates that all list parameters are of the same length and that
+         each element commissionThousandthsList is less than 1000
+      2. It then replaces the current validators with the newly passed ones, each validator containing
+         an operate address, a consensus addrress, a fee address and a commissionThousandths count
+*/
   function updateValidatorSet(
     address[] calldata operateAddrList,
     address[] calldata consensusAddrList,
@@ -255,15 +297,24 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
   }
 
-  /// Slash the validator for felony behaviors
-  /// @param validator The validator to slash
-  /// @param felonyRound The number of rounds to jail
-  /// @param felonyDeposit The amount of deposits to slash
-  function felony(address validator, uint256 felonyRound, uint256 felonyDeposit) external override onlySlash {
+/* @product Called by the Slash contract (only) to slash validators for felony behaviors
+   @param validator: The validator to slash
+   @param felonyRound: The number of rounds to jail the validator
+   @param felonyDeposit: The amount of deposits to slash
+
+   @logic
+        1. If the 'bad' validator is the only validator then he will not be jailed, but 
+           his income will be zeroed
+        2. Else the validator will be removed from the current.validators list
+        3. And a sum equal to the 'bad' validator income will be equally divided between the 
+           rest of the validators without clearing of the 'bad' validator's income @openissue
+        4. Finally the CandidateHub's jailValidator() function will be invoked to place the 
+           validator in jail for felonyRound and slash some amount of deposits. Read its 
+           documentation for more details
+*/
+  function felony(address validator, uint256 felonyRound, uint256 felonyDeposit) 
+            external override onlySlash onlyIfCurrentValidator(validator) {
     uint256 index = currentValidatorSetMap[validator];
-    if (index == 0) {
-      return;
-    }
     // the actually index
     index = index - 1;
     uint256 income = currentValidatorSet[index].income;

@@ -6,6 +6,7 @@ import "./interface/IRelayerHub.sol";
 contract System {
 
   bool public alreadyInit;
+  bool public s_guardIsActive;
 
 {% if mock %}
   address public VALIDATOR_CONTRACT_ADDR;
@@ -110,6 +111,13 @@ contract System {
 
   modifier openForAll() {_;}
 
+  modifier nonReentrant() {
+    require(!s_guardIsActive, "reentrancy detected");
+    s_guardIsActive = true;
+    _;
+    s_guardIsActive = false;
+  }
+
   /// The length of param mismatch. Default is 32 bytes.
   /// @param name the name of param.
   error MismatchParamLength(string name);
@@ -121,6 +129,28 @@ contract System {
   /// @param lowerBound requested lower bound of the param.
   /// @param upperBound requested upper bound of the param
   error OutOfBounds(string name, uint256 given, uint256 lowerBound, uint256 upperBound);
+
+  function _allPlatformContracts(address[] memory _addrs) internal view returns(bool) {
+    for (uint i = 0; i < _addrs.length; i++) {
+      if (!_isPlatformContract(_addrs[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function _isPlatformContract(address addr) private view returns(bool) {
+    return addr == VALIDATOR_CONTRACT_ADDR ||
+           addr == SLASH_CONTRACT_ADDR ||
+           addr == SYSTEM_REWARD_ADDR ||
+           addr == LIGHT_CLIENT_ADDR ||
+           addr == RELAYER_HUB_ADDR ||
+           addr == CANDIDATE_HUB_ADDR ||
+           addr == GOV_HUB_ADDR ||
+           addr == PLEDGE_AGENT_ADDR ||
+           addr == BURN_ADDR ||
+           addr == FOUNDATION_ADDR;
+  }
 
   /* @INIT_FUNC: 
         the init() functions are 'historical' in the sense that they were called one upon platform-contract's 
