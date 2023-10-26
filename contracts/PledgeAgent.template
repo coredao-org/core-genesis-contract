@@ -206,7 +206,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     scores = new uint256[](candidateSize);
     for (uint256 i = 0; i < candidateSize; ++i) {
       Agent storage a = agentsMap[candidates[i]];
-      scores[i] = a.power * totalCoin * powerFactor / 10000 + a.coin * totalPower;
+      scores[i] = a.power * totalCoin * powerFactor / 10000 + a.coin * totalPower; //@openissue
     }
     return (scores, totalPower, totalCoin);
   }

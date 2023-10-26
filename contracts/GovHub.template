@@ -313,7 +313,7 @@ contract GovHub is System, IParamSubscriber {
 
   /// Add a member
   /// @param member The new member address
-  function addMember(address member) external onlyInit onlyGov {
+  function addMember(address member) external onlyInit onlyGov { //@openissue
     require(members[member] == 0, "member already exists");
     memberSet.push(member);
     members[member] = memberSet.length;
@@ -322,7 +322,7 @@ contract GovHub is System, IParamSubscriber {
 
   /// Remove a member
   /// @param member The address of the member to remove
-  function removeMember(address member) external onlyInit onlyGov onlyIfMember(member) {
+  function removeMember(address member) external onlyInit onlyGov onlyIfMember(member) { //@openissue
     require(memberSet.length > 5, "at least five members in DAO");
     uint256 index = members[member]; //@openissue
     if (index != memberSet.length) {
@@ -331,7 +331,7 @@ contract GovHub is System, IParamSubscriber {
       members[addr] = index;
     }
     memberSet.pop();
-    delete members[member];
+    delete members[member]; //@openissue
     emit MemberDeleted(member);
   }
 

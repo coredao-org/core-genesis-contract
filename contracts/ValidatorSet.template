@@ -18,7 +18,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   using RLPDecode for RLPDecode.Iterator;
   using RLPDecode for RLPDecode.RLPItem;
 
-  uint256 public constant BLOCK_REWARD = 3e18;
+  uint256 public constant BLOCK_REWARD = 3e18; //@openissue
   uint256 public constant BLOCK_REWARD_INCENTIVE_PERCENT = 10;
   uint256 public constant REDUCE_FACTOR = 9639;
   uint256 public {% if not mock %}constant{% endif %} SUBSIDY_REDUCE_INTERVAL = 10512000;
@@ -116,7 +116,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     if (block.number % SUBSIDY_REDUCE_INTERVAL == 0) {
       blockReward = blockReward * REDUCE_FACTOR / 10000;
     }
-    uint256 value = msg.value;
+    uint256 value = msg.value; // @openissue
     if (address(this).balance >= totalInCome + value + blockReward) {
       value += blockReward;
     }

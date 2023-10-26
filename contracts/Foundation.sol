@@ -24,7 +24,7 @@ contract Foundation is System {
     if (ret) {
       emit fundSuccess(payee, amount);
     } else {
-      emit fundFailed(payee, amount, address(this).balance);
+      emit fundFailed(payee, amount, address(this).balance); //@openissue
     }
   }
 }
