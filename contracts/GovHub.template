@@ -301,7 +301,7 @@ contract GovHub is System, IParamSubscriber {
     } else if (block.number > proposal.endBlock + executingPeriod) {
       return ProposalState.Expired;
     } else {
-      return ProposalState.Succeeded;
+      return ProposalState.Succeeded; //@openissue
     }
   }
 
