@@ -18,7 +18,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   uint256 public dues;
 
   mapping(address =>Relayer) relayers;
-  mapping(address =>bool) relayersExistMap;
+  mapping(address =>bool) relayersExistMap; //@openissue
 
   struct Relayer{
     uint256 deposit;

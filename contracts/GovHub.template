@@ -32,7 +32,7 @@ contract GovHub is System, IParamSubscriber {
 
   event paramChange(string key, bytes value);
   event receiveDeposit(address indexed from, uint256 amount);
-  event VoteCast(address voter, uint256 proposalId, bool support);
+  event VoteCast(address voter, uint256 proposalId, bool support); //@openissue
   event ProposalCreated(
     uint256 id,
     address proposer,
@@ -66,7 +66,7 @@ contract GovHub is System, IParamSubscriber {
     uint256 totalVotes;
     bool canceled;
     bool executed;
-    mapping(address => Receipt) receipts;
+    mapping(address => Receipt) receipts; //@openissue
   }
 
   struct Receipt {
@@ -215,11 +215,11 @@ contract GovHub is System, IParamSubscriber {
       4. the sender's vote is executed by incrementing the proposal's for or against counter
       5. the sender is marked as having voted
 */
-  function castVote(uint256 proposalId, bool support) 
+  function castVote(uint256 proposalId, bool support) //@openissue
         public onlyInit onlyMember onlyIfActiveProposal(proposalId) {    
     Proposal storage proposal = proposals[proposalId];
     Receipt storage receipt = proposal.receipts[msg.sender];
-    require(!receipt.hasVoted, "voter already voted");
+    require(!receipt.hasVoted, "voter already voted"); //@openissue
     if (support) {
       proposal.forVotes += 1;
     } else {
@@ -245,7 +245,7 @@ contract GovHub is System, IParamSubscriber {
   /// Execute the proposal
   /// @param proposalId The proposal Id
   function execute(uint256 proposalId) public payable nonReentrant onlyInit onlyIfSuccessfulProposal(proposalId) { //@openissue
-    Proposal storage proposal = proposals[proposalId];
+    Proposal storage proposal = proposals[proposalId]; //@openissue
     proposal.executed = true;
     uint256 targetSize = proposal.targets.length;
     for (uint256 i = 0; i < targetSize; i++) {
@@ -256,7 +256,7 @@ contract GovHub is System, IParamSubscriber {
         callData = abi.encodePacked(bytes4(keccak256(bytes(proposal.signatures[i]))), proposal.calldatas[i]);
       }
       address _target = proposal.targets[i];
-      (bool success, bytes memory returnData) = _target.call{ value: proposal.values[i] }(callData); //@dev:unsafe
+      (bool success, bytes memory returnData) = _target.call{ value: proposal.values[i] }(callData); //@dev:unsafe  //@openissue
       require(success, "Transaction execution reverted.");
       emit ExecuteTransaction(_target, proposal.values[i], proposal.signatures[i], proposal.calldatas[i]);
     }
@@ -324,7 +324,7 @@ contract GovHub is System, IParamSubscriber {
   /// @param member The address of the member to remove
   function removeMember(address member) external onlyInit onlyGov onlyIfMember(member) {
     require(memberSet.length > 5, "at least five members in DAO");
-    uint256 index = members[member];
+    uint256 index = members[member]; //@openissue
     if (index != memberSet.length) {
       address addr = memberSet[memberSet.length - 1];
       memberSet[index - 1] = addr;
