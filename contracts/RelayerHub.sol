@@ -45,14 +45,14 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   event paramChange(string key, bytes value);
 
 
-  function init() external onlyNotInit{ //see @INIT_FUNC
+  function init() external onlyNotInit{ //see @dev:init
     requiredDeposit = INIT_REQUIRED_DEPOSIT;
     dues = INIT_DUES;
     alreadyInit = true;
   }
 
   /// Register as a BTC relayer on Core blockchain
-  function register() external payable noExist onlyInit noProxy{
+  function register() external payable noExist onlyInit noProxy{ //@openissue
     require(msg.value == requiredDeposit, "deposit value does not match requirement");
     relayers[msg.sender] = Relayer(requiredDeposit, dues);
     relayersExistMap[msg.sender] = true;
@@ -69,7 +69,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     Relayer memory r = relayers[msg.sender];
     delete relayersExistMap[msg.sender];
     delete relayers[msg.sender];
-    payable(msg.sender).transfer(r.deposit - r.dues);
+    payable(msg.sender).transfer(r.deposit - r.dues); //@dev:unsafe
     payable(SYSTEM_REWARD_ADDR).transfer(r.dues);
     emit relayerUnRegister(msg.sender);
   }

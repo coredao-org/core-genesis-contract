@@ -266,7 +266,7 @@ library RLPDecode {
         }
 
         // left over bytes. Mask is used to remove unwanted bytes from the word
-        unchecked { 
+        unchecked {  //@openissue
             uint mask = 256 ** (WORD_SIZE - len) - 1;
             assembly {
                 let srcpart := and(mload(src), not(mask)) // zero out src

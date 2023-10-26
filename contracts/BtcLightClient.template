@@ -87,7 +87,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
   /*********************** init **************************/
   /// Initialize 
-  function init() external onlyNotInit { //see @INIT_FUNC
+  function init() external onlyNotInit { //see @dev:init
     bytes32 blockHash = doubleShaFlip(INIT_CONSENSUS_STATE_BYTES);
     address rewardAddr;
     address candidateAddr;

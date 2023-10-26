@@ -17,7 +17,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   bool isBurn;
 
   /*********************** init **************************/
-  function init() external onlyNotInit { //see @INIT_FUNC
+  function init() external onlyNotInit { //see @dev:init
     operators[LIGHT_CLIENT_ADDR] = true;
     operators[SLASH_CONTRACT_ADDR] = true;
     numOperator = 2;
@@ -84,7 +84,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   {
     uint256 actualAmount = amount < address(this).balance ? amount : address(this).balance;
     if (to != address(0) && actualAmount != 0) {
-      to.transfer(actualAmount);
+      to.transfer(actualAmount); //@dev:unsafe
       emit rewardTo(to, actualAmount);
     } else {
       emit rewardEmpty();

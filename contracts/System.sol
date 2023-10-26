@@ -54,7 +54,7 @@ contract System {
     _;
   }
 
-  modifier onlyNotInit() {
+  modifier onlyNotInit() { //@openissue
     require(!alreadyInit, "the contract already init");
     _;
   }
@@ -137,7 +137,7 @@ contract System {
            addr == FOUNDATION_ADDR;
   }
 
-  /* @INIT_FUNC: 
+  /* @dev:init
         the init() functions are 'historical' in the sense that they were called one upon platform-contract's 
         initial deployment and will never be called again including not upon updates. If maliciously called, 
         the onlyNotInit() modifier should immediatley revert.

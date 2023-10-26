@@ -71,7 +71,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   }
 
   /*********************** init **************************/
-  function init() external onlyNotInit { //see @INIT_FUNC
+  function init() external onlyNotInit { //see @dev:init
     (Validator[] memory validatorSet, bool valid) = decodeValidatorSet(INIT_VALIDATORSET_BYTES);
     require(valid, "failed to parse init validatorSet");
     uint256 validatorSize = validatorSet.length;

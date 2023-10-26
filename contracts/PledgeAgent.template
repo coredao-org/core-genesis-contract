@@ -118,7 +118,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param target Address of the target candidate
   error SameCandidate(address source, address target);
 
-  function init() external onlyNotInit { //see @INIT_FUNC
+  function init() external onlyNotInit { //see @dev:init
     requiredCoinDeposit = INIT_REQUIRED_COIN_DEPOSIT;
     powerFactor = INIT_HASH_POWER_FACTOR;
     roundTag = 1;
@@ -346,7 +346,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param amount The amount of CORE to undelegate
   function undelegateCoin(address agent, uint256 amount) public nonReentrant {
     (uint256 deposit, ) = undelegateCoin(agent, msg.sender, amount, false);
-    Address.sendValue(payable(msg.sender), deposit);
+    Address.sendValue(payable(msg.sender), deposit); //@dev:unsafe
     emit undelegatedCoin(agent, msg.sender, deposit);
   }
 
@@ -377,7 +377,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Claim reward for delegator
   /// @param agentList The list of validators to claim rewards on, it can be empty
   /// @return (Amount claimed, Are all rewards claimed)
-  function claimReward(address[] calldata agentList) external distributeReward returns (uint256, bool) {
+  function claimReward(address[] calldata agentList) external distributeReward returns (uint256, bool) { //@openissue
     // limit round count to control gas usage
     int256 roundLimit = 500;
     uint256 reward;
@@ -417,7 +417,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   /*********************** Internal methods ***************************/
   function distributeReward(address payable delegator, uint256 reward) internal {
-    Address.sendValue(delegator, reward);
+    Address.sendValue(delegator, reward); //@dev:unsafe
     emit claimedReward(delegator, msg.sender, reward, true);
   }
 

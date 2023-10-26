@@ -108,7 +108,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   event paramChange(string key, bytes value);
 
   /*********************** init **************************/
-  function init() external onlyNotInit { //see @INIT_FUNC
+  function init() external onlyNotInit { //see @dev:init
     requiredMargin = INIT_REQUIRED_MARGIN;
     dues = INIT_DUES;
     roundInterval = INIT_ROUND_INTERVAL;
@@ -154,7 +154,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
           b. transfer the candidate's margin eth value to the SystemReward contract
   */    
   function jailValidator(address operateAddress, uint256 round, uint256 fine) 
-        external override onlyValidator onlyIfCandidateAddress {
+        external override onlyValidator onlyIfCandidateAddress(operateAddress) {
     uint256 index = operateMap[operateAddress];
     if (index == 0) return;
 
