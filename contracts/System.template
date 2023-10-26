@@ -69,7 +69,7 @@ contract System {
     _;
   }
 
-  modifier onlyNotInit() {
+  modifier onlyNotInit() { //@openissue
     require(!alreadyInit, "the contract already init");
     _;
   }
