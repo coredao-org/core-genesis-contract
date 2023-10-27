@@ -36,7 +36,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   event receiveDeposit(address indexed from, uint256 amount);
   event paramChange(string key, bytes value);
 
-  receive() external payable { //@openissue
+  receive() external payable {
     if (msg.value != 0) {
       _burnExcessiveTokens();
       emit receiveDeposit(msg.sender, msg.value);
