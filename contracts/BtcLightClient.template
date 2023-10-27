@@ -302,7 +302,6 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       dest := add(add(_output, 0x20), start)
     }
     Memory.copy(src, dest, length);
-    return _output; //@openissue
   }
 
   function encode(bytes memory headerBytes, address rewardAddr, uint256 scoreBlock,
