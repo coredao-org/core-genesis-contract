@@ -38,6 +38,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
 
   receive() external payable { //@openissue
     if (msg.value != 0) {
+      _burnExcessiveTokens();
       emit receiveDeposit(msg.sender, msg.value);
     }
   }
@@ -55,15 +56,19 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
 */
   function receiveRewards() external payable override onlyInit {
     if (msg.value != 0) {
-      if (address(this).balance > incentiveBalanceCap) {
-        uint256 value = address(this).balance - incentiveBalanceCap;
-        if (isBurn) {
-          IBurn(BURN_ADDR).burn{ value: value }();
-        } else {
-          payable(FOUNDATION_ADDR).transfer(value);
-        }
-      }
+      _burnExcessiveTokens();
       emit receiveDeposit(msg.sender, msg.value);
+    }
+  }
+
+  function _burnExcessiveTokens() private {
+    if (address(this).balance > incentiveBalanceCap) {
+      uint256 value = address(this).balance - incentiveBalanceCap;
+      if (isBurn) {
+        IBurn(BURN_ADDR).burn{ value: value }();
+      } else {
+        payable(FOUNDATION_ADDR).transfer(value);
+      }
     }
   }
 
