@@ -130,28 +130,6 @@ contract System { //@openissue
   /// @param upperBound requested upper bound of the param
   error OutOfBounds(string name, uint256 given, uint256 lowerBound, uint256 upperBound);
 
-  function _allPlatformContracts(address[] memory _addrs) internal view returns(bool) {
-    for (uint i = 0; i < _addrs.length; i++) {
-      if (!_isPlatformContract(_addrs[i])) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  function _isPlatformContract(address addr) private view returns(bool) {
-    return addr == VALIDATOR_CONTRACT_ADDR ||
-           addr == SLASH_CONTRACT_ADDR ||
-           addr == SYSTEM_REWARD_ADDR ||
-           addr == LIGHT_CLIENT_ADDR ||
-           addr == RELAYER_HUB_ADDR ||
-           addr == CANDIDATE_HUB_ADDR ||
-           addr == GOV_HUB_ADDR ||
-           addr == PLEDGE_AGENT_ADDR ||
-           addr == BURN_ADDR ||
-           addr == FOUNDATION_ADDR;
-  }
-
   /* @dev:init
         the init() functions are 'historical' in the sense that they were called one upon platform-contract's 
         initial deployment and will never be called again including not upon updates. If maliciously called, 

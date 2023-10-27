@@ -152,7 +152,6 @@ contract GovHub is System, IParamSubscriber {
     );
     require(targets.length != 0, "must provide actions");
     require(targets.length <= proposalMaxOperations, "too many actions");
-    require(_allPlatformContracts(targets), "not platform contracts");
 
     uint256 proposalId = latestProposalIds[msg.sender];
     if (proposalId != 0) {
