@@ -289,7 +289,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     } else if (2*maxWeight < count && count <= (2*maxWeight + 3*maxWeight/4)) {
       return 3*maxWeight - count;
     } else {
-      return count/4;
+      return count/4 - (7*maxWeight)/16;
     }
   }
   
