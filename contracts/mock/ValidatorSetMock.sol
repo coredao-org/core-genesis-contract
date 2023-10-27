@@ -39,9 +39,10 @@ contract ValidatorSetMock is ValidatorSet {
     }
 
     function getValidatorByConsensus(address consensus) external view returns(Validator memory) {
-        uint index = currentValidatorSetMap[consensus];
-        require(index > 0, "no match validator");
-        return currentValidatorSet[index-1];
+        uint indexPlus1 = currentValidatorSetMap[consensus];
+        require(indexPlus1 > 0, "no match validator");
+        uint index_ = indexPlus1 - 1;
+        return currentValidatorSet[index_];
     }
 
     function setValidatorSetMap(address validator) external {

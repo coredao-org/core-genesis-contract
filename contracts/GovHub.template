@@ -324,11 +324,12 @@ contract GovHub is System, IParamSubscriber {
   /// @param member The address of the member to remove
   function removeMember(address member) external onlyInit onlyGov onlyIfMember(member) { //@openissue
     require(memberSet.length > 5, "at least five members in DAO");
-    uint256 index = members[member]; //@openissue
-    if (index != memberSet.length) {
+    uint256 indexPlus1 = members[member]; //@openissue
+    if (indexPlus1 != memberSet.length) {
+      uint index_ = indexPlus1 - 1;
       address addr = memberSet[memberSet.length - 1];
-      memberSet[index - 1] = addr;
-      members[addr] = index;
+      memberSet[index_] = addr;
+      members[addr] = indexPlus1;
     }
     memberSet.pop();
     delete members[member]; //@openissue

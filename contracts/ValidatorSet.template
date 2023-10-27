@@ -120,9 +120,10 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     if (address(this).balance >= totalInCome + value + blockReward) {
       value += blockReward;
     }
-    uint256 index = currentValidatorSetMap[valAddr];
-    if (index != 0) {
-      Validator storage validator = currentValidatorSet[index - 1];
+    uint256 indexPlus1 = currentValidatorSetMap[valAddr];
+    if (indexPlus1 != 0) {
+      uint index_ = indexPlus1 - 1;
+      Validator storage validator = currentValidatorSet[index_];
       totalInCome = totalInCome + value;
       validator.income = validator.income + value;
       emit validatorDeposit(valAddr, value);
@@ -259,27 +260,27 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// @param validator The validator address
   /// @return The incoming reward of the validator
   function getIncoming(address validator) external view returns (uint256) {
-    uint256 index = currentValidatorSetMap[validator];
-    if (index == 0) {
+    uint256 indexPlus1 = currentValidatorSetMap[validator];
+    if (indexPlus1 == 0) {
       return 0;
     }
-    return currentValidatorSet[index - 1].income;
+    uint index_ = indexPlus1 - 1;
+    return currentValidatorSet[index_].income;
   }
 
   /*********************** For slash **************************/
   /// Slash the validator for misdemeanor behaviors
   /// @param validator The validator to slash
   function misdemeanor(address validator) external override onlySlash {
-    uint256 index = currentValidatorSetMap[validator];
-    if (index == 0) {
+    uint256 indexPlus1 = currentValidatorSetMap[validator];
+    if (indexPlus1 == 0) {
       return;
     }
-    // the actually index
-    index = index - 1;
-    uint256 income = currentValidatorSet[index].income;
-    currentValidatorSet[index].income = 0;
+    uint index_ = indexPlus1 - 1;
+    uint256 income = currentValidatorSet[index_].income;
+    currentValidatorSet[index_].income = 0;
     uint256 rest = currentValidatorSet.length - 1;
-    address operateAddress = currentValidatorSet[index].operateAddress;
+    address operateAddress = currentValidatorSet[index_].operateAddress;
     emit validatorMisdemeanor(operateAddress, income);
     if (rest == 0) {
       // should not happen, but still protect
@@ -287,11 +288,11 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
     uint256 averageDistribute = income / rest;
     if (averageDistribute != 0) {
-      for (uint256 i = 0; i < index; i++) {
+      for (uint256 i = 0; i < index_; i++) {
         currentValidatorSet[i].income += averageDistribute;
       }
       uint256 n = currentValidatorSet.length;
-      for (uint256 i = index + 1; i < n; i++) {
+      for (uint256 i = index_ + 1; i < n; i++) {
         currentValidatorSet[i].income += averageDistribute;
       }
     }
@@ -314,23 +315,22 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
 */
   function felony(address validator, uint256 felonyRound, uint256 felonyDeposit) 
             external override onlySlash onlyIfCurrentValidator(validator) {
-    uint256 index = currentValidatorSetMap[validator];
-    // the actually index
-    index = index - 1;
-    uint256 income = currentValidatorSet[index].income;
+    uint256 indexPlus1 = currentValidatorSetMap[validator];    
+    uint index_ = indexPlus1 - 1;
+    uint256 income = currentValidatorSet[index_].income;
     uint256 rest = currentValidatorSet.length - 1;
     if (rest == 0) {
       // will not remove the validator if it is the only one validator.
-      currentValidatorSet[index].income = 0;
+      currentValidatorSet[index_].income = 0;
       return;
     }
     address operateAddress = currentValidatorSet[index].operateAddress;
     emit validatorFelony(operateAddress, income);
     delete currentValidatorSetMap[validator];
     // It is ok that the validatorSet is not in order.
-    if (index != currentValidatorSet.length - 1) {
-      currentValidatorSet[index] = currentValidatorSet[currentValidatorSet.length - 1];
-      currentValidatorSetMap[currentValidatorSet[index].consensusAddress] = index + 1;
+    if (index_ != currentValidatorSet.length - 1) {
+      currentValidatorSet[index_] = currentValidatorSet[currentValidatorSet.length - 1];
+      currentValidatorSetMap[currentValidatorSet[index_].consensusAddress] = index_ + 1;
     }
     currentValidatorSet.pop();
     uint256 averageDistribute = income / rest;

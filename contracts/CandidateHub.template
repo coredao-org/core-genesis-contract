@@ -127,11 +127,12 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @param agent The operator address of the validator candidate
   /// @return true/false
   function canDelegate(address agent) external override view returns(bool) {
-    uint256 index = operateMap[agent];
-    if (index == 0) {
+    uint256 indexPlus1 = operateMap[agent];
+    if (indexPlus1 == 0) {
       return false;
     }
-    uint256 status = candidateSet[index - 1].status;
+    uint index_ = indexPlus1 - 1;
+    uint256 status = candidateSet[index_].status;
     return status == (status & ACTIVE_STATUS);
   }
 
@@ -155,10 +156,11 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   */    
   function jailValidator(address operateAddress, uint256 round, uint256 fine) 
         external override onlyValidator onlyIfCandidateAddress(operateAddress) {
-    uint256 index = operateMap[operateAddress];
-    if (index == 0) return;
+    uint256 indexPlus1 = operateMap[operateAddress];
+    if (indexPlus1 == 0) return;
 
-    Candidate storage c = candidateSet[index - 1];
+    uint index_ = indexPlus1 - 1;
+    Candidate storage c = candidateSet[index_];
     uint256 margin = c.margin;
     if (margin >= dues && margin - dues >= fine) { //@openissue
       uint256 status = c.status | SET_JAIL;
@@ -180,7 +182,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
         payable(SYSTEM_REWARD_ADDR).transfer(fine);
       }
     } else {
-      removeCandidate(index);
+      removeCandidate(indexPlus1);
 
       payable(SYSTEM_REWARD_ADDR).transfer(margin);
       emit deductedMargin(operateAddress, margin, 0);
@@ -273,8 +275,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     uint256[] memory commissionThousandthsList = new uint256[](totalCount);
 
     for (uint256 i = 0; i < totalCount; ++i) {
-      uint256 index = operateMap[validatorList[i]];
-      Candidate storage c = candidateSet[index - 1];
+      uint256 indexPlus1 = operateMap[validatorList[i]];
+      uint index_ = indexPlus1 - 1;
+      Candidate storage c = candidateSet[index_];
       consensusAddrList[i] = c.consensusAddr;
       feeAddrList[i] = c.feeAddr;
       if (scores[i] == 0) {
@@ -282,7 +285,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       } else {
         commissionThousandthsList[i] = c.commissionThousandths;
       }
-      statusList[index - 1] |= SET_VALIDATOR;
+      statusList[index_] |= SET_VALIDATOR;
     }
 
     IValidatorSet(VALIDATOR_CONTRACT_ADDR).updateValidatorSet(validatorList, consensusAddrList, feeAddrList, commissionThousandthsList);
@@ -355,12 +358,13 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
          value to the system reward contract
   */ 
   function unregister() external nonReentrant onlyInit onlyIfCandidate {
-    uint256 index = operateMap[msg.sender];
-    Candidate storage c = candidateSet[index - 1];
+    uint256 indexPlus1 = operateMap[msg.sender];
+    uint index_ = indexPlus1 - 1;
+    Candidate storage c = candidateSet[index_];
     require(c.status == (c.status & UNREGISTER_STATUS), "candidate status is not cleared");
     uint256 margin = c.margin;
 
-    removeCandidate(index);
+    removeCandidate(indexPlus1);
 
     if (margin > dues) {
       uint256 value = margin - dues;
@@ -379,8 +383,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should in range (0, 1000)");
     require(consensusAddr != address(0), "consensus address should not be zero");
     require(feeAddr != address(0), "fee address should not be zero");
-    uint256 index = operateMap[msg.sender];
-    Candidate storage c = candidateSet[index - 1];
+    uint256 indexPlus1 = operateMap[msg.sender];
+    uint index_ = indexPlus1 - 1;
+    Candidate storage c = candidateSet[index_];
     uint256 commissionLastRoundValue = roundTag == c.commissionLastChangeRound
       ? c.commissionLastRoundValue
       : c.commissionThousandths;
@@ -397,7 +402,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       require(consensusMap[consensusAddr] == 0, "the consensus already exists");
       delete consensusMap[c.consensusAddr];
       c.consensusAddr = consensusAddr;
-      consensusMap[consensusAddr] = index;
+      consensusMap[consensusAddr] = indexPlus1;
     }
     c.feeAddr = feeAddr;
     c.commissionThousandths = commissionThousandths;
@@ -407,16 +412,18 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// Refuse to accept delegate from others
   /// @dev Candidate will not be elected in this state
   function refuseDelegate() external onlyInit onlyIfCandidate {
-    uint256 index = operateMap[msg.sender];
-    Candidate storage c = candidateSet[index - 1];
+    uint256 indexPlus1 = operateMap[msg.sender];
+    uint index_ = indexPlus1 - 1;
+    Candidate storage c = candidateSet[index_];
     uint256 status = c.status | SET_INACTIVE;
     changeStatus(c, status);
   }
 
   /// Accept delegate from others
   function acceptDelegate() external onlyInit onlyIfCandidate {
-    uint256 index = operateMap[msg.sender];
-    Candidate storage c = candidateSet[index - 1];
+    uint256 indexPlus1 = operateMap[msg.sender];
+    uint index_ = indexPlus1 - 1;
+    Candidate storage c = candidateSet[index_];
     uint256 status = c.status & DEL_INACTIVE;
     changeStatus(c, status);
   }
@@ -430,13 +437,14 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 */
   function addMargin() external payable onlyInit onlyIfCandidate {
     require(msg.value != 0, "value should not be zero");
-    uint256 index = operateMap[msg.sender];
-    uint256 totalMargin = candidateSet[index - 1].margin + msg.value;
-    candidateSet[index - 1].margin = totalMargin;
+    uint256 indexPlus1 = operateMap[msg.sender];
+    uint index_ = indexPlus1 - 1;
+    uint256 totalMargin = candidateSet[index_].margin + msg.value;
+    candidateSet[index_].margin = totalMargin;
     emit addedMargin(msg.sender, msg.value, totalMargin);
 
     if (totalMargin >= requiredMargin) {
-      Candidate storage c = candidateSet[index - 1];
+      Candidate storage c = candidateSet[index_];
       uint256 status = c.status & DEL_MARGIN;
       changeStatus(c, status);
     }
@@ -457,18 +465,19 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       2. Candidate gets removed from contract internal structures
       3. No eth transfer takes place as part of this function
  */
-  function removeCandidate(uint256 index) internal {
-    Candidate storage c = candidateSet[index - 1];
+  function removeCandidate(uint256 indexPlus1) internal {
+    uint index_ = indexPlus1 - 1;
+    Candidate storage c = candidateSet[index_];
 
     emit unregistered(c.operateAddr, c.consensusAddr);
 
     delete operateMap[c.operateAddr];
     delete consensusMap[c.consensusAddr];
 
-    if (index != candidateSet.length) {
-      candidateSet[index-1] = candidateSet[candidateSet.length - 1];
-      operateMap[candidateSet[index-1].operateAddr] = index;
-      consensusMap[candidateSet[index-1].consensusAddr] = index;
+    if (indexPlus1 != candidateSet.length) {
+      candidateSet[index_] = candidateSet[candidateSet.length - 1];
+      operateMap[candidateSet[index_].operateAddr] = indexPlus1;
+      consensusMap[candidateSet[index_].consensusAddr] = indexPlus1;
     }
     candidateSet.pop();
   }
