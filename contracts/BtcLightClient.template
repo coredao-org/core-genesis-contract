@@ -281,7 +281,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
           3. else if count in half-open interval (2*maxWeight, 2.75*maxWeight] => return 3*maxWeight - count
           4. else return count/4
    */  
-  function calculateRelayerWeight(uint256 count) public view returns(uint256) { //@openissue
+  function calculateRelayerWeight(uint256 count) public view returns(uint256) {
     if (count <= maxWeight) {
       return count;
     } else if (maxWeight < count && count <= 2*maxWeight) {
