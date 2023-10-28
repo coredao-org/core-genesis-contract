@@ -18,7 +18,6 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   uint256 public dues;
 
   mapping(address =>Relayer) relayers;
-  mapping(address =>bool) relayersExistMap; //@openissue
 
   struct Relayer{
     uint256 deposit;
@@ -26,15 +25,16 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   }
 
   modifier noExist() {
-    require(!relayersExistMap[msg.sender], "relayer already exists");
+    require(relayers[msg.sender].deposit == 0, "relayer already exists");
     _;
   }
 
   modifier exist() {
-    require(relayersExistMap[msg.sender], "relayer does not exist");
+    require(relayers[msg.sender].deposit > 0, "relayer does not exist");
     _;
   }
 
+  // multisig may not be a relayer
   modifier noProxy() {
     require(msg.sender == tx.origin, "no proxy is allowed");
     _;
@@ -52,10 +52,9 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   }
 
   /// Register as a BTC relayer on Core blockchain
-  function register() external payable noExist onlyInit noProxy{ //@openissue
+  function register() external payable noExist onlyInit noProxy{
     require(msg.value == requiredDeposit, "deposit value does not match requirement");
     relayers[msg.sender] = Relayer(requiredDeposit, dues);
-    relayersExistMap[msg.sender] = true;
     emit relayerRegister(msg.sender);
   }
   
@@ -67,7 +66,6 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
  */
   function  unregister() external exist onlyInit{
     Relayer memory r = relayers[msg.sender];
-    delete relayersExistMap[msg.sender];
     delete relayers[msg.sender];
     payable(msg.sender).transfer(r.deposit - r.dues); //@dev:unsafe
     payable(SYSTEM_REWARD_ADDR).transfer(r.dues);
@@ -99,6 +97,6 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   /// @param sender The address to check
   /// @return true/false
   function isRelayer(address sender) external override view returns (bool) {
-    return relayersExistMap[sender];
+    return relayers[sender].deposit > 0;
   }
 }

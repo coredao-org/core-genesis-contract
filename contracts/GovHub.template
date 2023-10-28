@@ -32,7 +32,7 @@ contract GovHub is System, IParamSubscriber {
 
   event paramChange(string key, bytes value);
   event receiveDeposit(address indexed from, uint256 amount);
-  event VoteCast(address voter, uint256 proposalId, bool support); //@openissue
+  event VoteCast(address indexed voter, uint256 indexed proposalId, bool indexed support); 
   event ProposalCreated(
     uint256 id,
     address proposer,
@@ -213,12 +213,13 @@ contract GovHub is System, IParamSubscriber {
       3. the sender's vote is verified to be not yet cast yet else the Tx reverts
       4. the sender's vote is executed by incrementing the proposal's for or against counter
       5. the sender is marked as having voted
+      6. note that by design a voter will not be allowed to change his original vote
 */
   function castVote(uint256 proposalId, bool support) //@openissue
         public onlyInit onlyMember onlyIfActiveProposal(proposalId) {    
     Proposal storage proposal = proposals[proposalId];
     Receipt storage receipt = proposal.receipts[msg.sender];
-    require(!receipt.hasVoted, "voter already voted"); //@openissue
+    require(!receipt.hasVoted, "voter already voted");
     if (support) {
       proposal.forVotes += 1;
     } else {
@@ -243,8 +244,8 @@ contract GovHub is System, IParamSubscriber {
 
   /// Execute the proposal
   /// @param proposalId The proposal Id
-  function execute(uint256 proposalId) public payable nonReentrant onlyInit onlyIfSuccessfulProposal(proposalId) { //@openissue
-    Proposal storage proposal = proposals[proposalId]; //@openissue
+  function execute(uint256 proposalId) public payable nonReentrant onlyInit onlyIfSuccessfulProposal(proposalId) {
+    Proposal storage proposal = proposals[proposalId];
     proposal.executed = true;
     uint256 targetSize = proposal.targets.length;
     for (uint256 i = 0; i < targetSize; i++) {
@@ -254,8 +255,9 @@ contract GovHub is System, IParamSubscriber {
       } else {
         callData = abi.encodePacked(bytes4(keccak256(bytes(proposal.signatures[i]))), proposal.calldatas[i]);
       }
+      require(address(this).balance >= proposal.values[i], "not enough balance");
       address _target = proposal.targets[i];
-      (bool success, bytes memory returnData) = _target.call{ value: proposal.values[i] }(callData); //@dev:unsafe  //@openissue
+      (bool success, bytes memory returnData) = _target.call{ value: proposal.values[i] }(callData); //@dev:unsafe 
       require(success, "Transaction execution reverted.");
       emit ExecuteTransaction(_target, proposal.values[i], proposal.signatures[i], proposal.calldatas[i]);
     }
@@ -312,7 +314,7 @@ contract GovHub is System, IParamSubscriber {
 
   /// Add a member
   /// @param member The new member address
-  function addMember(address member) external onlyInit onlyGov { //@openissue
+  function addMember(address member) external onlyInit onlyGov {
     require(members[member] == 0, "member already exists");
     memberSet.push(member);
     members[member] = memberSet.length;
@@ -331,7 +333,7 @@ contract GovHub is System, IParamSubscriber {
       members[addr] = indexPlus1;
     }
     memberSet.pop();
-    delete members[member]; //@openissue
+    delete members[member];
     emit MemberDeleted(member);
   }
 
