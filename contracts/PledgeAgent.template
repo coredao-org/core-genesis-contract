@@ -377,7 +377,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Claim reward for delegator
   /// @param agentList The list of validators to claim rewards on, it can be empty
   /// @return (Amount claimed, Are all rewards claimed)
-  function claimReward(address[] calldata agentList) external returns (uint256, bool) {
+  function claimReward(address[] calldata agentList) external nonReentrant returns (uint256, bool) {
     // limit round count to control gas usage
     int256 roundLimit = 500;
     uint256 reward;
