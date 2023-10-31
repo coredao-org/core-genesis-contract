@@ -366,7 +366,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
     if (margin > dues) {
       uint256 value = margin - dues;
-      Address.sendValue(payable(msg.sender), value); //@dev:unsafe
+      Address.sendValue(payable(msg.sender), value); //@dev:unsafe(reentry)
       payable(SYSTEM_REWARD_ADDR).transfer(uint256(dues));
     } else {
       payable(SYSTEM_REWARD_ADDR).transfer(margin);

@@ -89,7 +89,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   {
     uint256 actualAmount = amount < address(this).balance ? amount : address(this).balance;
     if (to != address(0) && actualAmount != 0) {
-      to.transfer(actualAmount); //@dev:unsafe
+      to.transfer(actualAmount); //@dev:unsafe(DoS)
       emit rewardTo(to, actualAmount);
     } else {
       emit rewardEmpty();

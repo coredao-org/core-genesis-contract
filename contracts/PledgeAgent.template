@@ -346,7 +346,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param amount The amount of CORE to undelegate
   function undelegateCoin(address agent, uint256 amount) public nonReentrant {
     (uint256 deposit, ) = undelegateCoin(agent, msg.sender, amount, false);
-    Address.sendValue(payable(msg.sender), deposit); //@dev:unsafe
+    Address.sendValue(payable(msg.sender), deposit); //@dev:unsafe(reentry, no DoS since msg.sender)
     emit undelegatedCoin(agent, msg.sender, deposit);
   }
 
@@ -417,7 +417,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   /*********************** Internal methods ***************************/
   function distributeReward(address payable delegator, uint256 reward) internal {
-    Address.sendValue(delegator, reward); //@dev:unsafe
+    Address.sendValue(delegator, reward); //@dev:unsafe(DoS+reentry)
     emit claimedReward(delegator, msg.sender, reward, true);
   }
 

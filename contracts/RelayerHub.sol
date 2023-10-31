@@ -69,7 +69,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   function  unregister() external exist onlyInit{
     Relayer memory r = relayers[msg.sender];
     delete relayers[msg.sender];
-    payable(msg.sender).transfer(r.deposit - r.dues); //@dev:unsafe
+    payable(msg.sender).transfer(r.deposit - r.dues); //@dev:safe(no DoS since msg.sender)
     payable(SYSTEM_REWARD_ADDR).transfer(r.dues);
     emit relayerUnRegister(msg.sender);
   }

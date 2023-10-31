@@ -184,7 +184,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
         }
 
         v.income = 0;
-        bool success = feeAddress.send(validatorReward); //@dev:unsafe
+        bool success = feeAddress.send(validatorReward); //@dev:unsafe(DoS)
         if (success) {
           emit directTransfer(v.operateAddress, feeAddress, validatorReward, tempIncome);
         } else {
