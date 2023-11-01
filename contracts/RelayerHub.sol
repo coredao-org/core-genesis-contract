@@ -55,8 +55,9 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
 
   /// Register as a BTC relayer on Core blockchain
   function register() external payable noExist onlyInit noProxy{
-    require(requiredDeposit > 0 && msg.value == requiredDeposit, "deposit value does not match requirement");
-    relayers[msg.sender] = Relayer(requiredDeposit, dues);
+    uint _requiredDeposit = requiredDeposit;
+    require(_requiredDeposit > 0 && msg.value == _requiredDeposit, "deposit value does not match requirement");
+    relayers[msg.sender] = Relayer(_requiredDeposit, dues);
     emit relayerRegister(msg.sender);
   }
   
