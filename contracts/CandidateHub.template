@@ -160,7 +160,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     uint index_ = indexPlus1 - 1;
     Candidate storage c = candidateSet[index_];
     uint256 margin = c.margin;
-    if (margin >= dues + fine) {
+    if (margin >= dues && margin - dues >= fine) {
       uint256 status = c.status | SET_JAIL;
       // update jailMap
       if (jailMap[operateAddress] > 0) {
