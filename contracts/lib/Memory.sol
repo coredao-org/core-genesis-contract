@@ -32,7 +32,7 @@ library Memory {
         return equals(addr, addr2, len);
     }
 
-    function compareStrings(string memory a, string memory b) internal pure returns (bool) { //@openissue
+    function compareStrings(string memory a, string memory b) internal pure returns (bool) {
         return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
     }
 
