@@ -26,12 +26,12 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     uint256 dues;
   }
 
-  modifier noExist() {
+  modifier relayerDoesNotExist() {
     require(relayers[msg.sender].deposit == 0, "relayer already exists");
     _;
   }
 
-  modifier exist() {
+  modifier relayerExist() {
     require(relayers[msg.sender].deposit > 0, "relayer does not exist");
     _;
   }
@@ -54,7 +54,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
   }
 
   /// Register as a BTC relayer on Core blockchain
-  function register() external payable noExist onlyInit noProxy{
+  function register() external payable relayerDoesNotExist onlyInit noProxy{
     uint _requiredDeposit = requiredDeposit;
     require(_requiredDeposit > 0 && msg.value == _requiredDeposit, "deposit value does not match requirement");
     relayers[msg.sender] = Relayer(_requiredDeposit, dues);
@@ -67,7 +67,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
       2. Transfer (relayer.deposit - relayer.dues) eth to the relayer
       3. Transfer the relayer.dues eth to the SystemReward contract
  */
-  function  unregister() external exist onlyInit{
+  function  unregister() external relayerExist onlyInit{
     Relayer memory r = relayers[msg.sender];
     delete relayers[msg.sender];
     payable(msg.sender).transfer(r.deposit - r.dues); //@dev:safe(no DoS since msg.sender)
