@@ -87,7 +87,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
   /*********************** init **************************/
   /// Initialize 
-  function init() external onlyNotInit {
+  function init() external onlyNotInit { //see @dev:init
     bytes32 blockHash = doubleShaFlip(INIT_CONSENSUS_STATE_BYTES);
     address rewardAddr;
     address candidateAddr;
@@ -228,7 +228,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
      @openissue: This function may be called by any party (not only a relayer) with a relayer address to which the funds will be transferred
      this might prove problematic for relayers that prefer to choose their own dates of reward reclaiming
   */
-  function claimRelayerReward(address relayerAddr) external onlyInit {
+  function claimRelayerReward(address relayerAddr) external onlyInit { //@openissue
      uint256 reward = relayerRewardVault[relayerAddr];
      require(reward != 0, "no relayer reward");
      relayerRewardVault[relayerAddr] = 0;
@@ -240,7 +240,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /// @dev This method is triggered once per round, the default round value is set to 100 (BTC blocks)
   /// @dev And the weight of each relayer is calculated based on the `calculateRelayerWeight` method
   /// @return The reward for the caller of this method
-  function distributeRelayerReward() internal returns (uint256) {
+  function distributeRelayerReward() internal returns (uint256) { //@openissue
     uint256 totalReward = collectedRewardForHeaderRelayer;
 
     uint256 totalWeight=0;
@@ -302,7 +302,6 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       dest := add(add(_output, 0x20), start)
     }
     Memory.copy(src, dest, length);
-    return _output;
   }
 
   function encode(bytes memory headerBytes, address rewardAddr, uint256 scoreBlock,

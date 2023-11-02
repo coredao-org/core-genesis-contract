@@ -60,7 +60,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   function getSlashValidators() external view returns (address[] memory) {
     return validators;
   }{% endif %}
-  function init() external onlyNotInit{
+  function init() external onlyNotInit{ //see @dev:init
     misdemeanorThreshold = MISDEMEANOR_THRESHOLD;
     felonyThreshold = FELONY_THRESHOLD;
     rewardForReportDoubleSign = INIT_REWARD_FOR_REPORT_DOUBLE_SIGN;
@@ -111,8 +111,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
    @param header2: Another block header submitted by the validator with same height and parent
 
   @logic
-    1. This method is called by external verifiers, with no verifications are done to enfore it. @openissue
-       It receives header1 and header2 parameters, and verifies that:
+    1. This method is open for all to call and receives header1 and header2 parameters, and verifies that:
           a. the headers refer to to distinct blocks i.e. 'double sign'
           b. that the validators inside each header are identical and legal validators
     2. it then continues to apply a felony on the validator using the global felonyDeposit value
@@ -122,7 +121,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     4. Note2 that nowhere is a check made to verify that the method caller is himself not the 
        'bad' validator
 */
-  function doubleSignSlash(bytes calldata header1, bytes calldata header2) external onlyInit {
+  function doubleSignSlash(bytes calldata header1, bytes calldata header2) external openForAll onlyInit { 
     RLPDecode.RLPItem[] memory items1 = header1.toRLPItem().toList();
     RLPDecode.RLPItem[] memory items2 = header2.toRLPItem().toList();
 
