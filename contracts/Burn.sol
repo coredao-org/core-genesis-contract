@@ -13,7 +13,7 @@ contract Burn is System, IBurn, IParamSubscriber {
   uint256 public burnCap;
 
   /*********************** init **************************/
-  function init() external onlyNotInit {
+  function init() external onlyNotInit { //see @dev:init
     burnCap = BURN_CAP;
     alreadyInit = true;
   }
@@ -41,7 +41,7 @@ contract Burn is System, IBurn, IParamSubscriber {
       } else {
         v = msg.value - remain;
       }
-      payable(msg.sender).transfer(remain);
+      payable(msg.sender).transfer(remain); //@dev:safe(DoS-safe since msg.sender)
     }
     if (v != 0) emit burned(msg.sender, v);
   }

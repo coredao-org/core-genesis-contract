@@ -17,7 +17,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   bool isBurn;
 
   /*********************** init **************************/
-  function init() external onlyNotInit {
+  function init() external onlyNotInit { //see @dev:init
     operators[LIGHT_CLIENT_ADDR] = true;
     operators[SLASH_CONTRACT_ADDR] = true;
     numOperator = 2;
@@ -38,6 +38,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
 
   receive() external payable {
     if (msg.value != 0) {
+      _burnExcessiveTokens();
       emit receiveDeposit(msg.sender, msg.value);
     }
   }
@@ -55,15 +56,19 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
 */
   function receiveRewards() external payable override onlyInit {
     if (msg.value != 0) {
-      if (address(this).balance > incentiveBalanceCap) {
-        uint256 value = address(this).balance - incentiveBalanceCap;
-        if (isBurn) {
-          IBurn(BURN_ADDR).burn{ value: value }();
-        } else {
-          payable(FOUNDATION_ADDR).transfer(value);
-        }
-      }
+      _burnExcessiveTokens();
       emit receiveDeposit(msg.sender, msg.value);
+    }
+  }
+
+  function _burnExcessiveTokens() private {
+    if (address(this).balance > incentiveBalanceCap) {
+      uint256 value = address(this).balance - incentiveBalanceCap;
+      if (isBurn) {
+        IBurn(BURN_ADDR).burn{ value: value }();
+      } else {
+        payable(FOUNDATION_ADDR).transfer(value);
+      }
     }
   }
 
@@ -84,7 +89,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   {
     uint256 actualAmount = amount < address(this).balance ? amount : address(this).balance;
     if (to != address(0) && actualAmount != 0) {
-      to.transfer(actualAmount);
+      to.transfer(actualAmount); //@dev:unsafe(DoS)
       emit rewardTo(to, actualAmount);
     } else {
       emit rewardEmpty();
