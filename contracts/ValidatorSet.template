@@ -245,6 +245,10 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     emit validatorSetUpdated();
   }
 
+  function getValidator(uint ind) external view returns (Validator memory) {
+    return currentValidatorSet[ind];
+  }
+
   /// Get list of validators in the current round
   /// @return List of validator consensus addresses
   function getValidators() external view returns (address[] memory) {
@@ -389,6 +393,10 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       }
       require(commissionThousandthsList[i] <= 1000, "commissionThousandths out of bound");
     }
+  }
+
+  function numValidators() external view returns(uint) {
+    return currentValidatorSet.length;
   }
 
   //rlp encode & decode function
