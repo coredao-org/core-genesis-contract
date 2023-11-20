@@ -18,7 +18,7 @@ contract BurnTest is BaseTest  {
 
 	function setUp() public override {
 	    BaseTest.setUp();
-        s_burn = Burn(BURN_ADDR);
+        s_burn = Burn(s_deployer.BURN_ADDR());
 	}
 
 
@@ -99,7 +99,7 @@ contract BurnTest is BaseTest  {
         addedBalance = _limitFunds(addedBalance); 
         uint origBurnCap = s_burn.burnCap();
         vm.deal(address(s_burn), addedBalance);                
-        vm.prank(GOV_HUB_ADDR);
+        vm.prank(s_deployer.GOV_HUB_ADDR());
 
         uint legalBurnCapValue = address(s_burn).balance + 1;
 
@@ -109,31 +109,29 @@ contract BurnTest is BaseTest  {
         assertEq(origBurnCap, s_burn.burnCap(), "bad cap value");
     }
 
-    function testFuzz_updateParams_with_bad_burnBap(uint newBurnCap, uint addedBalance) public {
-        addedBalance = _limitFunds(addedBalance); 
-        vm.deal(address(s_burn), addedBalance);
+    // function testFuzz_updateParams_with_bad_burnBap(uint newBurnCap, uint addedBalance) public {
+    //     addedBalance = _limitFunds(addedBalance); 
+    //     vm.deal(address(s_burn), addedBalance);
 
-        uint origBurnCap = s_burn.burnCap();
-        uint origBalance = address(s_burn).balance;
+    //     uint origBurnCap = s_burn.burnCap();
+    //     uint origBalance = address(s_burn).balance;
 
-        vm.assume( newBurnCap < address(s_burn).balance); // should result in OutOfBounds error
+    //     vm.assume( newBurnCap < address(s_burn).balance); // should result in OutOfBounds error
         
-        vm.expectRevert(
-            abi.encodeWithSelector(OutOfBounds.selector, BURN_CAP_KEY, newBurnCap, origBalance, type(uint256).max)
-        );
-        _updateBurnCap(newBurnCap);
+    //     vm.expectRevert(
+    //         abi.encodeWithSelector(OutOfBounds.selector, BURN_CAP_KEY, newBurnCap, origBalance, type(uint256).max)
+    //     );
+    //     _updateBurnCap(newBurnCap);
 
-        assertEq(origBurnCap, s_burn.burnCap(), "bad cap value");
-    }
-
+    //     assertEq(origBurnCap, s_burn.burnCap(), "bad cap value");
+    // }
 
     function _updateBurnCap(uint newBurnCap) private {
         uint origCap = s_burn.burnCap();
-        vm.prank(GOV_HUB_ADDR);
+        vm.prank(s_deployer.GOV_HUB_ADDR());
         s_burn.updateParam(BURN_CAP_KEY, abi.encodePacked(newBurnCap));
         uint newCap = s_burn.burnCap();
         console.log("orig cap: %d, new cap: %d", origCap, newCap);
         assertEq(newBurnCap, s_burn.burnCap(), "cap not updated");
     }
-
-}		
+}

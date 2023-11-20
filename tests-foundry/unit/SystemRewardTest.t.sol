@@ -19,7 +19,7 @@ contract SystemRewardTest is BaseTest  {
 
 	function setUp() public override {
         BaseTest.setUp();
-        s_systemReward = SystemRewardMock(payable(SYSTEM_REWARD_ADDR));
+        s_systemReward = SystemRewardMock(payable(s_deployer.SYSTEM_REWARD_ADDR()));
 	}
 
 
@@ -35,7 +35,7 @@ contract SystemRewardTest is BaseTest  {
     }
 
     function testFuzz_systemReward(uint value, bool isBurn) public {
-        _hoaxWithGas(GOV_HUB_ADDR); // updateParam() can only be called by the governance contract
+        _hoaxWithGas(s_deployer.GOV_HUB_ADDR()); // updateParam() can only be called by the governance contract
         uint isBurnVal = isBurn ? 1 : 0;
         s_systemReward.updateParam(IS_BURN_KEY, abi.encodePacked(isBurnVal));
         assertEq(s_systemReward.isBurn(), isBurn, "failed to set isBurn");
@@ -60,7 +60,7 @@ contract SystemRewardTest is BaseTest  {
         address payable to = toAddressIsZero ? payable(address(0)) : payable(makeAddr("to"));
         
         // only these two contracts can invoke claimRewards()
-        address operator = operatorIsSlash ? SLASH_CONTRACT_ADDR : LIGHT_CLIENT_ADDR;
+        address operator = operatorIsSlash ? s_deployer.SLASH_CONTRACT_ADDR() : s_deployer.LIGHT_CLIENT_ADDR();
         s_systemReward.setOperator(operator);
     
         uint actualAmount = value < systemRewardBalance ? value : systemRewardBalance;
@@ -76,5 +76,5 @@ contract SystemRewardTest is BaseTest  {
         _hoaxWithGas(operator);            
         s_systemReward.claimRewards(to, value);
     }
-}		
+}
 

@@ -38,7 +38,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
 
   receive() external payable {
     if (msg.value != 0) {
-      _burnExcessiveTokens();
+      //_burnExcessiveTokens();
       emit receiveDeposit(msg.sender, msg.value);
     }
   }

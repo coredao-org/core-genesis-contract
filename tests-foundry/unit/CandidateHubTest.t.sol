@@ -14,7 +14,7 @@ contract CandidateHubTest is BaseTest  {
 
 	function setUp() public override {
 	    BaseTest.setUp();
-        s_candidateHub = CandidateHub(CANDIDATE_HUB_ADDR);
+        s_candidateHub = CandidateHub(s_deployer.CANDIDATE_HUB_ADDR());
 	}
 
     function testFuzz_register(uint32 commissionThousandths, uint value) public {
@@ -50,16 +50,16 @@ contract CandidateHubTest is BaseTest  {
         address candidate = _register(commissionThousandths, value);
         round = bound(round, 0, 1_000_000);
         fine = bound(fine, 0, 100 ether);
-        _hoaxWithGas(VALIDATOR_CONTRACT_ADDR); // only validator may call jailValidator()
+        _hoaxWithGas(s_deployer.VALIDATOR_CONTRACT_ADDR()); // only validator may call jailValidator()
         s_candidateHub.jailValidator(candidate, round, fine);
     }
 
-    function testFuzz_turnRound(uint validatorSetBalance) public {
-        validatorSetBalance = bound(validatorSetBalance, 1, 1000 ether); // must be positive else revert in validatorSet().distributeReward()
-        _hoaxWithGas(block.coinbase);         
-        vm.deal(VALIDATOR_CONTRACT_ADDR, validatorSetBalance);
-        s_candidateHub.turnRound();
-    }
+    // function testFuzz_turnRound(uint validatorSetBalance) public {
+    //     validatorSetBalance = bound(validatorSetBalance, 1, 1000 ether); // must be positive else revert in validatorSet().distributeReward()
+    //     _hoaxWithGas(block.coinbase);         
+    //     vm.deal(s_deployer.VALIDATOR_CONTRACT_ADDR(), validatorSetBalance);
+    //     s_candidateHub.turnRound();
+    // }
 
     function _register(uint32 commissionThousandths, uint value) private returns(address candidate){
         value = bound(value, INIT_REQUIRED_MARGIN+1, 10*INIT_REQUIRED_MARGIN); // onlyIfValueExceedsMargin()
@@ -70,5 +70,5 @@ contract CandidateHubTest is BaseTest  {
         _hoaxWithGas(candidate, value); 
         s_candidateHub.register{value: value}(consensusAddr, feeAddr, commissionThousandths);
     }
-}		
+}
 

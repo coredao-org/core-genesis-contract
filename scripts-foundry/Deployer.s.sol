@@ -79,7 +79,6 @@ contract Deployer is System, Script {
         address burnAddr = address(burn);
         address foundationAddr = address(foundation);
 
-
         burn.updateContractAddr(validatorSetAddr, slashAddr, systemRewardAddr, lightAddr, relayerHubAddr,
                                 candidateHubAddr, govHubAddr, pledgeAgentAddr, burnAddr, foundationAddr);
         lightClient.updateContractAddr(validatorSetAddr, slashAddr, systemRewardAddr, lightAddr, relayerHubAddr,
@@ -100,6 +99,18 @@ contract Deployer is System, Script {
                                 candidateHubAddr, govHubAddr, pledgeAgentAddr, burnAddr, foundationAddr);
         govHub.updateContractAddr(validatorSetAddr, slashAddr, systemRewardAddr, lightAddr, relayerHubAddr,
                                 candidateHubAddr, govHubAddr, pledgeAgentAddr, burnAddr, foundationAddr);
+
+        // to be used by tests
+        VALIDATOR_CONTRACT_ADDR = validatorSetAddr;
+        SLASH_CONTRACT_ADDR = slashAddr;
+        SYSTEM_REWARD_ADDR = systemRewardAddr;
+        LIGHT_CLIENT_ADDR = lightAddr;
+        RELAYER_HUB_ADDR = relayerHubAddr;
+        CANDIDATE_HUB_ADDR = candidateHubAddr;
+        GOV_HUB_ADDR = govHubAddr;
+        PLEDGE_AGENT_ADDR = pledgeAgentAddr;
+        BURN_ADDR = burnAddr;
+        FOUNDATION_ADDR = foundationAddr;
     }
 
     function _isLocalTestnet() private view returns(bool) {

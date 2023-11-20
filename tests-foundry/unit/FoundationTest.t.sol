@@ -17,7 +17,7 @@ contract FoundationTest is BaseTest  {
 
 	function setUp() public override {
         BaseTest.setUp();
-        s_foundation = Foundation(payable(FOUNDATION_ADDR));
+        s_foundation = Foundation(payable(s_deployer.FOUNDATION_ADDR()));
 	}
 
 
@@ -35,7 +35,7 @@ contract FoundationTest is BaseTest  {
     function testFuzz_fund_successful(uint value) public {
         value = bound(value, 0, 1000 ether);
         address payable payee = payable(makeAddr("payee"));
-        _hoaxWithGas(GOV_HUB_ADDR);
+        _hoaxWithGas(s_deployer.GOV_HUB_ADDR());
         
         vm.deal(address(s_foundation), value); // make sure Foundation has the needed funds
         
@@ -48,7 +48,7 @@ contract FoundationTest is BaseTest  {
     function testFuzz_fund_failed_insufficient_balance(uint value) public {
         value = bound(value, 1, 1000 ether);
         address payable payee = payable(makeAddr("payee"));
-        _hoaxWithGas(GOV_HUB_ADDR);
+        _hoaxWithGas(s_deployer.GOV_HUB_ADDR());
         
         uint newBalance = value-1;
         vm.deal(address(s_foundation), newBalance); // make sure Foundation has the needed funds
@@ -62,7 +62,7 @@ contract FoundationTest is BaseTest  {
     function testFuzz_fund_failed_payee_with_no_payable_func(uint value) public {
         value = bound(value, 1, 1000 ether);
         address payable payee = payable(address(this)); // note that this contract's receive() will always revert
-        _hoaxWithGas(GOV_HUB_ADDR);
+        _hoaxWithGas(s_deployer.GOV_HUB_ADDR());
         
         uint newBalance = value-1;
         vm.deal(address(s_foundation), newBalance); // make sure Foundation has the needed funds
@@ -72,5 +72,5 @@ contract FoundationTest is BaseTest  {
 
         s_foundation.fund(payee, value);
     }
-}		
+}	
 
