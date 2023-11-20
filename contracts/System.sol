@@ -3,58 +3,38 @@ pragma solidity 0.8.4;
 
 import "./interface/IRelayerHub.sol";
 
-abstract contract System {
+contract System {
 
   bool public alreadyInit;
-  bool public s_guardIsActive;
 
 
-  address public VALIDATOR_CONTRACT_ADDR;
-  address public SLASH_CONTRACT_ADDR;
-  address public SYSTEM_REWARD_ADDR;
-  address public LIGHT_CLIENT_ADDR;
-  address public RELAYER_HUB_ADDR;
-  address public CANDIDATE_HUB_ADDR;
-  address public GOV_HUB_ADDR;
-  address public PLEDGE_AGENT_ADDR;
-  address public BURN_ADDR;
-  address public FOUNDATION_ADDR;
+  address public constant VALIDATOR_CONTRACT_ADDR = 0x0000000000000000000000000000000000001000;
+  address public constant SLASH_CONTRACT_ADDR = 0x0000000000000000000000000000000000001001;
+  address public constant SYSTEM_REWARD_ADDR = 0x0000000000000000000000000000000000001002;
+  address public constant LIGHT_CLIENT_ADDR = 0x0000000000000000000000000000000000001003;
+  address public constant RELAYER_HUB_ADDR = 0x0000000000000000000000000000000000001004;
+  address public constant CANDIDATE_HUB_ADDR = 0x0000000000000000000000000000000000001005;
+  address public constant GOV_HUB_ADDR = 0x0000000000000000000000000000000000001006;
+  address public constant PLEDGE_AGENT_ADDR = 0x0000000000000000000000000000000000001007;
+  address public constant BURN_ADDR = 0x0000000000000000000000000000000000001008;
+  address public constant FOUNDATION_ADDR = 0x0000000000000000000000000000000000001009;
 
-  function updateContractAddr(
-    address valAddr,
-    address slashAddr,
-    address rewardAddr,
-    address lightAddr,
-    address relayerHubAddr,
-    address candidateHubAddr,
-    address govHubAddr,
-    address pledgeAgentAddr,
-    address burnAddr,
-    address foundationAddr
-  ) external {
-    VALIDATOR_CONTRACT_ADDR = valAddr;
-    SLASH_CONTRACT_ADDR = slashAddr;
-    SYSTEM_REWARD_ADDR = rewardAddr;
-    LIGHT_CLIENT_ADDR = lightAddr;
-    RELAYER_HUB_ADDR = relayerHubAddr;
-    CANDIDATE_HUB_ADDR = candidateHubAddr;
-    GOV_HUB_ADDR = govHubAddr;
-    PLEDGE_AGENT_ADDR = pledgeAgentAddr;
-    BURN_ADDR = burnAddr;
-    FOUNDATION_ADDR = foundationAddr;
-  }
 
   modifier onlyCoinbase() {
+  
+    require(msg.sender == block.coinbase, "the message sender must be the block producer");
   
     _;
   }
 
   modifier onlyZeroGasPrice() {
     
+    require(tx.gasprice == 0 , "gasprice is not zero");
+    
     _;
   }
 
-  modifier onlyNotInit() { //@openissue
+  modifier onlyNotInit() {
     require(!alreadyInit, "the contract already init");
     _;
   }
@@ -89,20 +69,6 @@ abstract contract System {
     _;
   }
 
-  modifier onlyIfPositiveValue() {
-    require(msg.value > 0, "value should be greater than zero"); 
-    _;
-  }
-
-  modifier openForAll() {_;}
-
-  modifier nonReentrant() {
-    require(!s_guardIsActive, "reentrancy detected");
-    s_guardIsActive = true;
-    _;
-    s_guardIsActive = false;
-  }
-
   /// The length of param mismatch. Default is 32 bytes.
   /// @param name the name of param.
   error MismatchParamLength(string name);
@@ -114,12 +80,4 @@ abstract contract System {
   /// @param lowerBound requested lower bound of the param.
   /// @param upperBound requested upper bound of the param
   error OutOfBounds(string name, uint256 given, uint256 lowerBound, uint256 upperBound);
-
-  /* @dev:init
-        the init() functions are 'historical' in the sense that they were called once upon platform-contract's 
-        initial deployment and will never be called again including not upon updates. If maliciously called, 
-        the onlyNotInit() modifier should immediately revert.
-        also, since they do not carry parameters the identity of their original caller was irrelevant - hence no 
-        ownerOnly or similar access modifier was set
-   */
 }

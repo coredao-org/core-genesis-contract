@@ -65,11 +65,6 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   event paramChange(string key, bytes value);
   event received(address indexed from, uint256 amount);
 
-  modifier onlyIfCurrentValidator(address validator) {
-    require(currentValidatorSetMap[validator] > 0, "not a current validator");
-    _;
-  }
-
   /*********************** init **************************/
   function init() external onlyNotInit { //see @dev:init
     (Validator[] memory validatorSet, bool valid) = decodeValidatorSet(INIT_VALIDATORSET_BYTES);
@@ -318,7 +313,11 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
            documentation for more details
 */
   function felony(address validator, uint256 felonyRound, uint256 felonyDeposit)
-            external override onlySlash onlyIfCurrentValidator(validator) {
+            external override onlySlash {
+    if (currentValidatorSetMap[validator] == 0) {
+      // not a current validator, return do notg revert
+      return;
+    }    
     uint256 indexPlus1 = currentValidatorSetMap[validator];
     uint index_ = indexPlus1 - 1;
     uint256 income = currentValidatorSet[index_].income;

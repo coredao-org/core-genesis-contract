@@ -40,7 +40,7 @@ contract BurnTest is BaseTest  {
     function testFuzz_burn_with_value_balance_and_cap_variations(uint value, uint addedBalance, uint burnCap) public {
         value = _limitFunds(value);
         addedBalance = _limitFunds(addedBalance); 
-        burnCap = _limitFunds(burnCap); 
+        burnCap = bound(burnCap, 0, address(s_burn).balance); // else OutOfBound error
 
         _updateBurnCap(burnCap);        
 
@@ -54,6 +54,8 @@ contract BurnTest is BaseTest  {
         if (address(s_burn).balance <= burnCap) {
             vm.deal(address(s_burn), burnCap+1); 
         }
+
+        burnCap = bound(burnCap, 0, address(s_burn).balance); // else OutOfBound error
         
         _updateBurnCap(burnCap); 
 

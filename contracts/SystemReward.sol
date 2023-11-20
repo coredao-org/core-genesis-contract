@@ -14,7 +14,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   uint256 public incentiveBalanceCap;
   uint256 public numOperator;
   mapping(address => bool) operators;
-  bool public isBurn;
+  bool isBurn;
 
   /*********************** init **************************/
   function init() external onlyNotInit { //see @dev:init
@@ -38,7 +38,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
 
   receive() external payable {
     if (msg.value != 0) {
-      //_burnExcessiveTokens();
+      _burnExcessiveTokens();
       emit receiveDeposit(msg.sender, msg.value);
     }
   }

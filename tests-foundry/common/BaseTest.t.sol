@@ -7,7 +7,7 @@ import {System} from "../../contracts/System.sol";
 import {Test} from "forge-std/Test.sol";
 import {Deployer} from "../../scripts-foundry/Deployer.s.sol";
 
-abstract contract BaseTest is /*System,*/ Test {
+abstract contract BaseTest is Test {
     
     uint constant internal MAX_ETH_VALUE = 10_000_000 ether; // or any other reasonable cap
     uint constant internal ADDITIONAL_GAS_FEES = 100 ether; // or any other reasonable value
