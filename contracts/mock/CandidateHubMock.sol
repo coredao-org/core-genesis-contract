@@ -3,7 +3,7 @@ pragma solidity 0.8.4;
 import "../CandidateHub.sol";
 
 contract CandidateHubMock is CandidateHub {
-    uint256 private constant MOCK_INIT_ROUND_INTERVAL = 1;
+    uint256 private constant MOCK_INIT_ROUND_INTERVAL = 86400;
     uint256 private constant MOCK_INIT_VALIDATOR_COUNT = 21;
 
     uint256[] public scores;
@@ -93,11 +93,11 @@ contract CandidateHubMock is CandidateHub {
   }
 
   function _initRoundInterval() internal view override returns(uint256) {
-    return MOCK_INIT_ROUND_INTERVAL; //{{initRoundInterval}}; zzzz;
+    return MOCK_INIT_ROUND_INTERVAL;
   }
 
   function _initValidatorCount() internal view override returns(uint256) {
-    return MOCK_INIT_VALIDATOR_COUNT; //{{initValidatorCount}};zzzzz;
+    return MOCK_INIT_VALIDATOR_COUNT; 
   }
 
   function setControlRoundTimeTag(bool value) external {

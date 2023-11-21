@@ -4,6 +4,8 @@ import "../SlashIndicator.sol";
 import "../lib/RLPDecode.sol";
 
 contract SlashIndicatorMock is SlashIndicator {
+    uint32 private constant MOCK_CHAINID = 1112;
+
     using RLPDecode for bytes;
     using RLPDecode for RLPDecode.RLPItem;
 
@@ -32,7 +34,7 @@ contract SlashIndicatorMock is SlashIndicator {
   }
 
   function _chainId() internal pure override returns (uint) {
-    return zzzzz {{chainid}};
+    return uint(MOCK_CHAINID);
   }
 
   function getIndicators() public view returns (address[] memory, uint256[] memory) {
