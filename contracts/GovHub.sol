@@ -269,7 +269,7 @@ contract GovHub is System, IParamSubscriber {
       }
       require(address(this).balance >= proposal.values[i], "not enough balance");
       address _target = proposal.targets[i];
-      (bool success, bytes memory returnData) = _target.call{ value: proposal.values[i] }(callData); //@dev:unsafe(DoS+reentry)
+      (bool success,) = _target.call{ value: proposal.values[i] }(callData); //@dev:unsafe(DoS+reentry)
       require(success, "Transaction execution reverted.");
       emit ExecuteTransaction(_target, proposal.values[i], proposal.signatures[i], proposal.calldatas[i]);
     }

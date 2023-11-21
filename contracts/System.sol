@@ -20,10 +20,10 @@ abstract contract System {
   address private constant _BURN_ADDR = 0x0000000000000000000000000000000000001008;
   address private constant _FOUNDATION_ADDR = 0x0000000000000000000000000000000000001009;
 
-  address public constant CORE_MAINNET = 1116;
-  address public constant CORE_TESTNET = 1115;
-  address public constant ANVIL_CHAINID = 31337;
-  address public constant GANACHE_CHAINID = 1337;
+  uint public constant CORE_MAINNET = 1116;
+  uint public constant CORE_TESTNET = 1115;
+  uint public constant ANVIL_CHAINID = 31337;
+  uint public constant GANACHE_CHAINID = 1337;
 
   address immutable public s_testModeDeployer;
 
@@ -227,7 +227,7 @@ abstract contract System {
   function updateContractAddr(address validatorSet_, address slash_, address systemReward_, 
                               address lightClient_, address relayerHub_, address candidateHub_, 
                               address govHub_, address pledgeAgent_, address burn_, address foundation_) 
-           external view onlyLocalTestMode onlyTestModeDeployer updateContractAddrCalledOnce {
+           external onlyLocalTestMode onlyTestModeDeployer updateContractAddrCalledOnce {
 
     require(!_testModeAddressesWereSet(), "test-mode addresses already set");
 
@@ -266,7 +266,7 @@ abstract contract System {
           (block.chainid == ANVIL_CHAINID || block.chainid == GANACHE_CHAINID); // allow in only anvil or ganache
   }
 
-  function _testModeAddressesWereSet() private pure returns (bool) {
+  function _testModeAddressesWereSet() private view returns (bool) {
     return _ext().addrs.validatorSet != address(0); // or any other address in struct
   }
 

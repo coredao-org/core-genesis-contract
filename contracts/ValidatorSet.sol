@@ -421,7 +421,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     return (validator, success);
   }
 
-  function _subsidyReduceInterval() internal virtual view {
+  function _subsidyReduceInterval() internal virtual view returns(uint256) {
     return SUBSIDY_REDUCE_INTERVAL;
   }
 
