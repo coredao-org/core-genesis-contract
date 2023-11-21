@@ -673,7 +673,7 @@ def test_felony_success_with_validator_set_which_has_income(candidate_hub):
 def test_subsidy_reduce():
     validator_set_instance.updateBlockReward(BLOCK_REWARD)
     validator_set_instance.updateSubsidyReduceInterval(3)
-    reduce_interval = validator_set_instance.SUBSIDY_REDUCE_INTERVAL()
+    reduce_interval = validator_set_instance.getSubsidyReduceInterval()
     chain.mine(reduce_interval - chain.height % reduce_interval - 1)
     validator_set_instance.deposit(ZERO_ADDRESS, {'value': 1})
     assert validator_set_instance.blockReward() == validator_set_instance.BLOCK_REWARD() * validator_set_instance.REDUCE_FACTOR() // 10000
@@ -686,7 +686,7 @@ def test_subsidy_reduce_for_81_times():
 
     validator_set_instance.updateBlockReward(BLOCK_REWARD)
     validator_set_instance.updateSubsidyReduceInterval(3)
-    reduce_interval = validator_set_instance.SUBSIDY_REDUCE_INTERVAL()
+    reduce_interval = validator_set_instance.getSubsidyReduceInterval()
     chain.mine(reduce_interval - chain.height % reduce_interval - 1)
     validator_set_instance.deposit(ZERO_ADDRESS, {'value': 1})
     for _ in range(80):

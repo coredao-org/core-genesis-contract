@@ -71,7 +71,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
     Relayer memory r = relayers[msg.sender];
     delete relayers[msg.sender];
     payable(msg.sender).transfer(r.deposit - r.dues); //@dev:safe(no DoS since msg.sender)
-    payable(SYSTEM_REWARD_ADDR).transfer(r.dues);
+    payable(_systemReward()).transfer(r.dues);
     emit relayerUnRegister(msg.sender);
   }
 

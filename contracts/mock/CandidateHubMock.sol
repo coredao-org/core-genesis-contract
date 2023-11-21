@@ -3,9 +3,13 @@ pragma solidity 0.8.4;
 import "../CandidateHub.sol";
 
 contract CandidateHubMock is CandidateHub {
+    uint256 private constant MOCK_INIT_ROUND_INTERVAL = 1;
+    uint256 private constant MOCK_INIT_VALIDATOR_COUNT = 21;
+
     uint256[] public scores;
     uint256 public totalPower;
     uint256 public totalCoin;
+    bool public controlRoundTimeTag = false;
 
     function developmentInit() external {
         roundInterval = 1;
@@ -74,10 +78,30 @@ contract CandidateHubMock is CandidateHub {
   }
 
   function getScoreMock(address[] memory candidates, uint256[] memory powers) external {
-    (scores, totalPower, totalCoin) = IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(
+    (scores, totalPower, totalCoin) = IPledgeAgent(_pledgeAgent()).getHybridScore(
       candidates,
       powers
     );
+  }
+
+  function _updateRoundTag() internal override { 
+    if (controlRoundTimeTag) {
+      roundTag++;
+    } else {
+      super._updateRoundTag();
+    }
+  }
+
+  function _initRoundInterval() internal view override returns(uint256) {
+    return MOCK_INIT_ROUND_INTERVAL; //{{initRoundInterval}}; zzzz;
+  }
+
+  function _initValidatorCount() internal view override returns(uint256) {
+    return MOCK_INIT_VALIDATOR_COUNT; //{{initValidatorCount}};zzzzz;
+  }
+
+  function setControlRoundTimeTag(bool value) external {
+    controlRoundTimeTag = value;
   }
 
   function getScores() external view returns (uint256[] memory) {
@@ -93,7 +117,7 @@ contract CandidateHubMock is CandidateHub {
   }
 
   function cleanMock() public {
-    ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
+    ISlashIndicator(_slash()).clean();
   }
 
   function registerMock(

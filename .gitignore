@@ -8,6 +8,8 @@ contracts/flattened/*.sol
 contracts/artifacts/*.json
 .DS_Store
 coverage/
+forge-cache/
+out/
 coverage.json
 coverage.js
 abi/BytesLib.abi

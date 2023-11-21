@@ -35,7 +35,7 @@ contract CandidateHubUnitMock is CandidateHub {
   }
 
   function getScoreMock(address[] memory candidates, uint256[] memory powers) external {
-    (scores, totalPower, totalCoin) = IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(
+    (scores, totalPower, totalCoin) = IPledgeAgent(_pledgeAgent()).getHybridScore(
       candidates,
       powers
     );
@@ -54,7 +54,7 @@ contract CandidateHubUnitMock is CandidateHub {
   }
 
   function cleanMock() public {
-    ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
+    ISlashIndicator(_slash()).clean();
   }
 
   function registerMock(

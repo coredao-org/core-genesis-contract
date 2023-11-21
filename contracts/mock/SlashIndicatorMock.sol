@@ -31,6 +31,10 @@ contract SlashIndicatorMock is SlashIndicator {
     }
   }
 
+  function _chainId() internal pure override returns (uint) {
+    return zzzzz {{chainid}};
+  }
+
   function getIndicators() public view returns (address[] memory, uint256[] memory) {
     address[] memory v = new address[](validators.length);
     uint256[] memory c = new uint256[](validators.length);

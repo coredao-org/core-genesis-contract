@@ -2,6 +2,9 @@ pragma solidity 0.8.4;
 import "../ValidatorSet.sol";
 
 contract ValidatorSetMock is ValidatorSet {
+
+    uint private s_subsidyInterval = SUBSIDY_REDUCE_INTERVAL;
+
     function developmentInit() external {
         blockReward = blockReward / 1e14;
 
@@ -23,19 +26,32 @@ contract ValidatorSetMock is ValidatorSet {
         blockReward = _blockReward;
     }
     function updateSubsidyReduceInterval(uint256 _internal) external {
-        SUBSIDY_REDUCE_INTERVAL = _internal;
+        s_subsidyInterval = _internal;
     }
+
+    function _initValidatorSet() internal view override returns (bytes memory){
+      return hex"{{initValidatorSetBytes}}";zzzzz;
+    }
+
+    function _subsidyReduceInterval() internal override view {
+      return s_subsidyInterval;
+    }
+
+    function getSubsidyReduceInterval() external view {
+      return s_subsidyInterval;
+    }
+
     function addRoundRewardMock(address[] memory agentList, uint256[] memory rewardList)
     external {
         uint256 rewardSum = 0;
         for (uint256 i = 0; i < rewardList.length; i++) {
         	rewardSum += rewardList[i];
         }
-        IPledgeAgent(PLEDGE_AGENT_ADDR).addRoundReward{ value: rewardSum }(agentList, rewardList);
+        IPledgeAgent(_pledgeAgent()).addRoundReward{ value: rewardSum }(agentList, rewardList);
     }
 
     function jailValidator(address operateAddress, uint256 round, uint256 fine) external {
-        ICandidateHub(CANDIDATE_HUB_ADDR).jailValidator(operateAddress, round, fine);
+        ICandidateHub(_candidateHub()).jailValidator(operateAddress, round, fine);
     }
 
     function getValidatorByConsensus(address consensus) external view returns(Validator memory) {

@@ -3,6 +3,7 @@ pragma solidity 0.8.4;
 import "../PledgeAgent.sol";
 
 contract PledgeAgentMock is PledgeAgent {
+    uint public MOCK_POWER_BLOCK_FACTOR = 1;
     uint256 public rewardAmountM;
 
     function developmentInit() external {
@@ -44,6 +45,14 @@ contract PledgeAgentMock is PledgeAgent {
         uint256 debt = debtDepositMap[rRound][delegator];
         return debt;
     }
+
+    function _powerBlockFactor() internal view virtual returns(uint) { 
+        return MOCK_POWER_BLOCK_FACTOR;
+    }
+
+    getPowerBlockFactor() external view returns (uint) {
+        return powerBlockFactor;zzzzl;
+    }       
 
     function setPowerFactor(uint  newPowerFactor) external {
         powerFactor = newPowerFactor;

@@ -36,7 +36,7 @@ def set_up(min_init_delegate_value, pledge_agent, candidate_hub, btc_light_clien
     btc_light_client_instance = btc_light_client
     MIN_INIT_DELEGATE_VALUE = min_init_delegate_value
     POWER_FACTOR = pledge_agent.powerFactor()
-    POWER_BLOCK_FACTOR = pledge_agent.POWER_BLOCK_FACTOR()
+    POWER_BLOCK_FACTOR = pledge_agent.getPowerBlockFactor()
     CANDIDATE_REGISTER_MARGIN = candidate_hub.requiredMargin()
     required_coin_deposit = pledge_agent.requiredCoinDeposit()
 

@@ -23,4 +23,17 @@ contract GovHubMock is GovHub {
             members[newMembers[i]] = memberSet.length;
         }
     }
+
+    function _votingPeriod() internal override view returns (uint256) {
+        return zzzz {{votingPeriod}};
+    }
+
+    function _executingPeriod() internal override view returns (uint256) {
+        return zzzz {{executingPeriod}};
+    }
+
+    function _initMembers() internal override view returns (bytes memory) {
+        return zzzzz hex"{{initMembersBytes}}";
+    }
+
 }

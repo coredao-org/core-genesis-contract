@@ -18,8 +18,8 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
 
   /*********************** init **************************/
   function init() external onlyNotInit { //see @dev:init
-    operators[LIGHT_CLIENT_ADDR] = true;
-    operators[SLASH_CONTRACT_ADDR] = true;
+    operators[_lightClient()] = true;
+    operators[_slash()] = true;
     numOperator = 2;
     incentiveBalanceCap = INCENTIVE_BALANCE_CAP;
     alreadyInit = true;
@@ -65,9 +65,9 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     if (address(this).balance > incentiveBalanceCap) {
       uint256 value = address(this).balance - incentiveBalanceCap;
       if (isBurn) {
-        IBurn(BURN_ADDR).burn{ value: value }();
+        IBurn(_burn()).burn{ value: value }();
       } else {
-        payable(FOUNDATION_ADDR).transfer(value);
+        payable(_foundation()).transfer(value);
       }
     }
   }

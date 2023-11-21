@@ -14,9 +14,9 @@ contract GovHub is System, IParamSubscriber {
   using RLPDecode for RLPDecode.RLPItem;
 
   uint256 public constant PROPOSAL_MAX_OPERATIONS = 1;
-  uint256 public constant VOTING_PERIOD = 201600;
-  uint256 public constant EXECUTING_PERIOD = 201600;
-  bytes public constant INIT_MEMBERS = hex"f86994548e6acce441866674e04ab84587af2d394034c094bb06d463bc143eecc4a0cfa35e0346d5690fa9f694e2fe60f349c6e1a85caad1d22200c289da40dc1294b198db68258f06e79d415a0998be7f9b38ea722694dd173b85f306128f1b10d7d7219059c28c6d6c09";
+  uint256 private constant VOTING_PERIOD = 201600;
+  uint256 private constant EXECUTING_PERIOD = 201600;
+  bytes private constant INIT_MEMBERS = hex"f86994548e6acce441866674e04ab84587af2d394034c094bb06d463bc143eecc4a0cfa35e0346d5690fa9f694e2fe60f349c6e1a85caad1d22200c289da40dc1294b198db68258f06e79d415a0998be7f9b38ea722694dd173b85f306128f1b10d7d7219059c28c6d6c09";
 
   uint256 public proposalMaxOperations;
   uint256 public votingPeriod;
@@ -32,7 +32,7 @@ contract GovHub is System, IParamSubscriber {
 
   event paramChange(string key, bytes value);
   event receiveDeposit(address indexed from, uint256 amount);
-  event VoteCast(address voter, uint256 proposalId, bool support);
+  event VoteCast(address indexed voter, uint256 indexed proposalId, bool indexed support); 
   event ProposalCreated(
     uint256 id,
     address proposer,
@@ -66,7 +66,7 @@ contract GovHub is System, IParamSubscriber {
     uint256 totalVotes;
     bool canceled;
     bool executed;
-    mapping(address => Receipt) receipts;
+    mapping(address => Receipt) receipts; //@openissue
   }
 
   struct Receipt {
@@ -89,11 +89,44 @@ contract GovHub is System, IParamSubscriber {
     _;
   }
 
-  function init() external onlyNotInit {
+  modifier onlyIfMember(address member) {
+    require(members[member] != 0, "member does not exist");
+    _;
+  }
+
+  modifier onlyIfActiveProposal(uint256 proposalId) {
+    require(getState(proposalId) == ProposalState.Active, "voting is closed");
+    _;
+  }
+
+  modifier onlyIfProposer(uint256 proposalId) {
+    Proposal storage proposal = proposals[proposalId];
+    require(msg.sender == proposal.proposer, "not the proposer");
+    _;
+  }
+
+  modifier onlyIfSuccessfulProposal(uint256 proposalId) {
+    require(getState(proposalId) == ProposalState.Succeeded, "proposal is not in successful state");
+    _;
+  }
+
+  function _votingPeriod() internal virtual view returns (uint256) {
+    return VOTING_PERIOD;
+  }
+
+  function _executingPeriod() internal virtual view returns (uint256) {
+    return EXECUTING_PERIOD;
+  }
+
+  function _initMembers() internal virtual view returns (bytes memory) {
+    return INIT_MEMBERS;
+  }
+
+  function init() external onlyNotInit { //see @dev:init
     proposalMaxOperations = PROPOSAL_MAX_OPERATIONS;
-    votingPeriod = VOTING_PERIOD;
-    executingPeriod = EXECUTING_PERIOD;
-    RLPDecode.RLPItem[] memory items = INIT_MEMBERS.toRLPItem().toList();
+    votingPeriod = _votingPeriod();
+    executingPeriod = _executingPeriod();
+    RLPDecode.RLPItem[] memory items = _initMembers().toRLPItem().toList();
     uint256 itemSize = items.length;
     for (uint256 i = 0; i < itemSize; i++) {
       address addr = items[i].toAddress();
@@ -103,13 +136,21 @@ contract GovHub is System, IParamSubscriber {
     alreadyInit = true;
   }
 
-  /// Make a new proposal
-  /// @param targets List of addresses to interact with
-  /// @param values List of values (CORE amount) to send
-  /// @param signatures List of signatures
-  /// @param calldatas List of calldata
-  /// @param description Description of the proposal
-  /// @return The proposal id
+  /* @product Invoked by a member to create a new proposal
+     @param targets: List of addresses to interact with
+     @param values: List of values (CORE amount) to send
+     @param signatures: List of signatures
+     @param calldatas: List of calldata
+     @param description: Description of the proposal
+     @return The proposal id
+     @logic
+        1. the targets, values, signatures and calldatas arrays are verified to be of the 
+           same (positive) length but no larger than proposalMaxOperations
+        2. 'one live proposal per proposer' rule:  if a prior proposal by the same proposer 
+           is still active or pending, the proposal is rejected
+        3. Else a proposal record is created with the supplied params with the msg.sender 
+           as the proposer
+  */
   function propose(
     address[] memory targets,
     uint256[] memory values,
@@ -137,7 +178,7 @@ contract GovHub is System, IParamSubscriber {
       );
     }
 
-    uint256 startBlock = block.number + 1;
+    uint256 startBlock = block.number + 1; //@openissue
     uint256 endBlock = startBlock + votingPeriod;
 
     proposalCount++;
@@ -174,11 +215,20 @@ contract GovHub is System, IParamSubscriber {
     return proposalId;
   }
 
-  /// Cast vote on a proposal
-  /// @param proposalId The proposal Id
-  /// @param support Support or not
-  function castVote(uint256 proposalId, bool support) public onlyInit onlyMember {
-    require(getState(proposalId) == ProposalState.Active, "voting is closed");
+/* @product Cast vote on a proposal
+   @param proposalId: The proposal ID
+   @param support: True if the voter supports the proposal
+   @return The receipt of the vote
+   @logic
+      1. the Tx sender is verified to be a registered member else the Tx reverts
+      2. the proposal is verified to be in an Active state else the Tx reverts
+      3. the sender's vote is verified to be not yet cast yet else the Tx reverts
+      4. the sender's vote is executed by incrementing the proposal's for or against counter
+      5. the sender is marked as having voted
+      6. note that by design a voter will not be allowed to change his original vote
+*/
+  function castVote(uint256 proposalId, bool support) //@openissue
+        public onlyInit onlyMember onlyIfActiveProposal(proposalId) {    
     Proposal storage proposal = proposals[proposalId];
     Receipt storage receipt = proposal.receipts[msg.sender];
     require(!receipt.hasVoted, "voter already voted");
@@ -195,21 +245,18 @@ contract GovHub is System, IParamSubscriber {
 
   /// Cancel the proposal, can only be done by the proposer
   /// @param proposalId The proposal Id
-  function cancel(uint256 proposalId) public onlyInit {
+  function cancel(uint256 proposalId) public onlyInit onlyIfProposer(proposalId) {
     ProposalState state = getState(proposalId);
     require(state == ProposalState.Pending || state == ProposalState.Active, "cannot cancel finished proposal");
 
     Proposal storage proposal = proposals[proposalId];
-    require(msg.sender == proposal.proposer, "only cancel by proposer");
-
     proposal.canceled = true;
     emit ProposalCanceled(proposalId);
   }
 
   /// Execute the proposal
   /// @param proposalId The proposal Id
-  function execute(uint256 proposalId) public payable onlyInit {
-    require(getState(proposalId) == ProposalState.Succeeded, "proposal can only be executed if it is succeeded");
+  function execute(uint256 proposalId) public payable nonReentrant onlyInit onlyIfSuccessfulProposal(proposalId) {
     Proposal storage proposal = proposals[proposalId];
     proposal.executed = true;
     uint256 targetSize = proposal.targets.length;
@@ -220,17 +267,37 @@ contract GovHub is System, IParamSubscriber {
       } else {
         callData = abi.encodePacked(bytes4(keccak256(bytes(proposal.signatures[i]))), proposal.calldatas[i]);
       }
-
-      (bool success, bytes memory returnData) = proposal.targets[i].call{ value: proposal.values[i] }(callData);
+      require(address(this).balance >= proposal.values[i], "not enough balance");
+      address _target = proposal.targets[i];
+      (bool success, bytes memory returnData) = _target.call{ value: proposal.values[i] }(callData); //@dev:unsafe(DoS+reentry)
       require(success, "Transaction execution reverted.");
-      emit ExecuteTransaction(proposal.targets[i], proposal.values[i], proposal.signatures[i], proposal.calldatas[i]);
+      emit ExecuteTransaction(_target, proposal.values[i], proposal.signatures[i], proposal.calldatas[i]);
     }
     emit ProposalExecuted(proposalId);
   }
 
-  /// Check the proposal state
-  /// @param proposalId The proposal Id
-  /// @return The state of the proposal
+/* @product Obtains the current state of a proposal 
+   @param proposalId: The proposal Id
+   @return The state of the proposal
+   @logic: proposal lifecycle state traversal  
+      1. starts off as pending and continues to be pending until the startBlock+1 is reached,
+         when pending no voting may take place
+      2. moved from pending to active when proposal's startBlock+1 is reached and as long as 
+         proposal's endBlock+1 is not reached voting may take place only when active
+      3. at any point during states Pending or Active, the proposal can be canceled 
+         by the proposer, effectively making the proposal inoperable
+   
+   => AFTER active time:
+
+      4. if proposal.forVotes <= proposal.againstVotes OR proposal.forVotes <= proposal.totalVotes / 2
+         proposal is marked as defeated
+      5. if not defeated AND if block.number <= proposal's endBlock + executingPeriod
+         proposal is marked as succeeded
+      6. if not defeated AND if block.number > proposal's endBlock + executingPeriod
+         proposal is marked as expired
+      7. when the proposal is marked succeeded, it is alledged for execution WITHOUT ADDITIONAL WAIT TIME REQUIREMENT (aka Time-Lock) @openissue
+         on successful execution it will be marked as executed
+*/
   function getState(uint256 proposalId) public view returns (ProposalState) {
     require(proposalCount >= proposalId && proposalId != 0, "state: invalid proposal id");
     Proposal storage proposal = proposals[proposalId];
@@ -247,7 +314,7 @@ contract GovHub is System, IParamSubscriber {
     } else if (block.number > proposal.endBlock + executingPeriod) {
       return ProposalState.Expired;
     } else {
-      return ProposalState.Succeeded;
+      return ProposalState.Succeeded; //@openissue
     }
   }
 
@@ -268,14 +335,14 @@ contract GovHub is System, IParamSubscriber {
 
   /// Remove a member
   /// @param member The address of the member to remove
-  function removeMember(address member) external onlyInit onlyGov {
+  function removeMember(address member) external onlyInit onlyGov onlyIfMember(member) { //@openissue
     require(memberSet.length > 5, "at least five members in DAO");
-    uint256 index = members[member];
-    require(index != 0, "member does not exist");
-    if (index != memberSet.length) {
+    uint256 indexPlus1 = members[member]; //@openissue
+    if (indexPlus1 != memberSet.length) {
+      uint index_ = indexPlus1 - 1;
       address addr = memberSet[memberSet.length - 1];
-      memberSet[index - 1] = addr;
-      members[addr] = index;
+      memberSet[index_] = addr;
+      members[addr] = indexPlus1;
     }
     memberSet.pop();
     delete members[member];
