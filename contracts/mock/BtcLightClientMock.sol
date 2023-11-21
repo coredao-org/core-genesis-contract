@@ -63,4 +63,13 @@ contract BtcLightClientMock is BtcLightClient {
     function addMinerPowerMock(bytes32 blockHash) external {
         addMinerPower(blockHash);
     }
+
+    function _updateAddressesAlreadyCalled() internal override view returns (bool) {
+        return false;
+    }
+
+    function _testModeAddressesWereSet() internal override view returns (bool) {
+        return false;
+    }
 }
+

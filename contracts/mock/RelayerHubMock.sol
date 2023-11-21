@@ -7,4 +7,12 @@ contract RelayerHubMock is RelayerHub {
         dues = dues / 1e16;
         requiredDeposit = requiredDeposit / 1e16;
     }
+
+    function _updateAddressesAlreadyCalled() internal override view returns (bool) {
+        return false;
+    }
+
+    function _testModeAddressesWereSet() internal override view returns (bool) {
+        return false;
+    }
 }

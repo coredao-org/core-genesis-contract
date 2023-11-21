@@ -46,4 +46,16 @@ contract SlashIndicatorMock is SlashIndicator {
     }
     return (v, c);
   }
+
+  function _isCoinbase() internal override view returns (bool) {
+    return true;
+  }
+
+  function _updateAddressesAlreadyCalled() internal override view returns (bool) {
+    return false;
+  }
+
+  function _testModeAddressesWereSet() internal override view returns (bool) {
+    return false;
+  }
 }

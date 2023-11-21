@@ -25,7 +25,7 @@ def fake_gov():
         CandidateHubMock[0].address,
         accounts[0],
         PledgeAgentMock[0].address,
-        Burn[0].address,
+        BurnMock[0].address,
         Foundation[0].address
     )
 
@@ -283,7 +283,7 @@ def test_update_param_voting_period_through_propose(gov_hub):
 
 def test_cast_vote_failed_with_address_which_is_not_member(gov_hub):
     gov_hub.propose([gov_hub.address], [1], ["123"], ["0x"], "test propose one")
-    with brownie.reverts("only member is allowed to call the method"):
+    with brownie.reverts("Test: only member is allowed to call the method"):
         gov_hub.castVote(1, True, {'from': accounts[3]})
 
 

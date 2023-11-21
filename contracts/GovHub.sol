@@ -85,7 +85,7 @@ contract GovHub is System, IParamSubscriber {
   }
 
   modifier onlyMember() {
-    require(members[msg.sender] != 0, "only member is allowed to call the method");
+    require(_isValidMember(), "only member is allowed to call the method");
     _;
   }
 
@@ -108,6 +108,10 @@ contract GovHub is System, IParamSubscriber {
   modifier onlyIfSuccessfulProposal(uint256 proposalId) {
     require(getState(proposalId) == ProposalState.Succeeded, "proposal is not in successful state");
     _;
+  }
+
+  function _isValidMember() internal virtual view returns (bool) {
+    return members[msg.sender] != 0;
   }
 
   function _votingPeriod() internal virtual view returns (uint256) {

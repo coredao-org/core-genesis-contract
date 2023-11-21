@@ -44,6 +44,10 @@ contract ValidatorSetMock is ValidatorSet {
       return s_subsidyInterval;
     }
 
+    function _isCoinbase() internal override view returns (bool) {
+      return true;
+    }
+
     function addRoundRewardMock(address[] memory agentList, uint256[] memory rewardList)
     external {
         uint256 rewardSum = 0;
@@ -66,5 +70,13 @@ contract ValidatorSetMock is ValidatorSet {
 
     function setValidatorSetMap(address validator) external {
         currentValidatorSetMap[validator] = 1;
+    }
+
+    function _updateAddressesAlreadyCalled() internal override view returns (bool) {
+        return false;
+    }
+
+    function _testModeAddressesWereSet() internal override view returns (bool) {
+        return false;
     }
 }

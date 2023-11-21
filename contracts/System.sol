@@ -28,7 +28,7 @@ abstract contract System {
   address immutable public s_testModeDeployer;
 
   modifier onlyCoinbase() {  
-    require(msg.sender == block.coinbase, "the message sender must be the block producer");  
+    require(_isCoinbase(), "the message sender must be the block producer");  
     _;
   }
 
@@ -87,7 +87,7 @@ abstract contract System {
   }
 
   modifier onlyLocalTestMode() {
-    require(_isLocalTestNodeChain(), "only local test mode");
+    require(_isLocalTestNode(), "only local test mode");
     _;
   }
 
@@ -97,10 +97,15 @@ abstract contract System {
   }
 
   modifier updateContractAddrCalledOnce() {
-    require(!s_contractAddrUpdated, "contract addresses already updated");
+    require(!_updateAddressesAlreadyCalled(), "contract addresses already updated");
     s_contractAddrUpdated = true;
     _;
   }
+
+  function _updateAddressesAlreadyCalled() internal virtual view returns (bool) {zzzz
+    return s_contractAddrUpdated;
+  }
+
 
   /// The length of param mismatch. Default is 32 bytes.
   /// @param name the name of param.
@@ -133,7 +138,7 @@ abstract contract System {
   }
 
   constructor() {
-    s_testModeDeployer = _isLocalTestNodeChain() ? msg.sender : address(0);
+    s_testModeDeployer = _isLocalTestNode() ? msg.sender : address(0);
   }
 
   function _ext() private pure returns (ExtStorage storage _extStorage) {
@@ -145,7 +150,7 @@ abstract contract System {
   }
 
   function _validatorSet() view internal returns (address) {
-    if (_isLocalTestNodeChain()) {
+    if (_isLocalTestNode()) {
       return _notNull(_ext().addrs.validatorSet);
     } else {
       return _VALIDATOR_CONTRACT_ADDR;   
@@ -153,7 +158,7 @@ abstract contract System {
   }
 
   function _slash() view internal returns (address) {
-    if (_isLocalTestNodeChain()) {
+    if (_isLocalTestNode()) {
       return _notNull(_ext().addrs.slash);
     } else {
       return _SLASH_CONTRACT_ADDR;   
@@ -161,7 +166,7 @@ abstract contract System {
   }
 
   function _systemReward() view internal returns (address) {
-    if (_isLocalTestNodeChain()) {
+    if (_isLocalTestNode()) {
       return _notNull(_ext().addrs.systemReward);
     } else {
       return _SYSTEM_REWARD_ADDR;   
@@ -169,7 +174,7 @@ abstract contract System {
   }
 
   function _lightClient() view internal returns (address) {
-    if (_isLocalTestNodeChain()) {
+    if (_isLocalTestNode()) {
       return _notNull(_ext().addrs.lightClient);
     } else {
       return _LIGHT_CLIENT_ADDR;   
@@ -177,7 +182,7 @@ abstract contract System {
   }
 
   function _relayerHub() view internal returns (address) {
-    if (_isLocalTestNodeChain()) {
+    if (_isLocalTestNode()) {
       return _notNull(_ext().addrs.relayerHub);
     } else {
       return _RELAYER_HUB_ADDR;   
@@ -185,7 +190,7 @@ abstract contract System {
   }
 
   function _candidateHub() view internal returns (address) {
-    if (_isLocalTestNodeChain()) {
+    if (_isLocalTestNode()) {
       return _notNull(_ext().addrs.candidateHub);
     } else {
       return _CANDIDATE_HUB_ADDR;   
@@ -193,7 +198,7 @@ abstract contract System {
   }
 
   function _govHub() view internal returns (address) {
-    if (_isLocalTestNodeChain()) {
+    if (_isLocalTestNode()) {
       return _notNull(_ext().addrs.govHub);
     } else {
       return _GOV_HUB_ADDR;   
@@ -201,7 +206,7 @@ abstract contract System {
   }
 
   function _pledgeAgent() view internal returns (address) {
-    if (_isLocalTestNodeChain()) {
+    if (_isLocalTestNode()) {
       return _notNull(_ext().addrs.pledgeAgent);
     } else {
       return _PLEDGE_AGENT_ADDR;   
@@ -209,7 +214,7 @@ abstract contract System {
   }
 
   function _burn() view internal returns (address) {
-    if (_isLocalTestNodeChain()) {
+    if (_isLocalTestNode()) {
       return _notNull(_ext().addrs.burn);
     } else {
       return _BURN_ADDR;   
@@ -217,7 +222,7 @@ abstract contract System {
   }
 
   function _foundation() view internal returns (address) {
-    if (_isLocalTestNodeChain()) {
+    if (_isLocalTestNode()) {
       return _notNull(_ext().addrs.foundation);
     } else {
       return _FOUNDATION_ADDR;   
@@ -261,13 +266,16 @@ abstract contract System {
     return addr;
   }
 
-  function _isLocalTestNodeChain() private view returns (bool) {
-    return block.chainid != CORE_MAINNET && block.chainid != CORE_TESTNET && // sanity check: not Core mainnet or testnet
-          (block.chainid == ANVIL_CHAINID || block.chainid == GANACHE_CHAINID); // allow in only anvil or ganache
+  function _isLocalTestNode() private view returns (bool) {
+    return block.chainid != CORE_MAINNET && block.chainid != CORE_TESTNET; // any network which is neither Core mainnet or testnet
   }
 
-  function _testModeAddressesWereSet() private view returns (bool) {
+  function _testModeAddressesWereSet() internal virtual view returns (bool) {
     return _ext().addrs.validatorSet != address(0); // or any other address in struct
+  }
+
+  function _isCoinbase() internal virtual view returns (bool) {
+    return msg.sender == block.coinbase;
   }
 
   /* @dev:init

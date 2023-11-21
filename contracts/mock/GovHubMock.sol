@@ -40,4 +40,15 @@ contract GovHubMock is GovHub {
         return MOCK_INIT_MEMBERS;
     }
 
+    function _updateAddressesAlreadyCalled() internal override view returns (bool) {
+        return false;
+    }
+
+    function _isValidMember() internal override view returns (bool) {
+        return true;
+    }
+
+    function _testModeAddressesWereSet() internal override view returns (bool) {
+        return false;
+    }
 }

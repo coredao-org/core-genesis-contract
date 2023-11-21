@@ -64,4 +64,12 @@ contract PledgeAgentMock is PledgeAgent {
         CoinDelegator storage d = a.cDelegatorMap[delegator];
         rewardAmountM = collectCoinReward(a, d, roundLimit);
     }
+
+    function _updateAddressesAlreadyCalled() internal override view returns (bool) {
+        return false;
+    }
+
+    function _testModeAddressesWereSet() internal override view returns (bool) {
+        return false;
+    }
 }
