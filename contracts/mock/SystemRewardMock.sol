@@ -15,4 +15,8 @@ contract SystemRewardMock is SystemReward {
     function _testModeAddressesWereSet() internal override view returns (bool) {
         return false;
     }
+
+    function _gasPriceIsZero() internal override view returns (bool) {
+        return true;
+    }
 }

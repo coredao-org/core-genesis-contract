@@ -33,7 +33,7 @@ abstract contract System {
   }
 
   modifier onlyZeroGasPrice() {    
-    require(tx.gasprice == 0 , "gasprice is not zero");    
+    require(_gasPriceIsZero() , "gasprice is not zero");
     _;
   }
 
@@ -104,6 +104,10 @@ abstract contract System {
 
   function _updateAddressesAlreadyCalled() internal virtual view returns (bool) {
     return s_contractAddrUpdated;
+  }
+
+  function _gasPriceIsZero() internal virtual view returns (bool) {
+    return tx.gasprice == 0;
   }
 
 
