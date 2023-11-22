@@ -34,9 +34,6 @@ npm install
 # install test dependency
 pip install -r requirements.txt
 
-# generate contracts for testing
-./generate-test-contracts.sh
-
 # run brownie tests
 brownie test -v --stateful false
 ```
