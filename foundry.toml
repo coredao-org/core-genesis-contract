@@ -1,0 +1,42 @@
+[profile.default]
+src = "contracts"
+test = "tests-foundry"
+script = 'scripts-foundry'
+out = "out"
+libs = ["lib"]
+cache = true
+cache_path = "forge-cache"
+gas_reports = ['*']
+gas_reports_ignore = []
+offline = false
+optimizer = false # @dev true in mainnet
+optimizer_runs = 200
+no_match_contract = "TestLibMemory"
+#eth-rpc-url = "https://mainnet.infura.io"
+solc = "0.8.4"
+
+
+[fuzz]
+runs = 1000 # @dev test with 50_000 pre major releases 
+#max_test_rejects = 65536
+#seed = '0x3e8'
+#dictionary_weight = 40
+#include_storage = true
+#include_push_bytes = true
+
+[invariant]
+runs = 10_000
+depth = 40
+fail_on_revert = false
+call_override = false
+dictionary_weight = 80
+include_storage = true
+include_push_bytes = true
+shrink_sequence = true
+
+[fmt]
+line_length = 100
+tab_width = 3
+bracket_spacing = true
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

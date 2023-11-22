@@ -78,11 +78,6 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     _;
   }
 
-  modifier onlyIfCandidateAddress(address operateAddress) {
-    require(operateMap[operateAddress] > 0, "not a candidate");
-    _;
-  }
-
   modifier onlyIfConsensusAddrNotExist(address consensusAddr) {
     require(consensusMap[consensusAddr] == 0, "consensus already exists");
     _;
@@ -155,7 +150,11 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
           b. transfer the candidate's margin eth value to the SystemReward contract
   */
   function jailValidator(address operateAddress, uint256 round, uint256 fine)
-        external override onlyValidator onlyIfCandidateAddress(operateAddress) {
+        external override onlyValidator {
+    if (operateMap[operateAddress] == 0) {
+      // no a condidate, return do notrevert
+      return;
+    }
     uint256 indexPlus1 = operateMap[operateAddress];
     uint index_ = indexPlus1 - 1;
     Candidate storage c = candidateSet[index_];
