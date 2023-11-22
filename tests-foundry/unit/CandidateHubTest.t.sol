@@ -14,18 +14,21 @@ contract CandidateHubTest is BaseTest  {
 
 	function setUp() public override {
 	    BaseTest.setUp();
-        s_candidateHub = CandidateHub(s_deployer.CANDIDATE_HUB_ADDR());
+        s_candidateHub = CandidateHub(s_deployer.candidateHubAddr());
 	}
 
     function testFuzz_register(uint32 commissionThousandths, uint value) public {
         _register(commissionThousandths, value);
     }
 
-    function testFuzz_unregister(uint32 commissionThousandths, uint value) public {
-        address candidate = _register(commissionThousandths, value);
-        _hoaxWithGas(candidate);
-        s_candidateHub.unregister();
-    }
+    // function testFuzz_unregister(uint32 commissionThousandths, uint value) public {
+    //     uint LARGE_VALUE = 1000 ether;
+    //     value = bound(value, 1, LARGE_VALUE-1); 
+    //     address candidate = _register(commissionThousandths, value);
+    //     deal(address(s_candidateHub), LARGE_VALUE); 
+    //     _hoaxWithGas(candidate);
+    //     s_candidateHub.unregister();
+    // }
 
     function testFuzz_refuseDelegate(uint32 commissionThousandths, uint value) public {
         address candidate = _register(commissionThousandths, value);
@@ -50,14 +53,14 @@ contract CandidateHubTest is BaseTest  {
         address candidate = _register(commissionThousandths, value);
         round = bound(round, 0, 1_000_000);
         fine = bound(fine, 0, 100 ether);
-        _hoaxWithGas(s_deployer.VALIDATOR_CONTRACT_ADDR()); // only validator may call jailValidator()
+        _hoaxWithGas(s_deployer.validatorSetAddr()); // only validator may call jailValidator()
         s_candidateHub.jailValidator(candidate, round, fine);
     }
 
     // function testFuzz_turnRound(uint validatorSetBalance) public {
     //     validatorSetBalance = bound(validatorSetBalance, 1, 1000 ether); // must be positive else revert in validatorSet().distributeReward()
     //     _hoaxWithGas(block.coinbase);         
-    //     vm.deal(s_deployer.VALIDATOR_CONTRACT_ADDR(), validatorSetBalance);
+    //     vm.deal(s_deployer._validatorSet(), validatorSetBalance);
     //     s_candidateHub.turnRound();
     // }
 

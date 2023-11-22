@@ -270,7 +270,7 @@ abstract contract System {
     return addr;
   }
 
-  function _isLocalTestNode() private view returns (bool) {
+  function _isLocalTestNode() internal view returns (bool) {
     return block.chainid != CORE_MAINNET && block.chainid != CORE_TESTNET; // any network which is neither Core mainnet or testnet
   }
 

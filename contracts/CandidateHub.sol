@@ -359,7 +359,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     uint256 indexPlus1 = operateMap[msg.sender];
     uint index_ = indexPlus1 - 1;
     Candidate storage c = candidateSet[index_];
-    require(c.status == (c.status & UNREGISTER_STATUS), "candidate status is not cleared");
+    uint status_ = _getCandidateStatus(index_);
+    require(status_ == (status_ & UNREGISTER_STATUS), "candidate status is not cleared");
     uint256 margin = c.margin;
 
     removeCandidate(indexPlus1);
@@ -371,6 +372,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     } else {
       payable(_systemReward()).transfer(margin);
     }
+  }
+
+  function _getCandidateStatus(uint index_) internal virtual view returns(uint256) {
+    return candidateSet[index_].status;
   }
 
   /// Update validator candidate information

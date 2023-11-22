@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
 import "../CandidateHub.sol";
@@ -161,5 +162,4 @@ contract CandidateHubMock is CandidateHub {
   function _gasPriceIsZero() internal override view returns (bool) {
       return true;
   }
-
 }

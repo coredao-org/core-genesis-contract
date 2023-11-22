@@ -4,8 +4,8 @@ pragma solidity 0.8.4;
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 
-import {System} from "../contracts/System.sol";
 import {BtcLightClient} from "../contracts/BtcLightClient.sol";
+import {System} from "../contracts/System.sol";
 import {Burn} from "../contracts/Burn.sol";
 import {CandidateHub} from "../contracts/CandidateHub.sol";
 import {Foundation} from "../contracts/Foundation.sol";
@@ -17,10 +17,17 @@ import {ValidatorSet} from "../contracts/ValidatorSet.sol";
 import {SystemRewardMock} from "../contracts/mock/SystemRewardMock.sol";
 
 
-contract Deployer is System, Script {
-
-    uint public constant ANVIL_CHAINID = 31337;
-    uint public constant GANACHE_CHAINID = 1337;
+contract Deployer is Script, System {
+    address public validatorSetAddr;
+    address public slashAddr ;
+    address public systemRewardAddr;
+    address public lightAddr;
+    address public relayerHubAddr;
+    address public candidateHubAddr;
+    address public govHubAddr ;
+    address public pledgeAgentAddr;
+    address public burnAddr ;
+    address public foundationAddr;
 
     // @dev declared as state-varible to circumvent stack-too-deep error
     Burn private burn; 
@@ -36,7 +43,7 @@ contract Deployer is System, Script {
 
     function run() external {
 	    // vm.startBroadcast(); 
-        if (_isLocalTestnet()) {
+        if (_isLocalTestNode()) {
             _performActualDeployment();
         } else {
             // rely on the already deployed contracts
@@ -48,37 +55,28 @@ contract Deployer is System, Script {
         console.log("deploying on network %s", block.chainid);
         
         burn = new Burn();                                
-        burn.init();
         lightClient = new BtcLightClient();        
-        lightClient.init();
         slashIndicator = new SlashIndicator();  
-        slashIndicator.init();
         systemReward = new SystemRewardMock(); // must use mock else onlyOperator() will fail        
-        systemReward.init();      
         candidateHub = new CandidateHub();        
-        candidateHub.init();
         pledgeAgent = new PledgeAgent();           
-        pledgeAgent.init();
         validatorSet = new ValidatorSet();        
-        validatorSet.init();
         relayerHub = new RelayerHub();              
-        relayerHub.init();
         foundation = new Foundation();               
-        //foundation.init(); -- non existent 
         govHub = new GovHub();                           
-        govHub.init();
 
-        address validatorSetAddr = address(validatorSet);
-        address slashAddr = address(slashIndicator);
-        address systemRewardAddr = address(systemReward);
-        address lightAddr = address(lightClient);
-        address relayerHubAddr = address(relayerHub);
-        address candidateHubAddr = address(candidateHub);
-        address govHubAddr = address(govHub);
-        address pledgeAgentAddr = address(pledgeAgent);
-        address burnAddr = address(burn);
-        address foundationAddr = address(foundation);
+        validatorSetAddr = address(validatorSet);
+        slashAddr = address(slashIndicator);
+        systemRewardAddr = address(systemReward);
+        lightAddr = address(lightClient);
+        relayerHubAddr = address(relayerHub);
+        candidateHubAddr = address(candidateHub);
+        govHubAddr = address(govHub);
+        pledgeAgentAddr = address(pledgeAgent);
+        burnAddr = address(burn);
+        foundationAddr = address(foundation);
 
+        // update contracts in local-node testing mode:
         burn.updateContractAddr(validatorSetAddr, slashAddr, systemRewardAddr, lightAddr, relayerHubAddr,
                                 candidateHubAddr, govHubAddr, pledgeAgentAddr, burnAddr, foundationAddr);
         lightClient.updateContractAddr(validatorSetAddr, slashAddr, systemRewardAddr, lightAddr, relayerHubAddr,
@@ -100,20 +98,16 @@ contract Deployer is System, Script {
         govHub.updateContractAddr(validatorSetAddr, slashAddr, systemRewardAddr, lightAddr, relayerHubAddr,
                                 candidateHubAddr, govHubAddr, pledgeAgentAddr, burnAddr, foundationAddr);
 
-        // to be used by tests
-        VALIDATOR_CONTRACT_ADDR = validatorSetAddr;
-        SLASH_CONTRACT_ADDR = slashAddr;
-        SYSTEM_REWARD_ADDR = systemRewardAddr;
-        LIGHT_CLIENT_ADDR = lightAddr;
-        RELAYER_HUB_ADDR = relayerHubAddr;
-        CANDIDATE_HUB_ADDR = candidateHubAddr;
-        GOV_HUB_ADDR = govHubAddr;
-        PLEDGE_AGENT_ADDR = pledgeAgentAddr;
-        BURN_ADDR = burnAddr;
-        FOUNDATION_ADDR = foundationAddr;
-    }
-
-    function _isLocalTestnet() private view returns(bool) {
-        return block.chainid == ANVIL_CHAINID || block.chainid == GANACHE_CHAINID; // add more local testnet ids if needed
+        // and call init() after setting of addresses
+        burn.init();
+        lightClient.init();
+        slashIndicator.init();
+        systemReward.init();      
+        candidateHub.init();
+        pledgeAgent.init();
+        validatorSet.init();
+        relayerHub.init();
+        //foundation.init(); -- non existent 
+        govHub.init();
     }
 }
