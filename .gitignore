@@ -4,6 +4,8 @@ build/
 pids
 logs
 .idea/
+forge-cache/
+out/
 contracts/flattened/*.sol
 contracts/artifacts/*.json
 .DS_Store
