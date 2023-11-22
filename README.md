@@ -34,7 +34,7 @@ npm install
 # (if needed) add .foundry/bin to PATH
 export PATH="$PATH:~/.foundry/bin"
 
-# install latest Foundry
+# update Foundry
 foundryup
 
 # run all foundry tests
