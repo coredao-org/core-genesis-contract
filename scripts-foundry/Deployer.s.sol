@@ -29,24 +29,13 @@ contract Deployer is Script, System {
     address public burnAddr ;
     address public foundationAddr;
 
-    // @dev declared as state-varible to circumvent stack-too-deep error
-    Burn private burn; 
-    BtcLightClient private lightClient;
-    SlashIndicator private slashIndicator;
-    SystemRewardMock private systemReward;
-    CandidateHub private candidateHub;
-    PledgeAgent private pledgeAgent;
-    ValidatorSet private validatorSet;
-    RelayerHub private relayerHub;
-    Foundation private foundation;
-    GovHub private govHub;
-
     function run() external {
 	    // vm.startBroadcast(); 
         if (_isLocalTestNode()) {
             _performActualDeployment();
         } else {
             // rely on the already deployed contracts
+            _useAlreadyDeployedAddresses();
         }
         // vm.stopBroadcast();
     }
@@ -54,16 +43,16 @@ contract Deployer is Script, System {
     function _performActualDeployment() private {        
         console.log("deploying on network %s", block.chainid);
         
-        burn = new Burn();                                
-        lightClient = new BtcLightClient();        
-        slashIndicator = new SlashIndicator();  
-        systemReward = new SystemRewardMock(); // must use mock else onlyOperator() will fail        
-        candidateHub = new CandidateHub();        
-        pledgeAgent = new PledgeAgent();           
-        validatorSet = new ValidatorSet();        
-        relayerHub = new RelayerHub();              
-        foundation = new Foundation();               
-        govHub = new GovHub();                           
+        Burn burn = new Burn();
+        BtcLightClient lightClient = new BtcLightClient();
+        SlashIndicator slashIndicator = new SlashIndicator();
+        SystemRewardMock systemReward = new SystemRewardMock(); // must use mock else onlyOperator() will fail 
+        CandidateHub candidateHub = new CandidateHub();
+        PledgeAgent pledgeAgent = new PledgeAgent();
+        ValidatorSet validatorSet = new ValidatorSet();
+        RelayerHub relayerHub = new RelayerHub();
+        Foundation foundation = new Foundation();
+        GovHub govHub = new GovHub();
 
         validatorSetAddr = address(validatorSet);
         slashAddr = address(slashIndicator);
@@ -110,4 +99,19 @@ contract Deployer is Script, System {
         //foundation.init(); -- non existent 
         govHub.init();
     }
+
+    function _useAlreadyDeployedAddresses() private {        
+        console.log("using pre-deployed contracts on network %s", block.chainid);
+        
+        validatorSetAddr = _VALIDATOR_CONTRACT_ADDR;
+        slashAddr = _SLASH_CONTRACT_ADDR;
+        systemRewardAddr = _SYSTEM_REWARD_ADDR;
+        lightAddr = _LIGHT_CLIENT_ADDR;
+        relayerHubAddr = _RELAYER_HUB_ADDR;
+        candidateHubAddr = _CANDIDATE_HUB_ADDR;
+        govHubAddr = _GOV_HUB_ADDR;
+        pledgeAgentAddr = _PLEDGE_AGENT_ADDR;
+        burnAddr = _BURN_ADDR;
+        foundationAddr = _FOUNDATION_ADDR;
+    }    
 }

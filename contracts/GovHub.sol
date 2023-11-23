@@ -269,7 +269,8 @@ contract GovHub is System, IParamSubscriber {
       if (bytes(proposal.signatures[i]).length == 0) {
         callData = proposal.calldatas[i];
       } else {
-        callData = abi.encodePacked(bytes4(keccak256(bytes(proposal.signatures[i]))), proposal.calldatas[i]);
+        bytes4 functionSignature = bytes4(keccak256(bytes(proposal.signatures[i])));
+        callData = abi.encodePacked(functionSignature, proposal.calldatas[i]);
       }
       require(address(this).balance >= proposal.values[i], "not enough balance");
       address _target = proposal.targets[i];
