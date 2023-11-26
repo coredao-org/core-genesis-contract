@@ -77,7 +77,7 @@ contract BurnTest is BaseTest  {
 
         console.log("preSenderBalance: %s, postSenderBalance: %s", preSenderBalance, postSenderBalance);
 
-        assertTrue(postSenderBalance > preSenderBalance - ADDITIONAL_GAS_FEES , "no eth should have been transferred to sender");
+        assertTrue(preSenderBalance >= postSenderBalance , "no eth should have been transferred to sender");
     }
 
 

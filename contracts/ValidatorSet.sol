@@ -310,7 +310,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
            documentation for more details
 */
   function felony(address validator, uint256 felonyRound, uint256 felonyDeposit)
-            external override onlySlash {
+            external override onlySlash nonReentrant {
     uint256 indexPlus1 = currentValidatorSetMap[validator];
     if (indexPlus1 == 0) {
       // not a validator

@@ -5,6 +5,7 @@ import {console} from "forge-std/console.sol";
 import {BaseTest} from "../common/BaseTest.t.sol";
 import {ValidatorSet} from "../../contracts/ValidatorSet.sol";
 import {SystemReward} from "../../contracts/SystemReward.sol";
+import {Address} from "../../contracts/lib/Address.sol";
 
 contract ValidatorSetTest is BaseTest  {
 
@@ -36,7 +37,7 @@ contract ValidatorSetTest is BaseTest  {
             vm.expectEmit();
             emit receiveDeposit(sender, value);
         }
-        payable(address(s_systemReward)).transfer(value);        
+        Address.sendValue(payable(address(s_systemReward)), value);
     }
 
     function testFuzz_systemReward_receiveRewards(uint value, bool isBurn) public {

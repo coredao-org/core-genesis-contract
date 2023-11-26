@@ -2,6 +2,7 @@
 pragma solidity 0.8.4;
 
 import {console} from "forge-std/console.sol";
+import {Address} from "../../contracts/lib/Address.sol";
 import {BaseTest} from "../common/BaseTest.t.sol";
 import {SystemRewardMock} from "../../contracts/mock/SystemRewardMock.sol";
 
@@ -31,7 +32,7 @@ contract SystemRewardTest is BaseTest  {
             vm.expectEmit(true,false,false,true);
             emit receiveDeposit(sender, value);
         }
-        payable(s_systemReward).transfer(value);
+        Address.sendValue(payable(s_systemReward), value);
     }
 
     function testFuzz_systemReward(uint value, bool isBurn) public {

@@ -80,7 +80,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
          jump (default = 50), then leave its value unchanged and call the misdemeanor 
          method for the validator
 */
-  function slash(address validator) external onlyCoinbase onlyInit oncePerBlock onlyZeroGasPrice{
+  function slash(address validator) external onlyCoinbase onlyInit oncePerBlock onlyZeroGasPrice nonReentrant {
     if (!IValidatorSet(_validatorSet()).isValidator(validator)) {
       return;
     }

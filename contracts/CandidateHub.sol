@@ -144,7 +144,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
           b. transfer the candidate's margin eth value to the SystemReward contract
   */
   function jailValidator(address operateAddress, uint256 round, uint256 fine)
-        external override onlyValidator {
+        external override onlyValidator nonReentrant { 
     
     uint256 indexPlus1 = operateMap[operateAddress];
     if (indexPlus1 == 0) {
@@ -171,12 +171,11 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       }
       changeStatus(c, status);
       if (fine != 0) {
-        payable(_systemReward()).transfer(fine);
+        Address.sendValue(payable(_systemReward()), fine);
       }
     } else {
       removeCandidate(indexPlus1);
-
-      payable(_systemReward()).transfer(margin);
+      Address.sendValue(payable(_systemReward()), margin);    
       emit deductedMargin(operateAddress, margin, 0);
     }
   }
