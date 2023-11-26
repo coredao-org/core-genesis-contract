@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
+
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./interface/IValidatorSet.sol";
@@ -72,7 +73,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   modifier onlyIfCandidate() {
-    require(operateMap[msg.sender] != 0, "candidate does not exist");
+    require(isCandidate(msg.sender), "candidate does not exist");
     _;
   }
 
@@ -123,6 +124,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     uint index_ = indexPlus1 - 1;
     uint256 status = candidateSet[index_].status;
     return status == (status & ACTIVE_STATUS);
+  }
+
+  function isCandidate(address _addr) public view returns(bool) {
+    return operateMap[_addr] != 0;
   }
 
 
@@ -347,6 +352,13 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     emit registered(msg.sender, consensusAddr, feeAddr, commissionThousandths, msg.value);
   }
 
+  function getMargin(address _addr) external view returns(uint256) {
+    uint256 indexPlus1 = operateMap[_addr];
+    require(indexPlus1 > 0, "candidate does not exist");
+    uint index_ = indexPlus1 - 1;
+    return candidateSet[index_].margin;
+  }
+
   /* @product Unregister the validator candidate role on Core blockchain
      @logic
       1. if candidate margin exceeds global dues value - transfer the difference to the
@@ -367,9 +379,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     if (margin > dues) {
       uint256 value = margin - dues;
       Address.sendValue(payable(msg.sender), value); //@dev:unsafe(reentry)
-      payable(_systemReward()).transfer(uint256(dues));
+      Address.sendValue(payable(_systemReward()), uint256(dues));
     } else {
-      payable(_systemReward()).transfer(margin);
+      Address.sendValue(payable(_systemReward()), margin);
     }
   }
 
