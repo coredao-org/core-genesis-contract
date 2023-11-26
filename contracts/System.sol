@@ -28,12 +28,12 @@ abstract contract System {
   address immutable public s_testModeDeployer;
 
   modifier onlyCoinbase() {  
-    require(_isCoinbase(), "the message sender must be the block producer");  
+    require(msg.sender == block.coinbase, "the message sender must be the block producer");  
     _;
   }
 
   modifier onlyZeroGasPrice() {    
-    require(_gasPriceIsZero() , "gasprice is not zero");
+    require(tx.gasprice == 0 , "gasprice is not zero");
     _;
   }
 
@@ -105,11 +105,6 @@ abstract contract System {
   function _updateAddressesAlreadyCalled() internal virtual view returns (bool) {
     return s_contractAddrUpdated;
   }
-
-  function _gasPriceIsZero() internal virtual view returns (bool) {
-    return tx.gasprice == 0;
-  }
-
 
   /// The length of param mismatch. Default is 32 bytes.
   /// @param name the name of param.
@@ -276,10 +271,6 @@ abstract contract System {
 
   function _testModeAddressesWereSet() internal virtual view returns (bool) {
     return _ext().addrs.validatorSet != address(0); // or any other address in struct
-  }
-
-  function _isCoinbase() internal virtual view returns (bool) {
-    return msg.sender == block.coinbase;
   }
 
   /* @dev:init
