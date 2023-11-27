@@ -6,7 +6,6 @@ import "./interface/IRelayerHub.sol";
 abstract contract System {
 
   bool public alreadyInit;
-  bool public s_guardIsActive;
   bool private s_contractAddrUpdated;
 
   address internal constant _VALIDATOR_CONTRACT_ADDR = 0x0000000000000000000000000000000000001000;
@@ -24,6 +23,10 @@ abstract contract System {
   uint public constant CORE_TESTNET = 1115;
   uint public constant ANVIL_CHAINID = 31337;
   uint public constant GANACHE_CHAINID = 1337;
+
+  // ReentrancyGuard
+  uint256 private constant GUARD_NOT_ENTERED = 0;
+  uint256 private constant GUARD_ENTERED = 100;
 
   address immutable public s_testModeDeployer;
 
@@ -80,10 +83,10 @@ abstract contract System {
   modifier openForAll() {_;}
 
   modifier nonReentrant() {
-    require(!s_guardIsActive, "reentrancy detected");
-    s_guardIsActive = true;
+    require(_ext().guardStatus != GUARD_ENTERED, "reentrancy detected");
+    _ext().guardStatus = GUARD_ENTERED;
     _;
-    s_guardIsActive = false;
+    _ext().guardStatus = GUARD_NOT_ENTERED;
   }
 
   modifier onlyLocalTestMode() {
@@ -133,6 +136,7 @@ abstract contract System {
 
   struct ExtStorage {
     Addresses addrs;
+    uint256 guardStatus;
     // @dev additional extended-storage fields goes here
   }
 
