@@ -83,10 +83,11 @@ abstract contract System {
   modifier openForAll() {_;}
 
   modifier nonReentrant() {
-    require(_ext().guardStatus != GUARD_ENTERED, "reentrancy detected");
-    _ext().guardStatus = GUARD_ENTERED;
+    ExtStorage storage sref_ = _ext();
+    require(sref_.guardStatus != GUARD_ENTERED, "reentry detected");
+    sref_.guardStatus = GUARD_ENTERED;
     _;
-    _ext().guardStatus = GUARD_NOT_ENTERED;
+    sref_.guardStatus = GUARD_NOT_ENTERED;
   }
 
   modifier onlyLocalTestMode() {
