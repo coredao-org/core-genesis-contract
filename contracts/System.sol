@@ -136,21 +136,24 @@ abstract contract System {
   }
 
   struct ExtStorage {
+    // @dev use ERC-7201 namespace to reduce chances of collision, see https://eips.ethereum.org/EIPS/eip-7201
+    /// @custom:storage-location erc7201:core.system.extended.storage
     Addresses addrs;
     uint256 guardStatus;
     // @dev additional extended-storage fields goes here
   }
+
+  // ERC-7201 namespace: keccak256(abi.encode(uint256(keccak256("core.system.extended.storage")) - 1)) & ~bytes32(uint256(0xff));
+  bytes32 private constant _EXT_STORAGE_LOCATION = 0x67a7102a872f79141e3e6e107bddf1a70e311104f2c8c3897ed1c7c60974e600;
 
   constructor() {
     s_testModeDeployer = _isLocalTestNode() ? msg.sender : address(0);
   }
 
   function _ext() private pure returns (ExtStorage storage _extStorage) {
-    // @dev create 'floating' storage unit that will be positioned at _offset rather sequentially at the end of the contract
-    // and thus will not collide with storage of derived contracts
+    // @dev create 'floating' storage unit that will be positioned at non-sequential storage slot, thus avoiding collisions with derived contracts
     // see https://solidity.readthedocs.io/en/v0.8.4/internals/layout_in_storage.html#layout-of-state-variables-in-storage
-    bytes32 _offset = keccak256("core.system.extStorage");
-    assembly { _extStorage.slot := _offset }
+    assembly { _extStorage.slot := _EXT_STORAGE_LOCATION }
   }
 
   function _validatorSet() view internal returns (address) {
