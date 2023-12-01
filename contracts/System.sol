@@ -83,11 +83,11 @@ abstract contract System {
   modifier openForAll() {_;}
 
   modifier nonReentrant() {
-    ExtStorage storage sref_ = _ext();
-    require(sref_.guardStatus != GUARD_ENTERED, "reentry detected");
-    sref_.guardStatus = GUARD_ENTERED;
+    ExtStorage storage $ = _ext();
+    require($.guardStatus != GUARD_ENTERED, "reentry detected");
+    $.guardStatus = GUARD_ENTERED;
     _;
-    sref_.guardStatus = GUARD_NOT_ENTERED;
+    $.guardStatus = GUARD_NOT_ENTERED;
   }
 
   modifier onlyLocalTestMode() {
@@ -150,10 +150,10 @@ abstract contract System {
     s_testModeDeployer = _isLocalTestNode() ? msg.sender : address(0);
   }
 
-  function _ext() private pure returns (ExtStorage storage _extStorage) {
+  function _ext() private pure returns (ExtStorage storage $) {
     // @dev create 'floating' storage unit that will be positioned at non-sequential storage slot, thus avoiding collisions with derived contracts
     // see https://solidity.readthedocs.io/en/v0.8.4/internals/layout_in_storage.html#layout-of-state-variables-in-storage
-    assembly { _extStorage.slot := _EXT_STORAGE_LOCATION }
+    assembly { $.slot := _EXT_STORAGE_LOCATION }
   }
 
   function _validatorSet() view internal returns (address) {
