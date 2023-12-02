@@ -135,8 +135,11 @@ abstract contract System {
     address foundation;
   }
 
+/* @dev ExtStorage: an extended storage struct used to store base contract state variables in a 'floating' 
+   i.e. non-sequential storage slot. this is done to avoid collisions with derived contracts' state variables.       
+   Uses ERC-7201 namespace to reduce chances of collision, see https://eips.ethereum.org/EIPS/eip-7201
+  */
   struct ExtStorage {
-    // @dev use ERC-7201 namespace to reduce chances of collision, see https://eips.ethereum.org/EIPS/eip-7201
     /// @custom:storage-location erc7201:core.system.extended.storage
     Addresses addrs;
     uint256 guardStatus;
@@ -150,9 +153,10 @@ abstract contract System {
     s_testModeDeployer = _isLocalTestNode() ? msg.sender : address(0);
   }
 
+/* @dev _ext(): obtain a storage reference to the non-sequential extended storage struct
+   see https://solidity.readthedocs.io/en/v0.8.4/internals/layout_in_storage.html#layout-of-state-variables-in-storage
+  */
   function _ext() private pure returns (ExtStorage storage $) {
-    // @dev create 'floating' storage unit that will be positioned at non-sequential storage slot, thus avoiding collisions with derived contracts
-    // see https://solidity.readthedocs.io/en/v0.8.4/internals/layout_in_storage.html#layout-of-state-variables-in-storage
     assembly { $.slot := _EXT_STORAGE_LOCATION }
   }
 
