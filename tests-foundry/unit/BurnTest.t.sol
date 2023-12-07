@@ -10,6 +10,7 @@ contract BurnTest is BaseTest  {
     string constant private BAD_PARAM_ERROR_MSG = "unknown param";
     string constant private BURN_CAP_KEY = "burnCap";
 
+
     Burn private s_burn;
 
     event burned(address indexed to, uint256 amount); // event must be clowned here from tested contract to be used in expectEmit()
@@ -18,7 +19,7 @@ contract BurnTest is BaseTest  {
 
 	function setUp() public override {
 	    BaseTest.setUp();
-        s_burn = Burn(s_deployer.BURN_ADDR());
+        s_burn = Burn(s_deployer.burnAddr());
 	}
 
 
@@ -50,13 +51,15 @@ contract BurnTest is BaseTest  {
 
     function testFuzz_burn_with_burnCap_lesser_than_balance_results_in_no_eth_transfer(uint burnCap) public {
         burnCap = _limitFunds(burnCap);
+        console.log("burnCap = %s", burnCap);
 
         if (address(s_burn).balance <= burnCap) {
             vm.deal(address(s_burn), burnCap+1); 
         }
 
-        burnCap = bound(burnCap, 0, address(s_burn).balance); // else OutOfBound error
-        
+        uint burnBalance = address(s_burn).balance;
+        burnCap = bound(burnCap, burnBalance+1, burnBalance + MAX_ETH_VALUE); // else OutOfBound error    
+
         _updateBurnCap(burnCap); 
 
         assertTrue( burnCap >= address(s_burn).balance, "bad burnCap value");
@@ -74,7 +77,7 @@ contract BurnTest is BaseTest  {
 
         console.log("preSenderBalance: %s, postSenderBalance: %s", preSenderBalance, postSenderBalance);
 
-        assertTrue(postSenderBalance > preSenderBalance - ADDITIONAL_GAS_FEES , "no eth should have been transferred to sender");
+        assertTrue(preSenderBalance >= postSenderBalance , "no eth should have been transferred to sender");
     }
 
 
@@ -101,7 +104,7 @@ contract BurnTest is BaseTest  {
         addedBalance = _limitFunds(addedBalance); 
         uint origBurnCap = s_burn.burnCap();
         vm.deal(address(s_burn), addedBalance);                
-        vm.prank(s_deployer.GOV_HUB_ADDR());
+        vm.prank(s_deployer.govHubAddr());
 
         uint legalBurnCapValue = address(s_burn).balance + 1;
 
@@ -130,8 +133,8 @@ contract BurnTest is BaseTest  {
 
     function _updateBurnCap(uint newBurnCap) private {
         uint origCap = s_burn.burnCap();
-        vm.prank(s_deployer.GOV_HUB_ADDR());
-        s_burn.updateParam(BURN_CAP_KEY, abi.encodePacked(newBurnCap));
+        vm.prank(s_deployer.govHubAddr());
+        s_burn.updateParam(BURN_CAP_KEY, _toBytes(newBurnCap));
         uint newCap = s_burn.burnCap();
         console.log("orig cap: %d, new cap: %d", origCap, newCap);
         assertEq(newBurnCap, s_burn.burnCap(), "cap not updated");

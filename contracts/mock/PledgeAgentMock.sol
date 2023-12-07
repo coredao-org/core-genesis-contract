@@ -1,8 +1,10 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
 import "../PledgeAgent.sol";
 
 contract PledgeAgentMock is PledgeAgent {
+    uint private MOCK_POWER_BLOCK_FACTOR = 1;
     uint256 public rewardAmountM;
 
     function developmentInit() external {
@@ -45,6 +47,14 @@ contract PledgeAgentMock is PledgeAgent {
         return debt;
     }
 
+    function _powerBlockFactor() internal view override returns(uint) { 
+        return MOCK_POWER_BLOCK_FACTOR;
+    }
+
+    function getPowerBlockFactor() external view returns (uint) {
+        return _powerBlockFactor();
+    }       
+
     function setPowerFactor(uint  newPowerFactor) external {
         powerFactor = newPowerFactor;
     }
@@ -54,5 +64,13 @@ contract PledgeAgentMock is PledgeAgent {
         Agent storage a = agentsMap[agent];
         CoinDelegator storage d = a.cDelegatorMap[delegator];
         rewardAmountM = collectCoinReward(a, d, roundLimit);
+    }
+
+    function _updateAddressesAlreadyCalled() internal override view returns (bool) {
+        return false;
+    }
+
+    function _testModeAddressesWereSet() internal override view returns (bool) {
+        return false;
     }
 }

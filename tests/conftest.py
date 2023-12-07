@@ -93,7 +93,7 @@ def pledge_agent(accounts):
 
 @pytest.fixture(scope="module")
 def burn(accounts):
-    c = accounts[0].deploy(Burn)
+    c = accounts[0].deploy(BurnMock)
     c.init()
     return c
 

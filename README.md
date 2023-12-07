@@ -28,19 +28,31 @@ npm install
 
 
 
-## Run Tests
+## Run Foundry Tests
+
+```shell
+# (if needed) add .foundry/bin to PATH
+export PATH="$PATH:~/.foundry/bin"
+
+# update Foundry
+foundryup
+
+# run all foundry tests
+forge test
+
+# or: run a specific test
+forge test --match-test <name-of-test>
+```
+
+## Run Brownie Tests
 
 ```shell
 # install test dependency
 pip install -r requirements.txt
 
-# generate contracts for testing
-./generate-test-contracts.sh
-
 # run brownie tests
 brownie test -v --stateful false
 ```
-
 
 
 Flatten all system contracts:

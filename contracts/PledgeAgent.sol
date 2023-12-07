@@ -22,7 +22,7 @@ import "./System.sol";
 contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   uint256 public constant INIT_REQUIRED_COIN_DEPOSIT = 1e18;
   uint256 public constant INIT_HASH_POWER_FACTOR = 20000;
-  uint256 public constant POWER_BLOCK_FACTOR = 1e18;
+  uint256 private constant POWER_BLOCK_FACTOR = 1e18;
 
   uint256 public requiredCoinDeposit;
 
@@ -118,7 +118,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param target Address of the target candidate
   error SameCandidate(address source, address target);
 
-  function init() external onlyNotInit {
+  function init() external onlyNotInit { //see @dev:init
     requiredCoinDeposit = INIT_REQUIRED_COIN_DEPOSIT;
     powerFactor = INIT_HASH_POWER_FACTOR;
     roundTag = 1;
@@ -126,9 +126,16 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   }
 
   /*********************** Interface implementations ***************************/
-  /// Receive round rewards from ValidatorSet, which is triggered at the beginning of turn round
-  /// @param agentList List of validator operator addresses
-  /// @param rewardList List of reward amount
+  
+  /* @product Called by the ValidatorSet contract (only) at the beginning of turn round to 
+              receive round rewards
+     @param agentList: List of validator operator addresses
+     @param rewardList: List of reward amounts
+     @logic
+          For each validator - if the roundScore of the agent's last reward is positive and its (new) 
+          reward value is positive then set the agent's last reward's total and remain.reward 
+          values to the agent's new reward value
+*/
   function addRoundReward(address[] calldata agentList, uint256[] calldata rewardList)
     external
     payable
@@ -160,12 +167,23 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
   }
 
-  /// Calculate hybrid score for all candidates
-  /// @param candidates List of candidate operator addresses
-  /// @param powers List of power value in this round
-  /// @return scores List of hybrid scores of all validator candidates in this round
-  /// @return totalPower Total power delegate in this round
-  /// @return totalCoin Total coin delegate in this round
+/* @product Called by the CandidateHub contract from the turn round flow to calculate hybrid scores for all candidates
+   @param candidates: List of candidate operator addresses
+   @param powers: List of power values in this round
+   @return scores List of hybrid scores of all validator candidates in this round
+   @return totalPower Total power delegated in this round
+   @return totalCoin Total coin delegated in this round
+
+   @logic
+        1. assigns, for each candidate, its power to be the new power value times 
+           POWER_BLOCK_FACTOR (=1e18) and its coin value to be its totalDeposit
+        2. Calculates the totalPower of all candidates as the sum of all of their (new) power 
+           values PLUS ONE @openissue
+        3. Calculates the totalCoin of all candidates as the sum of all of their (new) coin 
+           values PLUS ONE @openissue
+        4. Use these values to calculates the hybrid score for each candidate as follows:
+              agent.score = (agent.power * totalCoin * powerFactor / 10000) +  (agent.coin * totalPower)
+*/
   function getHybridScore(address[] calldata candidates, uint256[] calldata powers
   ) external override onlyCandidate
       returns (uint256[] memory scores, uint256 totalPower, uint256 totalCoin) {
@@ -178,7 +196,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     for (uint256 i = 0; i < candidateSize; ++i) {
       Agent storage a = agentsMap[candidates[i]];
       // in order to improve accuracy, the calculation of power is based on 10^18
-      a.power = powers[i] * POWER_BLOCK_FACTOR;
+      a.power = powers[i] * _powerBlockFactor();
       a.coin = a.totalDeposit;
       totalPower += a.power;
       totalCoin += a.coin;
@@ -188,16 +206,31 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     scores = new uint256[](candidateSize);
     for (uint256 i = 0; i < candidateSize; ++i) {
       Agent storage a = agentsMap[candidates[i]];
-      scores[i] = a.power * totalCoin * powerFactor / 10000 + a.coin * totalPower;
+      scores[i] = a.power * totalCoin * powerFactor / 10000 + a.coin * totalPower; //@openissue
     }
     return (scores, totalPower, totalCoin);
   }
 
-  /// Start new round, this is called by the CandidateHub contract
-  /// @param validators List of elected validators in this round
-  /// @param totalPower Total power delegate in this round
-  /// @param totalCoin Total coin delegate in this round
-  /// @param round The new round tag
+  function _powerBlockFactor() internal view virtual returns(uint) { 
+    return POWER_BLOCK_FACTOR;
+  }
+  
+/* @product Called by the CandidateHub contract as part of the turn round flow to to start new round
+   @param validators: List of elected validators in this round
+   @param totalPower: Total power delegated in this round as calculated in getHybridScore()
+   @param totalCoin: Total coin delegated in this round as calculated in getHybridScore()
+   @param round: The new round tag
+
+   @logic
+        1. adds a new round record for the new round with power set to the totalPower value, 
+           coin to the totalCoin value, and powerFactor set to the global powerFactor
+        2. Sets the global roundTag value to be that of the new round
+        3. For each validator calculates a score as follows:
+               new.agent.score = (agent.power * totalCoin * powerFactor / 10000)  +  (agent.coin * totalPower)
+           
+           and adds a new reward to the agent's list for the new round with the new.agent.score 
+           and the agent's coin value
+*/
   function setNewRound(address[] calldata validators, uint256 totalPower,
       uint256 totalCoin, uint256 round) external override onlyCandidate {
     RoundState memory rs;
@@ -215,10 +248,31 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
   }
 
-  /// Distribute rewards for delegated hash power on one validator candidate
-  /// This method is called at the beginning of `turn round` workflow
-  /// @param candidate The operator address of the validator candidate
-  /// @param miners List of BTC miners who delegated hash power to the candidate
+/* @product Called by the CandidateHub contract from the turn round flow to distribute rewards for delegated hash 
+    power for a single validator candidate
+   @param candidate: The operator address of the validator candidate
+   @param miners: List of BTC miners who delegated hash power to the candidate
+   
+   @logic
+        1. Find the candidate.round.reward record i.e. the reward for the current round 
+           and verify its totalReward value is positive
+        2. Calculate a reward.value = 
+              current.round.coin * 1e18 * current.round.powerFactor / 10000 * agent.reward.totalReward / agent.reward.score
+        3. Increase the reward of all the miners in the miners list by reward.value
+        4. Calculate a powerReward value  = reward.value * number.of.candidate.miners
+        5. Calculate a undelegated.coin.reward initial value as follows:
+            if (candidate.coin > candidate.round.reward.coin)
+                undelegated.coin.reward = candidate.round.reward.totalReward * (candidate.coin - candidate.round.reward.coin) * this.round.power / candidate.round.reward.score;
+            else
+                undelegated.coin.reward = 0
+
+        6. If candidate.round.reward.coin = 0 then delete the candidate.round.reward record and
+            set undelegated.coin.reward = candidate.round.remainReward - powerReward
+        7. Else, if either powerReward or undelegated.coin.reward are positive, subtract their 
+           sum from candidate.round.reward.remainReward:
+        8. Finally, if undelegated.coin.reward is positive, call the SystemReward's receiveRewards() 
+           service with eth value of undelegated.coin.reward to store the rewards
+*/
   function distributePowerReward(address candidate, address[] calldata miners) external override onlyCandidate {
     // distribute rewards to every miner
     // note that the miners are represented in the form of reward addresses
@@ -234,7 +288,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       return;
     }
     RoundState storage rs = stateMap[roundTag];
-    uint256 reward = rs.coin * POWER_BLOCK_FACTOR * rs.powerFactor / 10000 * r.totalReward / r.score;
+    uint256 reward = rs.coin * _powerBlockFactor() * rs.powerFactor / 10000 * r.totalReward / r.score;
     uint256 minerSize = miners.length;
 
     uint256 powerReward = reward * minerSize;
@@ -258,7 +312,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
 
     if (undelegateCoinReward != 0) {
-      ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: undelegateCoinReward }();
+      ISystemReward(_systemReward()).receiveRewards{ value: undelegateCoinReward }();
     }
   }
 
@@ -276,8 +330,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /*********************** External methods ***************************/
   /// Delegate coin to a validator
   /// @param agent The operator address of validator
-  function delegateCoin(address agent) external payable {
-    if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(agent)) {
+  function delegateCoin(address agent) external payable nonReentrant {
+    if (!ICandidateHub(_candidateHub()).canDelegate(agent)) {
       revert InactiveAgent(agent);
     }
     uint256 newDeposit = delegateCoin(agent, msg.sender, msg.value, 0);
@@ -293,9 +347,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Undelegate coin from a validator
   /// @param agent The operator address of validator
   /// @param amount The amount of CORE to undelegate
-  function undelegateCoin(address agent, uint256 amount) public {
+  function undelegateCoin(address agent, uint256 amount) public nonReentrant {
     (uint256 deposit, ) = undelegateCoin(agent, msg.sender, amount, false);
-    Address.sendValue(payable(msg.sender), deposit);
+    Address.sendValue(payable(msg.sender), deposit); //@dev:unsafe(reentry, no DoS since msg.sender)
     emit undelegatedCoin(agent, msg.sender, deposit);
   }
 
@@ -310,8 +364,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param sourceAgent The validator to transfer coin stake from
   /// @param targetAgent The validator to transfer coin stake to
   /// @param amount The amount of CORE to transfer
-  function transferCoin(address sourceAgent, address targetAgent, uint256 amount) public {
-    if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetAgent)) {
+  function transferCoin(address sourceAgent, address targetAgent, uint256 amount) public nonReentrant {
+    if (!ICandidateHub(_candidateHub()).canDelegate(targetAgent)) {
       revert InactiveAgent(targetAgent);
     }
     if (sourceAgent == targetAgent) {
@@ -326,7 +380,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Claim reward for delegator
   /// @param agentList The list of validators to claim rewards on, it can be empty
   /// @return (Amount claimed, Are all rewards claimed)
-  function claimReward(address[] calldata agentList) external returns (uint256, bool) {
+  function claimReward(address[] calldata agentList) external nonReentrant returns (uint256, bool) {
     // limit round count to control gas usage
     int256 roundLimit = 500;
     uint256 reward;
@@ -366,7 +420,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   /*********************** Internal methods ***************************/
   function distributeReward(address payable delegator, uint256 reward) internal {
-    Address.sendValue(delegator, reward);
+    Address.sendValue(delegator, reward); //@dev:unsafe(DoS+reentry)
     emit claimedReward(delegator, msg.sender, reward, true);
   }
 
@@ -537,7 +591,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
           if (r.coin == 0) {
             delete a.rewardSet[rewardIndex];
           }
-          ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: undelegateReward }();
+          ISystemReward(_systemReward()).receiveRewards{ value: undelegateReward }();
         }
         deposit = d.deposit + transferOutDeposit;
         d.deposit = d.newDeposit;

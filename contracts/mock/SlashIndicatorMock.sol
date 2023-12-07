@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
 import "../SlashIndicator.sol";
 import "../lib/RLPDecode.sol";
 
 contract SlashIndicatorMock is SlashIndicator {
+    uint32 private constant MOCK_CHAINID = 1112;
+
     using RLPDecode for bytes;
     using RLPDecode for RLPDecode.RLPItem;
 
@@ -31,6 +34,10 @@ contract SlashIndicatorMock is SlashIndicator {
     }
   }
 
+  function _chainId() internal pure override returns (uint) {
+    return uint(MOCK_CHAINID);
+  }
+
   function getIndicators() public view returns (address[] memory, uint256[] memory) {
     address[] memory v = new address[](validators.length);
     uint256[] memory c = new uint256[](validators.length);
@@ -39,5 +46,13 @@ contract SlashIndicatorMock is SlashIndicator {
       c[i] = indicators[v[i]].count;
     }
     return (v, c);
+  }
+
+  function _updateAddressesAlreadyCalled() internal override view returns (bool) {
+    return false;
+  }
+
+  function _testModeAddressesWereSet() internal override view returns (bool) {
+    return false;
   }
 }

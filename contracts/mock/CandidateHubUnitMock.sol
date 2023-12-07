@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
 import "../CandidateHub.sol";
@@ -35,7 +36,7 @@ contract CandidateHubUnitMock is CandidateHub {
   }
 
   function getScoreMock(address[] memory candidates, uint256[] memory powers) external {
-    (scores, totalPower, totalCoin) = IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(
+    (scores, totalPower, totalCoin) = IPledgeAgent(_pledgeAgent()).getHybridScore(
       candidates,
       powers
     );
@@ -54,7 +55,7 @@ contract CandidateHubUnitMock is CandidateHub {
   }
 
   function cleanMock() public {
-    ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
+    ISlashIndicator(_slash()).clean();
   }
 
   function registerMock(
@@ -81,5 +82,13 @@ contract CandidateHubUnitMock is CandidateHub {
     consensusMap[consensusAddr] = index;
 
     emit registered(operateAddr, consensusAddr, feeAddr, commissionThousandths, msg.value);
+  }
+
+  function _updateAddressesAlreadyCalled() internal override view returns (bool) {
+    return false;
+  }
+
+  function _testModeAddressesWereSet() internal override view returns (bool) {
+    return false;
   }
 }

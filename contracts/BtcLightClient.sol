@@ -29,8 +29,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   uint64 public constant TARGET_TIMESPAN_MUL_4 = TARGET_TIMESPAN * 4;
   int256 public constant UNROUNDED_MAX_TARGET = 2**224 - 1; // different from (2**16-1)*2**208 http://bitcoin.stackexchange.com/questions/13803/how-exactly-was-the-original-coefficient-for-difficulty-determined
 
-  bytes public constant INIT_CONSENSUS_STATE_BYTES = hex"0000402089138e40cd8b4832beb8013bc80b1425c8bcbe10fc280400000000000000000058a06ab0edc5653a6ab78490675a954f8d8b4d4f131728dcf965cd0022a02cdde59f8e63303808176bbe3919";
-  uint32 public constant INIT_CHAIN_HEIGHT = 766080;
+  bytes private constant INIT_CONSENSUS_STATE_BYTES = hex"0000402089138e40cd8b4832beb8013bc80b1425c8bcbe10fc280400000000000000000058a06ab0edc5653a6ab78490675a954f8d8b4d4f131728dcf965cd0022a02cdde59f8e63303808176bbe3919"; 
+  uint32 private constant INIT_CHAIN_HEIGHT = 766080;
 
   uint256 public highScore;
   bytes32 public heaviestBlock;
@@ -88,7 +88,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /*********************** init **************************/
   /// Initialize 
   function init() external onlyNotInit {
-    bytes32 blockHash = doubleShaFlip(INIT_CONSENSUS_STATE_BYTES);
+    bytes32 blockHash = doubleShaFlip(_initConsensusState());
     address rewardAddr;
     address candidateAddr;
 
@@ -97,10 +97,10 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     heaviestBlock = blockHash;
     initBlockHash = blockHash;
 
-    bytes memory initBytes = INIT_CONSENSUS_STATE_BYTES;
-    uint32 adjustment = INIT_CHAIN_HEIGHT / DIFFICULTY_ADJUSTMENT_INTERVAL;
+    bytes memory initBytes = _initConsensusState();
+    uint32 adjustment = _initChainHeight() / DIFFICULTY_ADJUSTMENT_INTERVAL;
     adjustmentHashes[adjustment] = blockHash;
-    bytes memory nodeBytes = encode(initBytes, rewardAddr, scoreBlock, INIT_CHAIN_HEIGHT, adjustment, candidateAddr);
+    bytes memory nodeBytes = encode(initBytes, rewardAddr, scoreBlock, _initChainHeight(), adjustment, candidateAddr);
     blockChain[blockHash] = nodeBytes;
     rewardForSyncHeader = INIT_REWARD_FOR_SYNC_HEADER;
     callerCompensationMolecule=CALLER_COMPENSATION_MOLECULE;
@@ -111,9 +111,25 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     alreadyInit = true;
   }
 
-  /// Store a BTC block in Core blockchain
-  /// @dev This method is called by relayers
-  /// @param blockBytes BTC block bytes
+  function _initChainHeight() internal virtual view returns (uint32) {
+    return INIT_CHAIN_HEIGHT;
+  }
+
+  function _initConsensusState() internal virtual view returns (bytes memory){
+    return INIT_CONSENSUS_STATE_BYTES;
+  }
+
+/* @product Called by a BTC relayer to store a BTC block on the Core blockchain
+   @param blockBytes: BTC block bytes
+   @logic
+      1. Extracts the header bytes from the blockBytes
+      2. Calculates the blockHash from the header bytes
+      3. Check PoW of a relayed BTC block and exit function (but do not revert) if PoW is invalid
+      4. Verify that the block is no older than 5 days ago and revert if that is not the case. The calculation:
+          blockHeight + 720 > getHeight(heaviestBlock)
+      5. Verify MerkleRoot & pickup candidate address, reward address and bindingHash.
+      6. Save & update rewards
+  */
   function storeBlockHeader(bytes calldata blockBytes) external onlyRelayer {
     require(
       tx.gasprice == (storeBlockGasPrice == 0 ? INIT_STORE_BLOCK_GAS_PRICE : storeBlockGasPrice), 
@@ -198,7 +214,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     // The mining power with rounds less than or equal to frozenRoundTag has been frozen 
     // and there is no need to continue staking, otherwise it may disrupt the reward 
     // distribution mechanism
-    uint256 frozenRoundTag = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag() - POWER_ROUND_GAP;
+    uint256 frozenRoundTag = ICandidateHub(_candidateHub()).getRoundTag() - POWER_ROUND_GAP;
     if (candidate != address(0) && blockRoundTag > frozenRoundTag) {
       address miner = getRewardAddress(blockHash);
       RoundPower storage r = roundPowerMap[blockRoundTag];
@@ -211,14 +227,21 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     }
   }
 
-  /// Claim relayer rewards
-  /// @param relayerAddr The relayer address
+/* @product Claim relayer rewards
+     @param relayerAddr: The relayer address
+     @logic Called by relayers to claim their rewards for storing BTC blocks
+      - Reverts if the provided address is not a relayer or if the relayer currently has no reward to claim
+      - Else:  invokes SystemReward's claimRewards() to transfer the reward to the relayer.
+     Note that claimReward() may slash the reward to the current SystemReward balance if the latter is smaller than the reward without reverting the Tx
+     @openissue: This function may be called by any party (not only a relayer) with a relayer address to which the funds will be transferred
+     this might prove problematic for relayers that prefer to choose their own dates of reward reclaiming
+  */
   function claimRelayerReward(address relayerAddr) external onlyInit {
      uint256 reward = relayerRewardVault[relayerAddr];
      require(reward != 0, "no relayer reward");
      relayerRewardVault[relayerAddr] = 0;
      address payable recipient = payable(relayerAddr);
-     ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(recipient, reward);
+     ISystemReward(_systemReward()).claimRewards(recipient, reward);
   }
 
   /// Distribute relayer rewards
@@ -257,9 +280,14 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     return callerReward;
   }
 
-  /// Calculate relayer weight based number of BTC blocks relayed
-  /// @param count The number of BTC blocks relayed by a specific validator
-  /// @return The relayer weight
+ /* @product Calculate relayer weight based number of BTC blocks relayed
+     @param count: The number of BTC blocks relayed by a specific validator
+     @logic Weight calculation  (maxWeight default value = 20):
+          1. if count <= maxWeight (default: 20) => return count
+          2. else if count in half-open interval (maxWeight, 2*maxWeight] => return maxWeight
+          3. else if count in half-open interval (2*maxWeight, 2.75*maxWeight] => return 3*maxWeight - count
+          4. else return count/4
+   */  
   function calculateRelayerWeight(uint256 count) public view returns(uint256) {
     if (count <= maxWeight) {
       return count;
@@ -281,7 +309,6 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       dest := add(add(_output, 0x20), start)
     }
     Memory.copy(src, dest, length);
-    return _output;
   }
 
   function encode(bytes memory headerBytes, address rewardAddr, uint256 scoreBlock,
@@ -562,7 +589,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /// @param btcHash The BTC block hash
   /// @return true/false
   function isHeaderSynced(bytes32 btcHash) external view returns (bool) {
-    return getHeight(btcHash) >= INIT_CHAIN_HEIGHT;
+    return getHeight(btcHash) >= _initChainHeight();
   }
 
   /// Get the submitter/relayer of a specific BTC block

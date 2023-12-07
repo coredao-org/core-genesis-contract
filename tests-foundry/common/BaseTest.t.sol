@@ -10,7 +10,7 @@ import {Deployer} from "../../scripts-foundry/Deployer.s.sol";
 abstract contract BaseTest is Test {
     
     uint constant internal MAX_ETH_VALUE = 10_000_000 ether; // or any other reasonable cap
-    uint constant internal ADDITIONAL_GAS_FEES = 100 ether; // or any other reasonable value
+    uint constant internal ADDITIONAL_GAS_FEES = 1 ether; // or any other reasonable value
 
     bool constant internal ACCEPT_PAYMENTS = true; // test EOAs/eth-accepting contracts
     bool constant internal REJECT_PAYMENTS = false;  // test eth-rejecting (hostile?) contracts
@@ -18,6 +18,8 @@ abstract contract BaseTest is Test {
     Deployer internal s_deployer;
     
     bool internal s_acceptPayment; // mutable by design. to be set by a derived test on demand
+
+    error TestOutOfBounds(string name, uint256 given, uint256 lowerBound, uint256 upperBound);
 
     constructor(bool accept) {
         s_acceptPayment = accept;
@@ -49,5 +51,10 @@ abstract contract BaseTest is Test {
 
     function _strEqual(string memory str1, string memory str2) internal pure returns (bool) {
         return keccak256(abi.encodePacked(str1)) == keccak256(abi.encodePacked(str2));
+    }
+
+    function _toBytes(uint256 val) public pure returns (bytes memory bytes_) {
+        bytes_ = new bytes(32);
+        assembly { mstore(add(bytes_, 32), val) }  
     }
 }		

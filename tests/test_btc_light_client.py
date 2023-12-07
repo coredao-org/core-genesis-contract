@@ -114,7 +114,7 @@ def test_store_duplicate_block(btc_light_client):
 
 def test_distribute_relayer_reward(btc_light_client, system_reward):
     chain_tip = btc_light_client.getChainTip()
-    idx = btc_light_client.getHeight(chain_tip) - btc_light_client.INIT_CHAIN_HEIGHT()
+    idx = btc_light_client.getHeight(chain_tip) - btc_light_client.MOCK_INIT_CHAIN_HEIGHT()
     count_in_round = btc_light_client.countInRound()
     before_reward = btc_light_client.relayerRewardVault(accounts[0])
 
