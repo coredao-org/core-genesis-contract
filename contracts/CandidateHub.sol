@@ -77,13 +77,13 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     _;
   }
 
-  modifier onlyIfConsensusAddrNotExist(address consensusAddr) {
-    require(consensusMap[consensusAddr] == 0, "consensus already exists");
+  modifier onlyIfNotCandidate() {
+    require(!isCandidate(msg.sender), "candidate already exist");
     _;
   }
 
-  modifier onlyIfNotCandidate() {
-    require(operateMap[msg.sender] == 0, "candidate already exists");
+  modifier onlyIfConsensusAddrNotExist(address consensusAddr) {
+    require(consensusMap[consensusAddr] == 0, "consensus already exists");
     _;
   }
 
