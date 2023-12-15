@@ -80,6 +80,8 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
   uint256 public storeBlockGasPrice;
 
+  mapping(uint32 => bytes32) public height2HashMap;
+
   /*********************** events **************************/
   event StoreHeaderFailed(bytes32 indexed blockHash, int256 indexed returnCode);
   event StoreHeader(bytes32 indexed blockHash, address candidate, address indexed rewardAddr, uint32 indexed height, bytes32 bindingHash);
@@ -176,11 +178,20 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     // that when an (existing) Tip becomes stale, the chain can continue with
     // the alternate Tip
     if (scoreBlock >= highScore) {
+      uint32 prevHeight = blockHeight - 1;
+      bytes32 prevHash = getPrevHash(blockHash);
+      while(height2HashMap[prevHeight] != prevHash && prevHeight + CONFIRM_BLOCK >= blockHeight) {
+        height2HashMap[prevHeight] = prevHash;
+        --prevHeight;
+        prevHash = getPrevHash(prevHash);
+      }
+
       if (blockHeight > getHeight(heaviestBlock)) {
         addMinerPower(blockHash);
       }
       heaviestBlock = blockHash;
       highScore = scoreBlock;
+      height2HashMap[blockHeight] = blockHash;
     }
     emit StoreHeader(blockHash, candidateAddr, rewardAddr, blockHeight, bindingHash);
   }
@@ -269,6 +280,49 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       return 3*maxWeight - count;
     } else {
       return count/4;
+    }
+  }
+
+  /// Checks if a tx is included and confirmed on Bitcoin
+  /// @dev Checks if the block is confirmed, and Merkle proof is valid
+  /// @param txid Desired tx Id in LE form
+  /// @param blockHeight of the desired tx
+  /// @param confirmBlock of the tx confirmation
+  /// @param nodes Part of the Merkle tree from the tx to the root in LE form (called Merkle proof)
+  /// @param index of the tx in Merkle tree
+  /// @return True if the provided tx is confirmed on Bitcoin
+  function checkTxProof(bytes32 txid, uint32 blockHeight, uint32 confirmBlock, bytes32[] calldata nodes, uint256 index) public view override returns (bool) {
+    bytes32 blockHash = height2HashMap[blockHeight];
+    if (blockHeight + confirmBlock > getChainTipHeight() || txid == bytes32(0) || blockHash == bytes32(0)) {
+      return false;
+    }
+
+    bytes32 root = bytes32(loadInt256(68, blockChain[blockHash]));
+    if (nodes.length == 0) {
+      return txid == root;
+    }
+
+    bytes32 current = txid;
+    for (uint256 i = 0; i < nodes.length; i++) {
+      if (index % 2 == 1) {
+        current = merkleStep(nodes[i], current);
+      } else {
+        current = merkleStep(current, nodes[i]);
+      }
+      index >>= 1;
+    }
+    return current == root;
+  }
+
+  function merkleStep(bytes32 l, bytes32 r) private view returns (bytes32 digest) {
+    assembly {
+      // solium-disable-previous-line security/no-inline-assembly
+      let ptr := mload(0x40)
+      mstore(ptr, l)
+      mstore(add(ptr, 0x20), r)
+      pop(staticcall(gas(), 2, ptr, 0x40, ptr, 0x20)) // sha256 #1
+      pop(staticcall(gas(), 2, ptr, 0x20, ptr, 0x20)) // sha256 #2
+      digest := mload(ptr)
     }
   }
   
@@ -439,6 +493,10 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     return flip32Bytes(bytes32(loadInt256(36, blockChain[hash])));
   }
 
+  function getMerkleRoot(bytes32 hash) public view returns (bytes32) {
+    return flip32Bytes(bytes32(loadInt256(68, blockChain[hash])));
+  }
+
   function getCandidate(bytes32 hash) public view returns (address) {
     return address(uint160(loadInt256(160, blockChain[hash]) >> 96));
   }
@@ -463,6 +521,10 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   function getAdjustmentHash(bytes32 hash) public view returns (bytes32) {
     uint32 index = uint32(loadInt256(156, blockChain[hash]) >> 224);
     return adjustmentHashes[index];
+  }
+
+  function getChainTipHeight() public override view returns (uint32) {
+    return getHeight(heaviestBlock);
   }
 
   // Bitcoin-way of computing the target from the 'bits' field of a blockheader
