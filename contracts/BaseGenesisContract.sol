@@ -21,6 +21,8 @@ abstract contract BaseGenesisContract {
     modifier canUpdateAddresses() {
         require(_useDynamicAddr(), "cannot set addresses");
         require(msg.sender == _ext0().deployerAddr, "not deployer");
+        require(!_updateAddressesAlreadyCalled(), "contract addresses already updated");
+        _ext0().addressesWereUpdated = true;
         _;
     }
 
@@ -30,12 +32,6 @@ abstract contract BaseGenesisContract {
 
     function _ext0() private pure returns (BaseGenesisExtStorage storage $) {
         assembly { $.slot := _BASE_GENESIS_STORAGE_LOCATION }
-    }
-
-    modifier updateContractAddrCalledOnce() {
-        require(!_updateAddressesAlreadyCalled(), "contract addresses already updated");
-        _ext0().addressesWereUpdated = true;
-        _;
     }
 
     function _updateAddressesAlreadyCalled() internal virtual view returns (bool) {
