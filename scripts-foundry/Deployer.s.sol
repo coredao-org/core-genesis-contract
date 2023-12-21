@@ -31,7 +31,7 @@ contract Deployer is Script, System {
 
     function run() external {
 	    // vm.startBroadcast(); 
-        if (_isLocalTestNode()) {
+        if (_useDynamicAddr()) {
             _performActualDeployment();
         } else {
             // rely on the already deployed contracts

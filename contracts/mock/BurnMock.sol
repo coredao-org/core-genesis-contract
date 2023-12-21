@@ -8,7 +8,7 @@ contract BurnMock is Burn {
         return false;
     }
 
-    function _testModeAddressesWereSet() internal override view returns (bool) {
+    function _addressesWereSet() internal override view returns (bool) {
         return false;
     }
 }

@@ -13,7 +13,7 @@ contract RelayerHubMock is RelayerHub {
         return false;
     }
 
-    function _testModeAddressesWereSet() internal override view returns (bool) {
+    function _addressesWereSet() internal override view returns (bool) {
         return false;
     }
 }
