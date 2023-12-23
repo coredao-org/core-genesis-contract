@@ -100,7 +100,7 @@ def burn(accounts):
 
 @pytest.fixture(scope="module")
 def foundation(accounts):
-    c = accounts[0].deploy(Foundation)
+    c = accounts[0].deploy(FoundationMock)
     return c
 
 

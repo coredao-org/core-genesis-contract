@@ -2,8 +2,10 @@
 pragma solidity 0.8.4;
 
 import "../PledgeAgent.sol";
+import {BaseMock} from "./BaseMock.sol";
 
-contract PledgeAgentMock is PledgeAgent {
+
+contract PledgeAgentMock is PledgeAgent , BaseMock {
     uint private MOCK_POWER_BLOCK_FACTOR = 1;
     uint256 public rewardAmountM;
 
@@ -66,11 +68,47 @@ contract PledgeAgentMock is PledgeAgent {
         rewardAmountM = collectCoinReward(a, d, roundLimit);
     }
 
-    function _updateAddressesAlreadyCalled() internal override view returns (bool) {
-        return false;
+
+    // -- address mock overrides --
+
+    function _validatorSet() view internal override returns (address) {
+        return _notNull(s_validatorSet);
     }
 
-    function _addressesWereSet() internal override view returns (bool) {
-        return false;
+    function _slash() view internal override returns (address) {
+        return _notNull(s_slash);
     }
+
+    function _systemReward() view internal override returns (address) {
+        return _notNull(s_systemReward);   
+    }
+
+    function _lightClient() view internal override returns (address) {
+        return _notNull(s_lightClient); 
+    }
+
+    function _relayerHub() view internal override returns (address) {
+        return _notNull(s_relayerHub);  
+    }
+
+    function _candidateHub() view internal override returns (address) {
+        return _notNull(s_candidateHub);  
+    }
+
+    function _govHub() view internal override returns (address) {
+        return _notNull(s_govHub);
+    }
+
+    function _pledgeAgent() view internal override returns (address) {
+        return _notNull(s_pledgeAgent);  
+    }
+
+    function _burn() view internal override returns (address) {
+        return _notNull(s_burn);  
+    }
+
+    function _foundation() view internal override returns (address) {
+        return _notNull(s_foundation);  
+    }    
 }
+

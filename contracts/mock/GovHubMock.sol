@@ -2,8 +2,10 @@
 pragma solidity 0.8.4;
 
 import "../GovHub.sol";
+import {BaseMock} from "./BaseMock.sol";
 
-contract GovHubMock is GovHub {
+
+contract GovHubMock is GovHub , BaseMock {
     uint256 private constant MOCK_VOTING_PERIOD = 201600;
     uint256 private constant MOCK_EXECUTING_PERIOD = 201600;
     bytes private constant MOCK_INIT_MEMBERS = hex"f86994548e6acce441866674e04ab84587af2d394034c094bb06d463bc143eecc4a0cfa35e0346d5690fa9f694e2fe60f349c6e1a85caad1d22200c289da40dc1294b198db68258f06e79d415a0998be7f9b38ea722694dd173b85f306128f1b10d7d7219059c28c6d6c09";
@@ -29,27 +31,63 @@ contract GovHubMock is GovHub {
         }
     }
 
-    function _votingPeriod() internal override view returns (uint256) {
+    function _votingPeriod() internal override pure returns (uint256) {
         return MOCK_VOTING_PERIOD;
     }
 
-    function _executingPeriod() internal override view returns (uint256) {
+    function _executingPeriod() internal override pure returns (uint256) {
         return MOCK_EXECUTING_PERIOD;
     }
 
-    function _initMembers() internal override view returns (bytes memory) {
+    function _initMembers() internal override pure returns (bytes memory) {
         return MOCK_INIT_MEMBERS;
     }
 
-    function _updateAddressesAlreadyCalled() internal override view returns (bool) {
-        return false;
-    }
-
-    function _isValidMember() internal override view returns (bool) {
+    function _isValidMember() internal override pure returns (bool) {
         return true;
     }
 
-    function _addressesWereSet() internal override view returns (bool) {
-        return false;
+
+    // -- address mock overrides --
+
+    function _validatorSet() view internal override returns (address) {
+        return _notNull(s_validatorSet);
     }
+
+    function _slash() view internal override returns (address) {
+        return _notNull(s_slash);
+    }
+
+    function _systemReward() view internal override returns (address) {
+        return _notNull(s_systemReward);   
+    }
+
+    function _lightClient() view internal override returns (address) {
+        return _notNull(s_lightClient); 
+    }
+
+    function _relayerHub() view internal override returns (address) {
+        return _notNull(s_relayerHub);  
+    }
+
+    function _candidateHub() view internal override returns (address) {
+        return _notNull(s_candidateHub);  
+    }
+
+    function _govHub() view internal override returns (address) {
+        return _notNull(s_govHub);
+    }
+
+    function _pledgeAgent() view internal override returns (address) {
+        return _notNull(s_pledgeAgent);  
+    }
+
+    function _burn() view internal override returns (address) {
+        return _notNull(s_burn);  
+    }
+
+    function _foundation() view internal override returns (address) {
+        return _notNull(s_foundation);  
+    }    
 }
+

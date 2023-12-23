@@ -1,16 +1,11 @@
 // SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
-import "../RelayerHub.sol";
+import "../Foundation.sol";
 import {BaseMock} from "./BaseMock.sol";
 
 
-contract RelayerHubMock is RelayerHub , BaseMock {
-    function developmentInit() external {
-        dues = dues / 1e16;
-        requiredDeposit = requiredDeposit / 1e16;
-    }
-
+contract FoundationMock is Foundation , BaseMock {
 
     // -- address mock overrides --
 

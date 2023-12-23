@@ -4,20 +4,26 @@ pragma solidity 0.8.4;
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 
-import {BtcLightClient} from "../contracts/BtcLightClient.sol";
 import {System} from "../contracts/System.sol";
-import {Burn} from "../contracts/Burn.sol";
-import {CandidateHub} from "../contracts/CandidateHub.sol";
-import {Foundation} from "../contracts/Foundation.sol";
-import {GovHub} from "../contracts/GovHub.sol";
-import {PledgeAgent} from "../contracts/PledgeAgent.sol";
-import {RelayerHub} from "../contracts/RelayerHub.sol";
-import {SlashIndicator} from "../contracts/SlashIndicator.sol";
-import {ValidatorSet} from "../contracts/ValidatorSet.sol";
+import {BurnMock} from "../contracts/mock/BurnMock.sol";
+import {BtcLightClientMock} from "../contracts/mock/BtcLightClientMock.sol";
+import {SlashIndicatorMock} from "../contracts/mock/SlashIndicatorMock.sol";
 import {SystemRewardMock} from "../contracts/mock/SystemRewardMock.sol";
+import {CandidateHubMock} from "../contracts/mock/CandidateHubMock.sol";
+import {PledgeAgentMock} from "../contracts/mock/PledgeAgentMock.sol";
+import {ValidatorSetMock} from "../contracts/mock/ValidatorSetMock.sol";
+import {RelayerHubMock} from "../contracts/mock/RelayerHubMock.sol";
+import {FoundationMock} from "../contracts/mock/FoundationMock.sol";
+import {GovHubMock} from "../contracts/mock/GovHubMock.sol";
 
 
 contract Deployer is Script, System {
+
+    uint public constant CORE_MAINNET = 1116;
+    uint public constant CORE_TESTNET = 1115;
+    uint public constant ANVIL_CHAINID = 31337;
+    uint public constant GANACHE_CHAINID = 1337;
+
     address public validatorSetAddr;
     address public slashAddr ;
     address public systemRewardAddr;
@@ -31,7 +37,7 @@ contract Deployer is Script, System {
 
     function run() external {
 	    // vm.startBroadcast(); 
-        if (_useDynamicAddr()) {
+        if (_isLocalTestNode()) {
             _performActualDeployment();
         } else {
             // rely on the already deployed contracts
@@ -43,16 +49,16 @@ contract Deployer is Script, System {
     function _performActualDeployment() private {        
         console.log("deploying on network %s", block.chainid);
         
-        Burn burn = new Burn();
-        BtcLightClient lightClient = new BtcLightClient();
-        SlashIndicator slashIndicator = new SlashIndicator();
-        SystemRewardMock systemReward = new SystemRewardMock(); // must use mock else onlyOperator() will fail 
-        CandidateHub candidateHub = new CandidateHub();
-        PledgeAgent pledgeAgent = new PledgeAgent();
-        ValidatorSet validatorSet = new ValidatorSet();
-        RelayerHub relayerHub = new RelayerHub();
-        Foundation foundation = new Foundation();
-        GovHub govHub = new GovHub();
+        BurnMock burn = new BurnMock();
+        BtcLightClientMock lightClient = new BtcLightClientMock();
+        SlashIndicatorMock slashIndicator = new SlashIndicatorMock();
+        SystemRewardMock systemReward = new SystemRewardMock(); 
+        CandidateHubMock candidateHub = new CandidateHubMock();
+        PledgeAgentMock pledgeAgent = new PledgeAgentMock();
+        ValidatorSetMock validatorSet = new ValidatorSetMock();
+        RelayerHubMock relayerHub = new RelayerHubMock();
+        FoundationMock foundation = new FoundationMock();
+        GovHubMock govHub = new GovHubMock();
 
         validatorSetAddr = address(validatorSet);
         slashAddr = address(slashIndicator);
@@ -114,4 +120,8 @@ contract Deployer is Script, System {
         burnAddr = _BURN_ADDR;
         foundationAddr = _FOUNDATION_ADDR;
     }    
+
+    function _isLocalTestNode() private view returns (bool) {
+        return block.chainid != CORE_MAINNET && block.chainid != CORE_TESTNET;
+    }
 }

@@ -3,8 +3,10 @@ pragma solidity 0.8.4;
 
 import "../SlashIndicator.sol";
 import "../lib/RLPDecode.sol";
+import {BaseMock} from "./BaseMock.sol";
 
-contract SlashIndicatorMock is SlashIndicator {
+
+contract SlashIndicatorMock is SlashIndicator , BaseMock {
     uint32 private constant MOCK_CHAINID = 1112;
 
     using RLPDecode for bytes;
@@ -48,11 +50,47 @@ contract SlashIndicatorMock is SlashIndicator {
     return (v, c);
   }
 
-  function _updateAddressesAlreadyCalled() internal override view returns (bool) {
-    return false;
-  }
 
-  function _addressesWereSet() internal override view returns (bool) {
-    return false;
-  }
+    // -- address mock overrides --
+
+    function _validatorSet() view internal override returns (address) {
+        return _notNull(s_validatorSet);
+    }
+
+    function _slash() view internal override returns (address) {
+        return _notNull(s_slash);
+    }
+
+    function _systemReward() view internal override returns (address) {
+        return _notNull(s_systemReward);   
+    }
+
+    function _lightClient() view internal override returns (address) {
+        return _notNull(s_lightClient); 
+    }
+
+    function _relayerHub() view internal override returns (address) {
+        return _notNull(s_relayerHub);  
+    }
+
+    function _candidateHub() view internal override returns (address) {
+        return _notNull(s_candidateHub);  
+    }
+
+    function _govHub() view internal override returns (address) {
+        return _notNull(s_govHub);
+    }
+
+    function _pledgeAgent() view internal override returns (address) {
+        return _notNull(s_pledgeAgent);  
+    }
+
+    function _burn() view internal override returns (address) {
+        return _notNull(s_burn);  
+    }
+
+    function _foundation() view internal override returns (address) {
+        return _notNull(s_foundation);  
+    }    
 }
+
