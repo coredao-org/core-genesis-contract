@@ -27,12 +27,12 @@ abstract contract System {
 
 
   modifier onlyCoinbase() {  
-    require(msg.sender == block.coinbase, "the message sender must be the block producer");  
+    require(_isBlockProducer(), "the message sender must be the block producer");  
     _;
   }
 
   modifier onlyZeroGasPrice() {    
-    require(tx.gasprice == 0 , "gasprice is not zero");
+    require(_zeroGasPrice() , "gasprice is not zero");
     _;
   }
 
@@ -115,6 +115,15 @@ abstract contract System {
   function _ext() private pure returns (ExtStorage storage $) {
     assembly { $.slot := _EXT_STORAGE_LOCATION }
   }
+
+  function _isBlockProducer() internal virtual view returns (bool) {
+    return msg.sender == block.coinbase;
+  }
+
+  function _zeroGasPrice() internal virtual view returns (bool) {
+    return tx.gasprice == 0;
+  }
+
 
 
   // -- address virtual getters --

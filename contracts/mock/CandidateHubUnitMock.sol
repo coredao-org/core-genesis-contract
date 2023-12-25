@@ -87,6 +87,15 @@ contract CandidateHubUnitMock is CandidateHub , BaseMock {
   }
 
 
+    function _isBlockProducer() internal override pure returns (bool) {
+        return true;
+    }
+
+    function _zeroGasPrice() internal override pure returns (bool) {
+        return true;
+    }
+
+
     // -- address mock overrides --
 
     function _validatorSet() view internal override returns (address) {

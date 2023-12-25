@@ -127,6 +127,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   function isCandidate(address _addr) public view returns(bool) {
+    return _isCandidate(_addr);
+  }
+
+  function _isCandidate(address _addr) internal virtual view returns(bool) {
     return operateMap[_addr] != 0;
   }
 

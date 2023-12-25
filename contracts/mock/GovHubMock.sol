@@ -47,6 +47,18 @@ contract GovHubMock is GovHub , BaseMock {
         return true;
     }
 
+    function _isProposer(uint256 proposalId) internal override pure returns (bool) {
+        (proposalId);
+        return true; // disable proposer check for mocks
+    }
+
+    function _isBlockProducer() internal override pure returns (bool) {
+        return true;
+    }
+
+    function _zeroGasPrice() internal override pure returns (bool) {
+        return true;
+    }
 
     // -- address mock overrides --
 

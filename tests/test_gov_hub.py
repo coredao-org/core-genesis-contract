@@ -26,7 +26,7 @@ def fake_gov():
         accounts[0],
         PledgeAgentMock[0].address,
         BurnMock[0].address,
-        Foundation[0].address
+        FoundationMock[0].address
     )
 
 

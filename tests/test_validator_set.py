@@ -81,7 +81,7 @@ def __fake_validator_set():
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
         BurnMock[0].address,
-        Foundation[0].address
+        FoundationMock[0].address
     )
 
 
@@ -297,7 +297,7 @@ def test_update_param_success_with_key_blockRewardIncentivePercent():
         accounts[0].address,
         PledgeAgentMock[0].address,
         BurnMock[0].address,
-        Foundation[0].address
+        FoundationMock[0].address
     )
     validator_set_instance.updateParam('blockRewardIncentivePercent', '0x0000000000000000000000000000000000000000000000000000000000000014')
     assert validator_set_instance.blockRewardIncentivePercent() == 20
@@ -398,7 +398,7 @@ def test_misdemeanor_failed_with_after_set_empty_validator_set():
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
         BurnMock[0].address,
-        Foundation[0].address
+        FoundationMock[0].address
     )
 
     validator = validator_set_instance.getValidatorByConsensus(init_validators[0]).dict()
@@ -423,7 +423,7 @@ def test_misdemeanor_return_empty_with_empty_validator_set_and_ZERO_ADDRESS():
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
         BurnMock[0].address,
-        Foundation[0].address
+        FoundationMock[0].address
     )
     assert validator_set_instance.misdemeanor.call(ZERO_ADDRESS) == ()
 
@@ -442,7 +442,7 @@ def test_misdemeanor_return_empty_with_only_one_validator_set_and_0_income():
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
         BurnMock[0].address,
-        Foundation[0].address
+        FoundationMock[0].address
     )
     assert validator_set_instance.misdemeanor.call(init_validators[0]) == ()
     __contract_check(0, [0])
@@ -468,7 +468,7 @@ def test_misdemeanor_return_empty_with_only_one_validator_set():
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
         BurnMock[0].address,
-        Foundation[0].address
+        FoundationMock[0].address
     )
     assert validator_set_instance.misdemeanor.call(init_validators[0]) == ()
     __contract_check(deposit_value, [deposit_value])
@@ -485,7 +485,7 @@ def test_misdemeanor_success_0_income():
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
         BurnMock[0].address,
-        Foundation[0].address
+        FoundationMock[0].address
     )
     validator_set_instance.misdemeanor.call(init_validators[0])
     __contract_check(0, init_validator_incomes)
@@ -510,7 +510,7 @@ def test_misdemeanor_success():
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
         BurnMock[0].address,
-        Foundation[0].address
+        FoundationMock[0].address
     )
     validator_set_instance.misdemeanor(init_validators[2])
     __contract_check(deposit_value, [average_value, average_value, 0, average_value, average_value])
@@ -533,7 +533,7 @@ def test_misdemeanor_return_empty_with_ZERO_ADDRESS_validator():
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
         BurnMock[0].address,
-        Foundation[0].address
+        FoundationMock[0].address
     )
     assert validator_set_instance.felony.call(ZERO_ADDRESS, felony_round, felony_deposit) == ()
 
@@ -551,7 +551,7 @@ def test_felony_failed_with_one_validator_which_has_0_income():
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
         BurnMock[0].address,
-        Foundation[0].address
+        FoundationMock[0].address
     )
     assert validator_set_instance.felony.call(init_validators[0], felony_round, felony_deposit) == ()
     __contract_check(0, [0])
@@ -573,7 +573,7 @@ def test_felony_failed_with_one_validator_which_has_income():
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
         BurnMock[0].address,
-        Foundation[0].address
+        FoundationMock[0].address
     )
     assert validator_set_instance.felony.call(init_validators[0], felony_round, felony_deposit) == ()
     validator_set_instance.felony(init_validators[0], felony_round, felony_deposit)
@@ -597,7 +597,7 @@ def test_felony_success_with_validator_set_which_has_0_income(candidate_hub):
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
         BurnMock[0].address,
-        Foundation[0].address
+        FoundationMock[0].address
     )
 
     candidate = candidate_hub.candidateSet(0).dict()
@@ -639,7 +639,7 @@ def test_felony_success_with_validator_set_which_has_income(candidate_hub):
         GovHubMock[0].address,
         PledgeAgentMock[0].address,
         BurnMock[0].address,
-        Foundation[0].address
+        FoundationMock[0].address
     )
 
     deposit_value = 1000000000

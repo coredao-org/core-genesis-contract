@@ -149,6 +149,14 @@ contract CandidateHubMock is CandidateHub , BaseMock {
     emit registered(operateAddr, consensusAddr, feeAddr, commissionThousandths, msg.value);
   }
 
+  function _isBlockProducer() internal override pure returns (bool) {
+      return true;
+  }
+
+  function _zeroGasPrice() internal override pure returns (bool) {
+      return true;
+  }
+
 
     // -- address mock overrides --
 

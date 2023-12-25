@@ -100,8 +100,7 @@ contract GovHub is System, IParamSubscriber {
   }
 
   modifier onlyIfProposer(uint256 proposalId) {
-    Proposal storage proposal = proposals[proposalId];
-    require(msg.sender == proposal.proposer, "not the proposer");
+    require(_isProposer(proposalId), "not the proposer");
     _;
   }
 
@@ -124,6 +123,11 @@ contract GovHub is System, IParamSubscriber {
 
   function _initMembers() internal virtual view returns (bytes memory) {
     return INIT_MEMBERS;
+  }
+
+  function _isProposer(uint256 proposalId) internal virtual view returns (bool) {
+    Proposal storage proposal = proposals[proposalId];
+    return msg.sender == proposal.proposer;
   }
 
   function init() external onlyNotInit { //see @dev:init

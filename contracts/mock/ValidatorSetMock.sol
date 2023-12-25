@@ -39,8 +39,8 @@ contract ValidatorSetMock is ValidatorSet , BaseMock {
       return MOCK_INIT_VALIDATORSET_BYTES;
     }
 
-    function _subsidyReduceInterval() internal override pure returns(uint256) {
-      return MOCK_SUBSIDY_REDUCE_INTERVAL;
+    function _subsidyReduceInterval() internal override view returns(uint256) {
+      return s_subsidyInterval;
     }
 
     function getSubsidyReduceInterval() external view returns(uint256) {
@@ -69,6 +69,14 @@ contract ValidatorSetMock is ValidatorSet , BaseMock {
 
     function setValidatorSetMap(address validator) external {
         currentValidatorSetMap[validator] = 1;
+    }
+
+    function _isBlockProducer() internal override pure returns (bool) {
+        return true;
+    }
+
+    function _zeroGasPrice() internal override pure returns (bool) {
+        return true;
     }
 
 

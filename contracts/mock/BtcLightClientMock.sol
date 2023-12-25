@@ -10,7 +10,7 @@ contract BtcLightClientMock is BtcLightClient, BaseMock {
     uint256 public constant MOCK_SCORE = 24371874614346;
     uint32 public constant MOCK_ADJUSTMENT = 11;
     uint32 public constant MOCK_INIT_CHAIN_HEIGHT = 717696;
-    bytes private constant MOCK_INIT_CONSENSUS_STATE_BYTES = hex"000040209acaa5d26d392ace656c2428c991b0a3d3d773845a1300000000000000000000aa8e225b1f3ea6c4b7afd5aa1cecf691a8beaa7fa1e579ce240e4a62b5ac8ecc2141d9618b8c0b170d5c05bb"; 
+    bytes private constant MOCK_INIT_CONSENSUS_STATE_BYTES = hex"000040209acaa5d26d392ace656c2428c991b0a3d3d773845a1300000000000000000000aa8e225b1f3ea6c4b7afd5aa1cecf691a8beaa7fa1e579ce240e4a62b5ac8ecc2141d9618b8c0b170d5c05bb";
 
     constructor() BtcLightClient() {
         mockBlockHeight = MOCK_INIT_CHAIN_HEIGHT;
@@ -64,6 +64,14 @@ contract BtcLightClientMock is BtcLightClient, BaseMock {
 
     function addMinerPowerMock(bytes32 blockHash) external {
         addMinerPower(blockHash);
+    }
+
+    function _isBlockProducer() internal override pure returns (bool) {
+        return true;
+    }
+
+    function _zeroGasPrice() internal override pure returns (bool) {
+        return true;
     }
 
 

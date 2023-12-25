@@ -39,12 +39,14 @@ contract ReentryPledgeAgentProxy is BaseProxy {
 
     function transferCoin(address sourceAgent, address targetAgent) external payable {
         bytes memory payload = abi.encodeWithSignature("transferCoin(address,address)", sourceAgent, targetAgent);
-        (bool success, string memory _msg) = _call(payload);
+        (bool success,) = _call(payload);
+        (success);
     }
 
     function transferCoin(address sourceAgent, address targetAgent, uint256 amount) external payable {
         bytes memory payload = abi.encodeWithSignature("transferCoin(address,address,uint256)", sourceAgent, targetAgent, amount);
-        (bool success, string memory _msg) = _call(payload);
+        (bool success,) = _call(payload);
+        (success);
     }
 
     function claimReward(address[] calldata agentList) external payable {

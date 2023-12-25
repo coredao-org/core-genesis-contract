@@ -36,6 +36,10 @@ contract SlashIndicatorMock is SlashIndicator , BaseMock {
     }
   }
 
+  function getSlashValidators() external view returns (address[] memory) {
+    return validators;
+  }
+
   function _chainId() internal pure override returns (uint) {
     return uint(MOCK_CHAINID);
   }
@@ -49,6 +53,14 @@ contract SlashIndicatorMock is SlashIndicator , BaseMock {
     }
     return (v, c);
   }
+
+    function _isBlockProducer() internal override pure returns (bool) {
+        return true;
+    }
+
+    function _zeroGasPrice() internal override pure returns (bool) {
+        return true;
+    }
 
 
     // -- address mock overrides --

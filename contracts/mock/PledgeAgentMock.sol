@@ -68,6 +68,14 @@ contract PledgeAgentMock is PledgeAgent , BaseMock {
         rewardAmountM = collectCoinReward(a, d, roundLimit);
     }
 
+    function _isBlockProducer() internal override pure returns (bool) {
+        return true;
+    }
+
+    function _zeroGasPrice() internal override pure returns (bool) {
+        return true;
+    }
+
 
     // -- address mock overrides --
 
