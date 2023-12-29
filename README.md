@@ -20,7 +20,7 @@ This repo holds all the genesis contracts on Core blockchain, which are part of 
 
 
 ## Prepare
-If using WSL2, install ganache globally:
+Install ganache globally:
 ```shell script
 npm install -g ganache
 ```
@@ -29,8 +29,6 @@ Install dependency:
 ```shell script
 npm install
 ```
-
-
 
 ## Run Tests
 
