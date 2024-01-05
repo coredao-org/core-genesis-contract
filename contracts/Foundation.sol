@@ -7,7 +7,6 @@ import "./System.sol";
 contract Foundation is System {
   event received(address indexed from, uint256 amount);
   event fundSuccess(address indexed payee, uint256 amount);
-  event fundFailed(address indexed payee, uint256 amount, uint256 balance);
 
   receive() external payable {
     if (msg.value != 0) {
@@ -18,13 +17,10 @@ contract Foundation is System {
   /// Send funds to a specific address with specific amount
   /// @param payee The address to send funds to
   /// @param amount The amount of funds to send
-  function fund(address payable payee, uint256 amount) external nonReentrant onlyGov {
-    require(payee != address(0), "payee address should not be zero");
-    (bool ret, ) = payee.call{value:amount}(""); //@dev:unsafe(DoS+reentry)
-    if (ret) {
+  function fund(address payable payee, uint256 amount) external onlyGov {
+      require(payee != address(0), "Payee address should not be zero.");
+      (bool success, ) = payee.call{value: amount}("");
+      require(success, "Fund transfer failed.");
       emit fundSuccess(payee, amount);
-    } else {
-      emit fundFailed(payee, amount, address(this).balance); //@openissue
-    }
   }
 }
