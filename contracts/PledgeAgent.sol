@@ -5,7 +5,9 @@ import "./interface/IPledgeAgent.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/ICandidateHub.sol";
 import "./interface/ISystemReward.sol";
+import "./interface/ILightClient.sol";
 import "./lib/Address.sol";
+import "./lib/BitcoinHelper.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./System.sol";
@@ -20,9 +22,23 @@ import "./System.sol";
 /// which are eligible for claiming rewards in the acting round
 
 contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
+  using BitcoinHelper for bytes;
+  using BitcoinHelper for bytes29;
+  using TypedMemView for bytes29;
+  using SafeCast for uint256;
+
   uint256 public constant INIT_REQUIRED_COIN_DEPOSIT = 1e18;
   uint256 public constant INIT_HASH_POWER_FACTOR = 20000;
   uint256 public constant POWER_BLOCK_FACTOR = 1e18;
+  uint32 public constant BTC_CONFIRM_BLOCK = 3;
+  uint256 public constant MIN_BTC_LOCK_TIME = 86400*7;
+  uint256 public constant ROUND_INTERVAL = 86400;
+  uint256 public constant MIN_BTC_VALUE = 1e6;
+  uint256 public constant INIT_BTC_FACTOR = 5e14;
+  uint16 public constant CHAINID = 1116;
+  uint256 public constant INIT_DELEGATE_BTC_GAS_PRICE = 35e9;
+  uint256 public constant INIT_REPORT_BTC_TX_REWARD = 1e18;
+  uint256 public constant CLAIM_ROUND_LIMIT = 500;
 
   uint256 public requiredCoinDeposit;
 
@@ -60,6 +76,19 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   // debtDepositMap keeps delegator's amount of CORE which should be deducted when claiming rewards in every round
   mapping(uint256 => mapping(address => uint256)) public debtDepositMap;
 
+  mapping(bytes32 => uint256) public confirmedTxMap;
+
+  mapping(address => BtcReceipt[]) public btcDelegatorMap;
+
+  uint256 public btcFactor;
+
+  struct BtcReceipt {
+    address agent;
+    uint256 value;
+    uint256 endRound;
+    uint256 rewardIndex;
+  }
+
   struct CoinDelegator {
     uint256 deposit;
     uint256 newDeposit;
@@ -87,12 +116,15 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     Reward[] rewardSet;
     uint256 power;
     uint256 coin;
+    uint256 totalBtc;
+    mapping(uint256 => uint256) round2expireBtcMap;
   }
 
   struct RoundState {
     uint256 power;
     uint256 coin;
     uint256 powerFactor;
+    uint256 btcFactor;
   }
 
   /*********************** events **************************/
@@ -121,6 +153,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   function init() external onlyNotInit {
     requiredCoinDeposit = INIT_REQUIRED_COIN_DEPOSIT;
     powerFactor = INIT_HASH_POWER_FACTOR;
+    btcFactor = INIT_BTC_FACTOR;
     roundTag = 1;
     alreadyInit = true;
   }
@@ -174,15 +207,22 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
     totalPower = 1;
     totalCoin = 1;
+    uint256 curRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
     // setup `power` and `coin` values for every candidate
     for (uint256 i = 0; i < candidateSize; ++i) {
       Agent storage a = agentsMap[candidates[i]];
       // in order to improve accuracy, the calculation of power is based on 10^18
       a.power = powers[i] * POWER_BLOCK_FACTOR;
-      a.coin = a.totalDeposit;
+      a.coin = a.totalDeposit + a.totalBtc * (btcFactor == 0 ? INIT_BTC_FACTOR : btcFactor);
       totalPower += a.power;
       totalCoin += a.coin;
+
+      for(uint256 round = roundTag + 1; round <= curRound; ++round) {
+        a.totalBtc -= a.round2expireBtcMap[round];
+      }
     }
+
+
 
     // calc hybrid score
     scores = new uint256[](candidateSize);
@@ -204,6 +244,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     rs.power = totalPower;
     rs.coin = totalCoin;
     rs.powerFactor = powerFactor;
+    rs.btcFactor = btcFactor == 0 ? INIT_BTC_FACTOR : btcFactor;
     stateMap[round] = rs;
 
     roundTag = round;
@@ -362,6 +403,81 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       distributeReward(payable(msg.sender), rewardSum);
     }
     return (rewardSum, roundLimit >= 0);
+  }
+
+  function delegateBtc(bytes memory btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index) external {
+    require(tx.gasprice == INIT_DELEGATE_BTC_GAS_PRICE, "must use limited gasprice");
+
+    bytes32 txid = btcTx.calculateTxId();
+
+    require(confirmedTxMap[txid] == 0, "btc tx confirmed");
+    require(ILightClient(LIGHT_CLIENT_ADDR).
+      checkTxProof(txid, blockHeight, BTC_CONFIRM_BLOCK, nodes, index), "btc tx not confirm");
+
+    confirmedTxMap[txid] = 1;
+
+    (,, bytes29 voutView, uint32 lockTime)  = btcTx.extractTx();
+
+    require(lockTime > block.timestamp + MIN_BTC_LOCK_TIME, "insufficient lock time");
+    (uint256 value, bytes29 payload) = voutView.parseValueAndData();
+    require(value > MIN_BTC_VALUE, "min value limit");
+    require(CHAINID == payload.indexUint(0, 2).toUint16(), "chain id unequal");
+    
+    address agent = payload.indexAddress(2);
+    if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(agent)) {
+      revert InactiveAgent(agent);
+    }
+    Agent storage a = agentsMap[agent];
+    uint256 endRound = lockTime / ROUND_INTERVAL;
+    a.round2expireBtcMap[endRound] += value;
+    a.totalBtc += value;
+
+    address delegator = payload.indexAddress(22);
+    btcDelegatorMap[delegator].push(BtcReceipt(agent, value, endRound, a.rewardSet.length));
+    ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(msg.sender), INIT_REPORT_BTC_TX_REWARD);
+    //event
+  }
+
+  function claimBtcReward() external returns (uint256 rewardSum) {
+    uint256 claimRound;
+    uint256 curRound = roundTag;
+
+    BtcReceipt[] storage brList = btcDelegatorMap[msg.sender];
+    uint256 rindex = brList.length;
+    while(rindex > 0) {
+      BtcReceipt storage br = brList[rindex-1];
+      Agent storage a = agentsMap[br.agent];
+      uint256 rewardLength = a.rewardSet.length;
+      uint256 rewardIndex = br.rewardIndex;
+      while (rewardIndex < rewardLength && claimRound < CLAIM_ROUND_LIMIT) {
+        Reward storage r = a.rewardSet[rewardIndex];
+        uint256 rRound = r.round;
+        if (rRound == curRound || br.endRound > rRound) {
+          break;
+        }
+        uint256 deposit = br.value * stateMap[rRound].btcFactor;
+        rewardSum += collectCoinReward(r, deposit);
+        if (r.coin == 0) {
+          delete a.rewardSet[rewardIndex];
+        }
+        rewardIndex += 1;
+        claimRound += 1;
+      }
+      
+      if (br.endRound <= curRound && claimRound <  CLAIM_ROUND_LIMIT) {
+        uint256 len = brList.length;
+        if(rindex != len - 1) {
+          brList[rindex-1] = brList[len-1];
+        }
+        brList.pop();
+      } else {
+        br.rewardIndex = rewardIndex;
+      }
+    }
+    if (rewardSum != 0) {
+      distributeReward(payable(msg.sender), rewardSum);
+    }
+    return rewardSum;
   }
 
   /*********************** Internal methods ***************************/
