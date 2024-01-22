@@ -196,8 +196,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
     // calculate the hybrid score for all valid candidates and 
     // choose top ones to form the validator set of the new round
-    (uint256[] memory scores, uint256 totalPower, uint256 totalCoin) =
-      IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(candidates, powers);
+    (uint256[] memory scores) =
+      IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(candidates, powers, roundTag);
     address[] memory validatorList = getValidators(candidates, scores, validatorCount);
 
     // prepare arguments, and notify ValidatorSet contract
@@ -225,7 +225,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
 
     // notify PledgeAgent contract
-    IPledgeAgent(PLEDGE_AGENT_ADDR).setNewRound(validatorList, totalPower, totalCoin, roundTag);
+    IPledgeAgent(PLEDGE_AGENT_ADDR).setNewRound(validatorList, roundTag);
 
     // update validator jail status
     for (uint256 i = 0; i < candidateSize; i++) {

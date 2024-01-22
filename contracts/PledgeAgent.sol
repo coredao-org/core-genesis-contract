@@ -31,7 +31,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   uint256 public constant INIT_HASH_POWER_FACTOR = 20000;
   uint256 public constant POWER_BLOCK_FACTOR = 1e18;
   uint32 public constant BTC_CONFIRM_BLOCK = 3;
-  uint256 public constant MIN_BTC_LOCK_TIME = 86400*7;
+  uint256 public constant MIN_BTC_LOCK_ROUND = 7;
   uint256 public constant ROUND_INTERVAL = 86400;
   uint256 public constant MIN_BTC_VALUE = 1e6;
   uint256 public constant INIT_BTC_FACTOR = 5e14;
@@ -80,6 +80,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   mapping(address => BtcReceipt[]) public btcDelegatorMap;
 
+  mapping(uint256 => BtcExpireInfo) round2expireInfoMap;
+
   uint256 public btcFactor;
 
   struct BtcReceipt {
@@ -87,6 +89,11 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 value;
     uint256 endRound;
     uint256 rewardIndex;
+  }
+
+  struct BtcExpireInfo {
+    address[] agentAddrList;
+    mapping(address => uint256) agent2valueMap;
   }
 
   struct CoinDelegator {
@@ -116,14 +123,15 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     Reward[] rewardSet;
     uint256 power;
     uint256 coin;
+    uint256 btc;
     uint256 totalBtc;
-    mapping(uint256 => uint256) round2expireBtcMap;
   }
 
   struct RoundState {
     uint256 power;
     uint256 coin;
     uint256 powerFactor;
+    uint256 btc;
     uint256 btcFactor;
   }
 
@@ -196,64 +204,73 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Calculate hybrid score for all candidates
   /// @param candidates List of candidate operator addresses
   /// @param powers List of power value in this round
+  /// @param round The new round tag
   /// @return scores List of hybrid scores of all validator candidates in this round
-  /// @return totalPower Total power delegate in this round
-  /// @return totalCoin Total coin delegate in this round
-  function getHybridScore(address[] calldata candidates, uint256[] calldata powers
-  ) external override onlyCandidate
-      returns (uint256[] memory scores, uint256 totalPower, uint256 totalCoin) {
+  function getHybridScore(
+    address[] calldata candidates,
+    uint256[] calldata powers,
+    uint256 round
+  ) external override onlyCandidate returns (uint256[] memory scores) {
     uint256 candidateSize = candidates.length;
     require(candidateSize == powers.length, "the length of candidates and powers should be equal");
 
-    totalPower = 1;
-    totalCoin = 1;
-    uint256 curRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
+    uint256 totalPower = 1;
+    uint256 totalCoin = 1;
+    uint256 totalBtc;
     // setup `power` and `coin` values for every candidate
+    // cost gas approximate candidateSize*20000
     for (uint256 i = 0; i < candidateSize; ++i) {
       Agent storage a = agentsMap[candidates[i]];
       // in order to improve accuracy, the calculation of power is based on 10^18
-      a.power = powers[i] * POWER_BLOCK_FACTOR;
-      a.coin = a.totalDeposit + a.totalBtc * (btcFactor == 0 ? INIT_BTC_FACTOR : btcFactor);
+      a.power = powers[i] * POWER_BLOCK_FACTOR; // the maximum gas consumption is 20000
+      a.btc = a.totalBtc; // the maximum gas consumption is 20000
+      a.coin = a.totalDeposit;
       totalPower += a.power;
       totalCoin += a.coin;
-
-      for(uint256 round = roundTag + 1; round <= curRound; ++round) {
-        a.totalBtc -= a.round2expireBtcMap[round];
-      }
+      totalBtc += a.totalBtc;
     }
-
-
-
+    
+    uint256 bf = btcFactor == 0 ? INIT_BTC_FACTOR : btcFactor;
+    uint256 pf = totalPower * powerFactor * 10000 / (totalCoin - 1 + totalPower * powerFactor - powerFactor + totalBtc * bf);
+    
     // calc hybrid score
     scores = new uint256[](candidateSize);
     for (uint256 i = 0; i < candidateSize; ++i) {
       Agent storage a = agentsMap[candidates[i]];
-      scores[i] = a.power * totalCoin * powerFactor / 10000 + a.coin * totalPower;
+      scores[i] = a.power * totalCoin * pf / 10000 + a.coin * totalPower;
     }
-    return (scores, totalPower, totalCoin);
+
+    RoundState storage rs = stateMap[round];
+    rs.power = totalPower;
+    rs.coin = totalCoin;
+    rs.powerFactor = pf;
+    rs.btc = totalBtc;
+    rs.btcFactor = bf;
   }
 
   /// Start new round, this is called by the CandidateHub contract
   /// @param validators List of elected validators in this round
-  /// @param totalPower Total power delegate in this round
-  /// @param totalCoin Total coin delegate in this round
   /// @param round The new round tag
-  function setNewRound(address[] calldata validators, uint256 totalPower,
-      uint256 totalCoin, uint256 round) external override onlyCandidate {
-    RoundState memory rs;
-    rs.power = totalPower;
-    rs.coin = totalCoin;
-    rs.powerFactor = powerFactor;
-    rs.btcFactor = btcFactor == 0 ? INIT_BTC_FACTOR : btcFactor;
-    stateMap[round] = rs;
-
-    roundTag = round;
+  function setNewRound(address[] calldata validators, uint256 round) external override onlyCandidate {
+    RoundState storage rs = stateMap[round];
     uint256 validatorSize = validators.length;
     for (uint256 i = 0; i < validatorSize; ++i) {
       Agent storage a = agentsMap[validators[i]];
-      uint256 score = a.power * rs.coin * powerFactor / 10000 + a.coin * rs.power;
-      a.rewardSet.push(Reward(0, 0, score, a.coin, round));
+      uint256 score = a.power * rs.coin * rs.powerFactor / 10000 + a.coin * rs.power;
+      a.rewardSet.push(Reward(0, 0, score, a.coin + a.btc * (btcFactor == 0 ? INIT_BTC_FACTOR : btcFactor), round));
     }
+
+    for(uint256 r = roundTag; r <= round; ++r) {
+      BtcExpireInfo storage expireInfo = round2expireInfoMap[r];
+      uint256 len = expireInfo.agentAddrList.length;
+      for (uint256 j = 0; j < len; ++j) {
+        address agent = expireInfo.agentAddrList[j];
+        agentsMap[agent].totalBtc -= expireInfo.agent2valueMap[agent];
+      }
+      delete round2expireInfoMap[r];
+    }
+
+    roundTag = round;
   }
 
   /// Distribute rewards for delegated hash power on one validator candidate
@@ -418,21 +435,26 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
     (,, bytes29 voutView, uint32 lockTime)  = btcTx.extractTx();
 
-    require(lockTime > block.timestamp + MIN_BTC_LOCK_TIME, "insufficient lock time");
+    uint256 endRound = lockTime / ROUND_INTERVAL;
+    require(endRound > roundTag + MIN_BTC_LOCK_ROUND, "insufficient lock round");
     (uint256 value, bytes29 payload) = voutView.parseValueAndData();
     require(value > MIN_BTC_VALUE, "min value limit");
-    require(CHAINID == payload.indexUint(0, 2).toUint16(), "chain id unequal");
-    
-    address agent = payload.indexAddress(2);
+
+    (uint16 chainId, address agent, address delegator) = parsePayload(payload);
+    require(chainId == CHAINID, "chain id unequal");
     if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(agent)) {
       revert InactiveAgent(agent);
     }
+
     Agent storage a = agentsMap[agent];
-    uint256 endRound = lockTime / ROUND_INTERVAL;
-    a.round2expireBtcMap[endRound] += value;
+    BtcExpireInfo storage expireInfo = round2expireInfoMap[endRound];
+    uint256 expireValue = expireInfo.agent2valueMap[agent];
+    if (expireValue == 0) {
+      expireInfo.agentAddrList.push(agent);
+    }
+    expireInfo.agent2valueMap[agent] = expireValue + value;
     a.totalBtc += value;
 
-    address delegator = payload.indexAddress(22);
     btcDelegatorMap[delegator].push(BtcReceipt(agent, value, endRound, a.rewardSet.length));
     ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(msg.sender), INIT_REPORT_BTC_TX_REWARD);
     //event
@@ -671,6 +693,13 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     // update index whenever claim happens
     d.rewardIndex = rewardIndex;
     return rewardAmount;
+  }
+
+  function parsePayload(bytes29 payload) internal pure returns (uint16 chainId, address agent, address delegator) {
+    require(payload.len() == 42, "payload size unequal");
+    chainId = payload.indexUint(0, 2).toUint16();
+    agent = payload.indexAddress(2);
+    delegator = payload.indexAddress(22);
   }
 
   /*********************** Governance ********************************/
