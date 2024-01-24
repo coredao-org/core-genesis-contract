@@ -33,7 +33,7 @@ def get_candidate(operator=None):
     idx = CandidateHubMock[0].operateMap(operator)
     if idx == 0:
         return None
-    return CandidateHubMock[0].candidateSet(idx-1).dict()
+    return CandidateHubMock[0].candidateSet(idx - 1).dict()
 
 
 def turn_round(miners: list = None, tx_fee=100, round_count=1):
@@ -68,3 +68,10 @@ def register_relayer(relayer_address=None):
     RelayerHubMock[0].register({'from': relayer_address, 'value': RelayerHubMock[0].requiredDeposit()})
 
 
+def get_current_round():
+    return CandidateHubMock[0].roundTag()
+
+
+def set_last_round_tag(rount_tag):
+    CandidateHubMock[0].setRoundTag(rount_tag)
+    PledgeAgentMock[0].setRoundTag(rount_tag)
