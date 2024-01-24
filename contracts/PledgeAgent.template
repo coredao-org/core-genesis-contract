@@ -27,7 +27,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   uint256 public constant INIT_REQUIRED_COIN_DEPOSIT = 1e18;
   uint256 public constant INIT_HASH_POWER_FACTOR = 20000;
-  uint256 public constant POWER_BLOCK_FACTOR = {% if mock %}1{% else %}1e18{% endif %};
+  uint256 public {% if mock %}{% else %}constant{% endif %} POWER_BLOCK_FACTOR = {% if mock %}1{% else %}1e18{% endif %};
   uint32 public constant INIT_BTC_CONFIRM_BLOCK = 3;
   uint256 public constant INIT_MIN_BTC_LOCK_ROUND = 7;
   uint256 public constant ROUND_INTERVAL = {{initRoundInterval}};
@@ -35,9 +35,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   uint256 public constant INIT_BTC_FACTOR = 5e4;
   uint256 public constant BTC_STAKE_MAGIC = 0x5341542b;
   uint256 public constant CHAINID = {{chainid}};
-  uint256 public constant FEE_FACTOR = 1e18;
-  uint256 public constant CLAIM_ROUND_LIMIT = 500;
-  uint256 public constant BTC_UNIT_CONVERSION = 1e10;
+  uint256 public constant FEE_FACTOR = {% if mock %}100{% else %}1e18{% endif %};
+  uint256 public {% if mock %}{% else %}constant{% endif %} CLAIM_ROUND_LIMIT = 500;
+  uint256 public {% if mock %}{% else %}constant{% endif %} BTC_UNIT_CONVERSION = 1e10;
 
   uint256 public requiredCoinDeposit;
 

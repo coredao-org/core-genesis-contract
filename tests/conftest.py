@@ -84,6 +84,9 @@ def validator_set(accounts):
 
 @pytest.fixture(scope="module")
 def pledge_agent(accounts):
+    accounts[0].deploy(BitcoinHelper)
+    accounts[0].deploy(TypedMemView)
+    accounts[0].deploy(SafeCast)
     c = accounts[0].deploy(PledgeAgentMock)
     c.init()
     if is_development:
@@ -140,6 +143,7 @@ def set_system_contract_address(
     foundation.updateContractAddr(*args)
 
     system_reward.init()
+    candidate_hub.setControlRoundTimeTag(True)
     # used for distribute reward
     # accounts[-2].transfer(validator_set.address, Web3.toWei(100000, 'ether'))
 
