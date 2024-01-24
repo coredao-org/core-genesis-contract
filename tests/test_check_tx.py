@@ -1501,6 +1501,18 @@ def get_intermediate_nodes(txids, tx_index : int):
         size = (size + 1) // 2
     return intermediate_nodes
 
+def test_check_tx_proof_not_confirm(btc_light_client):
+    chain_tip = btc_light_client.getChainTip()
+    idx = btc_light_client.getHeight(chain_tip) - btc_light_client.INIT_CHAIN_HEIGHT()
+
+    for _ in range(0,6):
+        btc_light_client.storeBlockHeader(btc_block_data[idx])
+        idx += 1
+
+    nodes = get_intermediate_nodes(txids, 0)
+    nodes = ['0x'+binascii.hexlify(node).decode('utf8') for node in nodes]
+    assert not btc_light_client.checkTxProof(txids[0], 717700, 5, nodes, 0)
+
 def test_check_tx_proof_success(btc_light_client):
     chain_tip = btc_light_client.getChainTip()
     idx = btc_light_client.getHeight(chain_tip) - btc_light_client.INIT_CHAIN_HEIGHT()
@@ -1525,7 +1537,7 @@ def test_check_tx_proof_fail(btc_light_client):
     for i in range(len(txids)):
         j = i
         while j == i:
-            j = random.randint(0, len(txids))
+            j = random.randint(0, len(txids)-1)
         nodes = get_intermediate_nodes(txids, j)
         nodes = ['0x'+binascii.hexlify(node).decode('utf8') for node in nodes]
         assert not btc_light_client.checkTxProof(txids[i], 717700, 2, nodes, i)
@@ -1533,7 +1545,7 @@ def test_check_tx_proof_fail(btc_light_client):
     for i in range(len(txids)):
         j = i
         while j == i:
-            j = random.randint(0, len(txids))
+            j = random.randint(0, len(txids)-1)
         nodes = get_intermediate_nodes(txids, i)
         nodes = ['0x'+binascii.hexlify(node).decode('utf8') for node in nodes]
         assert not btc_light_client.checkTxProof(txids[j], 717700, 2, nodes, i)
@@ -1541,19 +1553,7 @@ def test_check_tx_proof_fail(btc_light_client):
     for i in range(len(txids)):
         j = i
         while j == i:
-            j = random.randint(0, len(txids))
+            j = random.randint(0, len(txids)-1)
         nodes = get_intermediate_nodes(txids, i)
         nodes = ['0x'+binascii.hexlify(node).decode('utf8') for node in nodes]
         assert not btc_light_client.checkTxProof(txids[i], 717700, 2, nodes, j)
-
-def test_check_tx_proof_not_confirm(btc_light_client):
-    chain_tip = btc_light_client.getChainTip()
-    idx = btc_light_client.getHeight(chain_tip) - btc_light_client.INIT_CHAIN_HEIGHT()
-
-    for _ in range(0,6):
-        btc_light_client.storeBlockHeader(btc_block_data[idx])
-        idx += 1
-
-    nodes = get_intermediate_nodes(txids, 0)
-    nodes = ['0x'+binascii.hexlify(node).decode('utf8') for node in nodes]
-    assert not btc_light_client.checkTxProof(txids[0], 717700, 5, nodes, 0)
