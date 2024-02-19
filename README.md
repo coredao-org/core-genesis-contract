@@ -6,16 +6,18 @@ This repo holds all the genesis contracts on Core blockchain, which are part of 
 
 ## List of Contracts
 
-- [BTCLightClient.sol](./contracts/BtcLightClient.sol): This contract implements a BTC light client on Core blockchain. Relayers store BTC blocks to Core blockchain by calling this contract. This contract calculates powers of BTC miners in each round, which is used to calculate hybrid score and reward distribution.
-- [Burn.sol](./contracts/Burn.sol): This contract burns CORE tokens up to pre defined CAP.
-- [CandidateHub.sol](./contracts/CandidateHub.sol): This contract manages all validator candidates on Core blockchain. It also exposes the method `turnRound` for the consensus engine to execute the `turn round` workflow. 
+- [System.sol](./contracts/System.sol): This contract defines system constants (such as the genesis contract addresses) and various modifiers that can be used across the system to
+limit the accessibility to function.
 - [Foundation.sol](./contracts/Foundation.sol): This is the DAO Treasury smart contract. The funds in this contract can only be moved through governance vote. 
-- [GovHub.sol](./contracts/GovHub.sol): This is the smart contract to manage governance votes.
-- [PledgeAgent.sol](./contracts/PledgeAgent.sol): This contract manages user delegate, also known as stake, including both coin delegate and hash delegate.
-- [RelayerHub.sol](./contracts/RelayerHub.sol): This contract manages BTC relayers on Core blockchain.
-- [SlashIndicator.sol](./contracts/SlashIndicator.sol): This contract manages slash/jail operations to validators on Core blockchain.
-- [SystemReward.sol](./contracts/SystemReward.sol): This smart contract manages funds for relayers and verifiers.
-- [ValidatorSet.sol](./contracts/ValidatorSet.sol): This contract manages elected validators in each round. All rewards for validators on Core blockchain are minted in genesis block and stored in this contract. 
+- [GovHub.sol](./contracts/GovHub.sol): This is the smart contract that manages governance votes.
+- [CandidateHub.sol](./contracts/CandidateHub.sol): This contract manages all validator candidates on the Core blockchain. It also exposes the method `turnRound` for the consensus engine to execute the `turn round` workflow. 
+- [ValidatorSet.sol](./contracts/ValidatorSet.sol): This contract manages elected validators in each round. All rewards for validators on Core blockchain are minted in genesis block and stored in this contract.
+- [SlashIndicator.sol](./contracts/SlashIndicator.sol): This contract manages all slash and jail operations pertaining to validators on the Core blockchain.
+- [PledgeAgent.sol](./contracts/PledgeAgent.sol): This contract manages user delegation, including both delegation of CORE from token holders and delegation of PoW from Bitcoin miners.
+- [RelayerHub.sol](./contracts/RelayerHub.sol): This contract manages BTC relayers on the Core blockchain.
+- [BTCLightClient.sol](./contracts/BtcLightClient.sol): This contract implements a BTC light client on the Core blockchain. Relayers transmit BTC block headers to Core by calling this contract. It also calculates powers of BTC miners in each round, which is used to calculate hybrid score and reward distribution.
+- [SystemReward.sol](./contracts/SystemReward.sol): This smart contract manages funds for relayers and verifiers. 
+- [Burn.sol](./contracts/Burn.sol): This contract burns CORE tokens up to a pre-defined CAP.
 
 
 
