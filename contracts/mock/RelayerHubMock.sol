@@ -7,4 +7,8 @@ contract RelayerHubMock is RelayerHub {
         dues = dues / 1e16;
         requiredDeposit = requiredDeposit / 1e16;
     }
+
+    function setRelayerRegister(address account, bool value) external {
+        relayersExistMap[account] = value;
+    }
 }
