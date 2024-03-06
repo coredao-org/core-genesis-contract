@@ -44,7 +44,7 @@ def turn_round(miners: list = None, tx_fee=100, round_count=1):
 
     for _ in range(round_count):
         for miner in miners:
-            ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[-1]})
+            ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[-2]})
         tx = CandidateHubMock[0].turnRound()
         chain.sleep(1)
 

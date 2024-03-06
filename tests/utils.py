@@ -101,7 +101,7 @@ def expect_query(query_data, expect: dict):
 
 
 def get_transaction_op_return_data(chain_id, agent_address, delegate_address, lock_data,
-                                core_fee=1, version=1):
+                                   core_fee=1, version=1):
     if lock_data is not None and len(str(lock_data)) == 10:
         hex_result = hex(lock_data)[2:]
         lock_time_hex = reverse_by_bytes(hex_result)
@@ -159,3 +159,16 @@ def get_btc_tx(value, chain_id, validator, delegator, script_type='hash', lock_d
 
     tx_id = get_transaction_txid(btc_tx)
     return btc_tx, tx_id
+
+
+def remove_witness_data_from_raw_tx(btc_tx_hex, script_pubkey) -> str:
+    raw_tx: str = btc_tx_hex
+    if raw_tx[8:12] == '0001':
+        raw_tx = raw_tx[:8] + raw_tx[12:]
+        witness_data = raw_tx[raw_tx.index(script_pubkey) + len(script_pubkey): -8]
+        raw_tx = raw_tx.replace(witness_data, '')
+    return raw_tx
+
+
+def get_block_info(height='latest'):
+    return web3.eth.get_block(height)
