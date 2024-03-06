@@ -60,6 +60,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   uint256 public roundTag;
   {% if mock %}
   bool public controlRoundTimeTag = false;
+  bool public turnroundFailed = false;
   {% endif %}
 
   struct Candidate {
@@ -168,6 +169,11 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// The `turn round` workflow
   /// @dev this method is called by Golang consensus engine at the end of a round
   function turnRound() external onlyCoinbase onlyInit onlyZeroGasPrice {
+    {% if mock %}
+      if (turnroundFailed == true){
+      require(false, "turnRound failed");
+    }
+    {% endif %}
     // distribute rewards for the about to end round
     address[] memory lastCandidates = IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward();
 
