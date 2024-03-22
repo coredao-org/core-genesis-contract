@@ -38,6 +38,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   uint256 public constant FEE_FACTOR = {% if mock %}100{% else %}1e18{% endif %};
   int256 public {% if mock %}{% else %}constant{% endif %} CLAIM_ROUND_LIMIT = 500;
   uint256 public {% if mock %}{% else %}constant{% endif %} BTC_UNIT_CONVERSION = 1e10;
+  uint256 public constant INIT_DELEGATE_BTC_GAS_PRICE = 1e12;
 
   uint256 public requiredCoinDeposit;
 
@@ -93,6 +94,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   // minimum value to stake for a BTC staking transaction
   uint256 public minBtcValue;
+
+  uint256 public delegateBtcGasPrice;
 
   // HARDFORK V-1.0.7
   struct BtcReceipt {
@@ -376,7 +379,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /*********************** External methods ***************************/
   /// Delegate coin to a validator
   /// @param agent The operator address of validator
-  function delegateCoin(address agent) external payable {
+  function delegateCoin(address agent) external payable override {
     if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(agent)) {
       revert InactiveAgent(agent);
     }
@@ -386,14 +389,14 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   /// Undelegate coin from a validator
   /// @param agent The operator address of validator
-  function undelegateCoin(address agent) external {
+  function undelegateCoin(address agent) external override {
     undelegateCoin(agent, 0);
   }
 
   /// Undelegate coin from a validator
   /// @param agent The operator address of validator
   /// @param amount The amount of CORE to undelegate
-  function undelegateCoin(address agent, uint256 amount) public {
+  function undelegateCoin(address agent, uint256 amount) public override {
     (uint256 deposit, ) = undelegateCoin(agent, msg.sender, amount, false);
     Address.sendValue(payable(msg.sender), deposit);
     emit undelegatedCoin(agent, msg.sender, deposit);
@@ -402,7 +405,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Transfer coin stake to a new validator
   /// @param sourceAgent The validator to transfer coin stake from
   /// @param targetAgent The validator to transfer coin stake to
-  function transferCoin(address sourceAgent, address targetAgent) external {
+  function transferCoin(address sourceAgent, address targetAgent) external override {
     transferCoin(sourceAgent, targetAgent, 0);
   }
 
@@ -410,7 +413,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param sourceAgent The validator to transfer coin stake from
   /// @param targetAgent The validator to transfer coin stake to
   /// @param amount The amount of CORE to transfer
-  function transferCoin(address sourceAgent, address targetAgent, uint256 amount) public {
+  function transferCoin(address sourceAgent, address targetAgent, uint256 amount) public override {
     if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetAgent)) {
       revert InactiveAgent(targetAgent);
     }
@@ -426,7 +429,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Claim reward for delegator
   /// @param agentList The list of validators to claim rewards on, it can be empty
   /// @return (Amount claimed, Are all rewards claimed)
-  function claimReward(address[] calldata agentList) external returns (uint256, bool) {
+  function claimReward(address[] calldata agentList) external override returns (uint256, bool) {
     // limit round count to control gas usage
     int256 roundLimit = CLAIM_ROUND_LIMIT;
     uint256 reward;
@@ -481,7 +484,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param nodes part of the Merkle tree from the tx to the root in LE form (called Merkle proof)
   /// @param index index of the tx in Merkle tree
   /// @param script the corresponding redeem script of the locked up output
-  function delegateBtc(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index, bytes memory script) external {
+  function delegateBtc(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index, bytes memory script) external override {
     require(script[0] == bytes1(uint8(0x04)) && script[5] == bytes1(uint8(0xb1)), "not a valid redeem script");
 
     bytes32 txid = btcTx.calculateTxId();
@@ -507,6 +510,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       revert InactiveAgent(br.agent);
     }
 
+    require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender) || msg.sender == br.delegator, "only delegator or relayer can submit the BTC transaction");
+    require(tx.gasprice <= (delegateBtcGasPrice == 0 ? INIT_DELEGATE_BTC_GAS_PRICE : delegateBtcGasPrice), "gas price is too high");
+
     emit delegatedBtc(txid, br.agent, br.delegator, script, blockHeight, outputIndex);
 
     if (fee != 0) {
@@ -524,7 +530,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// transfer staked BTC to a different validator
   /// @param txid id of the BTC staking transaction
   /// @param targetAgent the new validator address to stake to
-  function transferBtc(bytes32 txid, address targetAgent) public {
+  function transferBtc(bytes32 txid, address targetAgent) external override {
     BtcReceipt storage br = btcReceiptMap[txid];
     require(br.value != 0, "btc tx not found");
     require(br.delegator == msg.sender, "not the delegator of this btc receipt");
@@ -564,7 +570,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// claim BTC staking rewards
   /// @param txidList the list of BTC staking transaction id to claim rewards 
   /// @return rewardSum amount of reward claimed
-  function claimBtcReward(bytes32[] calldata txidList) public returns (uint256 rewardSum) {
+  function claimBtcReward(bytes32[] calldata txidList) external override returns (uint256 rewardSum) {
     int256 claimLimit = CLAIM_ROUND_LIMIT;
     uint256 len = txidList.length;
     for(uint256 i = 0; i < len && claimLimit != 0; i++) {
@@ -904,6 +910,12 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         revert OutOfBounds(key, newMinBtcValue, 1e4, type(uint256).max);
       }
       minBtcValue = newMinBtcValue;
+    } else if (Memory.compareStrings(key,"delegateBtcGasPrice")) {
+      uint256 newDelegateBtcGasPrice = BytesToTypes.bytesToUint256(32, value);
+      if (newDelegateBtcGasPrice < 1e9) {
+        revert OutOfBounds(key, newDelegateBtcGasPrice, 1e9, type(uint256).max);
+      }
+      delegateBtcGasPrice = newDelegateBtcGasPrice;
     } else {
       require(false, "unknown param");
     }
