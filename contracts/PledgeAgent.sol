@@ -112,7 +112,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   struct BtcExpireInfo {
     address[] agentAddrList;
     mapping(address => uint256) agent2valueMap;
-    mapping(address => uint256) agentExsitMap;
+    mapping(address => uint256) agentExistMap;
   }
 
   struct CoinDelegator {
@@ -260,7 +260,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         agentsMap[agent].totalBtc -= expireInfo.agent2valueMap[agent];
         expireInfo.agentAddrList.pop();
         delete expireInfo.agent2valueMap[agent];
-        delete expireInfo.agentExsitMap[agent];
+        delete expireInfo.agentExistMap[agent];
       }
       delete round2expireInfoMap[r];
     }
@@ -502,7 +502,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     bytes29 payload;
     uint256 outputIndex;
     (br.value, payload, outputIndex) = voutView.parseToScriptValueAndData(script);
-    require(br.value > (minBtcValue == 0 ? INIT_MIN_BTC_VALUE : minBtcValue), "staked value does not meet requirement");
+    require(br.value >= (minBtcValue == 0 ? INIT_MIN_BTC_VALUE : minBtcValue), "staked value does not meet requirement");
 
     uint256 fee;
     (br.delegator, br.agent, fee) = parseAndCheckPayload(payload);
@@ -808,9 +808,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   function addExpire(BtcReceipt storage br) internal {
     BtcExpireInfo storage expireInfo = round2expireInfoMap[br.endRound];
-    if (expireInfo.agentExsitMap[br.agent] == 0) {
+    if (expireInfo.agentExistMap[br.agent] == 0) {
       expireInfo.agentAddrList.push(br.agent);
-      expireInfo.agentExsitMap[br.agent] = 1;
+      expireInfo.agentExistMap[br.agent] = 1;
     }
     expireInfo.agent2valueMap[br.agent] += br.value;
   }
