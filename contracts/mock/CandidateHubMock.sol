@@ -68,15 +68,24 @@ contract CandidateHubMock is CandidateHub {
   function setCandidateStatus(address k, uint256 v) public {
     candidateSet[operateMap[k] - 1].status = v;
   }
+    
+    function setTurnroundFailed(bool value) public {
+      turnroundFailed = value;
+  }
+    function setRoundInterval(uint256 value) public {
+      roundInterval = value;
+  }
+    
 
   function getCandidate(address k) public view returns (Candidate memory) {
     return candidateSet[operateMap[k] - 1];
   }
 
-  function getScoreMock(address[] memory candidates, uint256[] memory powers) external {
-    (scores, totalPower, totalCoin) = IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(
+ function getScoreMock(address[] memory candidates, uint256[] memory powers, uint256 round) external {
+    scores = IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(
       candidates,
-      powers
+      powers, 
+      round
     );
   }
 

@@ -92,7 +92,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     roundInterval = INIT_ROUND_INTERVAL;
     validatorCount = INIT_VALIDATOR_COUNT;
     maxCommissionChange = MAX_COMMISSION_CHANGE;
-    roundTag = 7;
+    roundTag = block.timestamp / INIT_ROUND_INTERVAL;
     alreadyInit = true;
   }
   
@@ -107,6 +107,13 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     }
     uint256 status = candidateSet[index - 1].status;
     return status == (status & ACTIVE_STATUS);
+  }
+
+  /// Whether the input address is operator address of a validator candidate 
+  /// @param operateAddr Operator address of validator candidate
+  /// @return true/false
+  function isCandidateByOperate(address operateAddr) external override view returns (bool) {
+    return operateMap[operateAddr] != 0;
   }
 
   /// Jail a validator for some rounds and slash some amount of deposits
@@ -196,8 +203,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
     // calculate the hybrid score for all valid candidates and 
     // choose top ones to form the validator set of the new round
-    (uint256[] memory scores, uint256 totalPower, uint256 totalCoin) =
-      IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(candidates, powers);
+    (uint256[] memory scores) =
+      IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(candidates, powers, roundTag);
     address[] memory validatorList = getValidators(candidates, scores, validatorCount);
 
     // prepare arguments, and notify ValidatorSet contract
@@ -225,7 +232,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
 
     // notify PledgeAgent contract
-    IPledgeAgent(PLEDGE_AGENT_ADDR).setNewRound(validatorList, totalPower, totalCoin, roundTag);
+    IPledgeAgent(PLEDGE_AGENT_ADDR).setNewRound(validatorList, roundTag);
 
     // update validator jail status
     for (uint256 i = 0; i < candidateSize; i++) {
@@ -476,13 +483,6 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       opAddrs[i] = candidateSet[i].operateAddr;
     }
     return opAddrs;
-  }
-
-  /// Whether the input address is operator address of a validator candidate 
-  /// @param operateAddr Operator address of validator candidate
-  /// @return true/false
-  function isCandidateByOperate(address operateAddr) external view returns (bool) {
-    return operateMap[operateAddr] != 0;
   }
 
   /// Whether the input address is consensus address a validator candidate
