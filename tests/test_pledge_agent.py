@@ -231,6 +231,7 @@ def test_add_round_reward_success_with_normal_agent(pledge_agent, validator_set)
     powers = [2, 5]
     total_coin = 1e7
     total_power = 10
+    btc_coin = 10
     expect_coin_rewards = [0, 0]
     expect_power_rewards = [0, 0]
 
@@ -243,7 +244,7 @@ def test_add_round_reward_success_with_normal_agent(pledge_agent, validator_set)
 
     __candidate_register(agents[0])
     __candidate_register(agents[1])
-    pledge_agent.setRoundState(total_power, total_coin)
+    pledge_agent.setRoundState(total_power, total_coin, btc_coin)
     pledge_agent.setAgentValidator(agents[0], powers[0], coins[0])
     pledge_agent.setAgentValidator(agents[1], powers[1], coins[1])
     tx = validator_set.addRoundRewardMock(agents, rewards)
@@ -260,10 +261,11 @@ def test_add_round_reward_success_with_no_agent(pledge_agent, validator_set):
     agents = accounts[1:4]
     rewards = (1e7, 1e8, 1e8)
     total_coin = 1e7
+    btc_coin = 1e7
     total_power = 10
     __candidate_register(agents[0])
     __candidate_register(agents[1])
-    pledge_agent.setRoundState(total_power, total_coin)
+    pledge_agent.setRoundState(total_power, total_coin, btc_coin)
     tx = validator_set.addRoundRewardMock(agents, rewards)
     expect_event_not_emitted(tx, "roundReward")
 
@@ -294,7 +296,7 @@ def test_get_score_success(candidate_hub, validator_set):
     powers = [0, 0, 0, 3, 5]
     total_coin = required_coin_deposit * 5 + 1 + 10
     total_power = POWER_BLOCK_FACTOR * (3 + 5) + 1
-    candidate_hub.getScoreMock(agents, powers)
+    candidate_hub.getScoreMock(agents, powers,0)
     scores = candidate_hub.getScores()
     assert len(scores) == 5
     for i in range(5):
