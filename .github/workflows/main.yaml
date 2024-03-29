@@ -44,6 +44,14 @@ jobs:
         run: |
           npm install
           npm install -g ganache
+
+      - name: modify openssl.cnf
+        run: |
+          sudo chmod  -R 777 /usr/lib/ssl/openssl.cnf
+          sudo sed -i 's/^#openssl_conf = openssl_init/openssl_conf = openssl_init/' /usr/lib/ssl/openssl.cnf
+          sudo sed -i '/^\[provider_sect\]$/,/^\[/ s/^default = default_sect$/&\nlegacy = legacy_sect/' /usr/lib/ssl/openssl.cnf
+          sudo sed -i 's/^# activate = 1/activate = 1/' /usr/lib/ssl/openssl.cnf
+          sudo echo -e "\n[legacy_sect]\nactivate = 1" >> /usr/lib/ssl/openssl.cnf
       
       - name: Run tests
         run: |
