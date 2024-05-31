@@ -6,11 +6,11 @@ import "./SafeCast.sol";
 
 enum ScriptTypes {
     P2PK, // 32 bytes
-    P2PKH, // 20 bytes        
-    P2SH, // 20 bytes          
-    P2WPKH, // 20 bytes          
+    P2PKH, // 20 bytes
+    P2SH, // 20 bytes
+    P2WPKH, // 20 bytes
     P2WSH, // 32 bytes
-    P2TR // 32 bytes               
+    P2TR // 32 bytes
 }
 
 library BitcoinHelper {
@@ -49,6 +49,11 @@ library BitcoinHelper {
         MerkleNode,         // 0x12
         MerkleStep,         // 0x13
         MerkleArray         // 0x14
+    }
+
+    struct OutPoint {
+      bytes32 txid;
+      uint32 outputIndex;
     }
 
     /// @notice             requires `memView` to be of a specified type
@@ -250,6 +255,19 @@ library BitcoinHelper {
         _value = value(output);
     }
 
+    /// @notice              Finds the value of a specific output
+    /// @dev                 Reverts if vout is null
+    /// @param _voutView     The vout of a Bitcoin transaction
+    /// @param _index        Index of output
+    /// @return _value       Value of the specified output
+    /// @return _pkScriptView  Parsed pk script view
+    function parseOutputValueAndScript(bytes29 _voutView, uint _index) internal pure typeAssert(_voutView, BTCTypes.Vout) returns (uint64 _value, bytes29 _pkScriptView) {
+        bytes29 output = indexVout(_voutView, _index);
+        _value = value(output);
+        _pkScriptView = scriptPubkey(output);
+        //_lockingScript = _lockingScriptBytes29.clone();
+    }
+
     /// @notice                   Finds total outputs value
     /// @dev                      Reverts if vout is null
     /// @param _vout              The vout of a Bitcoin transaction
@@ -352,7 +370,7 @@ library BitcoinHelper {
         return parseValueHavingLockingScript(voutView, _lockingScript);
     }
 
-        /// @notice                           Parses the BTC amount of a transaction
+    /// @notice                           Parses the BTC amount of a transaction
     /// @dev                              Finds the BTC amount that has been sent to the locking script
     ///                                   Returns zero if no matching locking scrip is found
     /// @param _voutView                  The vout of a Bitcoin transaction

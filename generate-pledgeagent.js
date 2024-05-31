@@ -20,13 +20,10 @@ program.option(
 program.option("--mock <mock>",
     "if use mock",
     false);
-program.option("-c, --chainid <chainid>", "chain id", "1116")
 
 program.parse(process.argv);
 
 const data = {
-  initRoundInterval: init_cycle.roundInterval,
-  chainid: program.chainid,
   mock: program.mock,
 };
 
