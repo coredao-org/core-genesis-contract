@@ -507,4 +507,40 @@ library BytesLib {
 
         return success;
     }
+
+    function lastIndexByte(bytes memory s, uint8 c) internal pure returns (int256) {
+        if (s.length == 0)
+            return -1;
+        else if(s.length > (2**128 - 1)) // since we have to be able to return -1 (if the char isn't found or input error), this function must return an "int" type with a max length of (2^128 - 1)
+            return -1;
+        else {
+            for (uint i = s.length; i != 0; i--) {
+                // found the first char of b
+                if (uint8(s[i-1]) == c) {
+                    return int(i);
+                }
+            }
+            return -1;
+        }   
+    }
+
+    function indexUint(bytes memory s, uint256 start, uint8 size) internal pure returns (uint256 result) {
+      unchecked {
+        assembly {
+            // solium-disable-previous-line security/no-inline-assembly
+            result := mload(add(s, add(start, 0x20)))
+        }
+      }
+      return result >> ((32 - size) * 8);
+    }
+
+    function indexBytes32(bytes memory s, uint256 start, uint8 size) internal pure returns (bytes32 result) {
+      unchecked {
+        assembly {
+            // solium-disable-previous-line security/no-inline-assembly
+            result := mload(add(s, add(start, 0x20)))
+        }
+      }
+      return result >> ((32 - size) * 8);
+    }
 }
