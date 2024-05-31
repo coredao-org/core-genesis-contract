@@ -18,7 +18,13 @@ contract System {
   address public constant PLEDGE_AGENT_ADDR = 0x0000000000000000000000000000000000001007;
   address public constant BURN_ADDR = 0x0000000000000000000000000000000000001008;
   address public constant FOUNDATION_ADDR = 0x0000000000000000000000000000000000001009;
+  address public constant STAKE_HUB_ADDR = 0x0000000000000000000000000000000000001010;
 
+  address public constant CORE_AGENT_ADDR = 0x0000000000000000000000000000000000001011;
+  address public constant HASH_AGENT_ADDR = 0x0000000000000000000000000000000000001012;
+  address public constant BTC_AGENT_ADDR = 0x0000000000000000000000000000000000001013;
+  address public constant BTC_STAKE_ADDR = 0x0000000000000000000000000000000000001014;
+  address public constant BTCLST_STAKE_ADDR = 0x0000000000000000000000000000000000001015;
 
   modifier onlyCoinbase() {
   
@@ -66,6 +72,21 @@ contract System {
 
   modifier onlyRelayer() {
     require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender), "the msg sender is not a relayer");
+    _;
+  }
+
+  modifier onlyStakeHub() {
+    require(msg.sender == STAKE_HUB_ADDR, "the msg sender must be stake hub contract");
+    _;
+  }
+
+  modifier onlyBtcStake() {
+    require(msg.sender == BTC_STAKE_ADDR, "the msg sender must be bitcoin stake contract");
+    _;
+  }
+
+  modifier onlyBtcAgent() {
+    require(msg.sender == BTC_AGENT_ADDR, "the msg sender must be bitcoin agent contract");
     _;
   }
 
