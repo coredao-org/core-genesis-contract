@@ -5,11 +5,11 @@ import "./lib/Memory.sol";
 import "./interface/IValidatorSet.sol";
 import "./interface/ICandidateHub.sol";
 import "./interface/IParamSubscriber.sol";
-import "./interface/IPledgeAgent.sol";
 import "./interface/ISlashIndicator.sol";
-import "./interface/ILightClient.sol";
+import "./interface/IStakeHub.sol";
 import "./System.sol";
 import "./lib/Address.sol";
+import "./lib/SatoshiPlusHelper.sol";
 
 /// This contract manages all validator candidates on Core blockchain
 /// It also exposes the method `turnRound` for the consensus engine to execute the `turn round` workflow
@@ -17,7 +17,6 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
   uint256 public constant INIT_REQUIRED_MARGIN = 1e22;
   uint256 public constant INIT_DUES = 1e20;
-  uint256 public constant INIT_ROUND_INTERVAL = 86400;
   uint256 public constant INIT_VALIDATOR_COUNT = 21;
   uint256 public constant MAX_COMMISSION_CHANGE = 10;
   uint256 public constant CANDIDATE_COUNT_LIMIT = 1000;
@@ -83,30 +82,41 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   event addedMargin(address indexed operateAddr, uint256 margin, uint256 totalMargin);
   event deductedMargin(address indexed operateAddr, uint256 margin, uint256 totalMargin);
   event statusChanged(address indexed operateAddr, uint256 oldStatus, uint256 newStatus);
-  event paramChange(string key, bytes value);
+  event turnedRound(uint256 round);
 
   /*********************** init **************************/
   function init() external onlyNotInit {
     requiredMargin = INIT_REQUIRED_MARGIN;
     dues = INIT_DUES;
-    roundInterval = INIT_ROUND_INTERVAL;
     validatorCount = INIT_VALIDATOR_COUNT;
     maxCommissionChange = MAX_COMMISSION_CHANGE;
-    roundTag = block.timestamp / INIT_ROUND_INTERVAL;
+    roundTag = block.timestamp / SatoshiPlusHelper.ROUND_INTERVAL;
     alreadyInit = true;
   }
   
   /********************* ICandidateHub interface ****************************/
   /// Whether users can delegate on a validator candidate
-  /// @param agent The operator address of the validator candidate
+  /// @param candidate The operator address of the validator candidate
   /// @return true/false
-  function canDelegate(address agent) external override view returns(bool) {
-    uint256 index = operateMap[agent];
+  function canDelegate(address candidate) external override view returns(bool) {
+    uint256 index = operateMap[candidate];
     if (index == 0) {
       return false;
     }
     uint256 status = candidateSet[index - 1].status;
     return status == (status & ACTIVE_STATUS);
+  }
+
+  /// Whether the candidate is a validator
+  /// @param candidate The operator address of the validator candidate
+  /// @return true/false
+  function isValidator(address candidate) external override view returns(bool) {
+    uint256 index = operateMap[candidate];
+    if (index == 0) {
+      return false;
+    }
+    uint256 status = candidateSet[index - 1].status;
+    return SET_VALIDATOR == (status & SET_VALIDATOR);  
   }
 
   /// Whether the input address is operator address of a validator candidate 
@@ -162,20 +172,13 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// The `turn round` workflow
   /// @dev this method is called by Golang consensus engine at the end of a round
   function turnRound() external onlyCoinbase onlyInit onlyZeroGasPrice {
+    
     // distribute rewards for the about to end round
-    address[] memory lastCandidates = IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward();
-
-    // fetch BTC miners who delegated hash power in the about to end round; 
-    // and distribute rewards to them
-    uint256 lastCandidateSize = lastCandidates.length;
-    for (uint256 i = 0; i < lastCandidateSize; i++) {
-      address[] memory miners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(roundTag-7, lastCandidates[i]);
-      IPledgeAgent(PLEDGE_AGENT_ADDR).distributePowerReward(lastCandidates[i], miners);
-    }
+    IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward(roundTag);
 
     // update the system round tag; new round starts
     
-    uint256 roundTimestamp = block.timestamp / roundInterval;
+    uint256 roundTimestamp = block.timestamp / SatoshiPlusHelper.ROUND_INTERVAL;
     require(roundTimestamp > roundTag, "not allowed to turn round, wait for more time");
     roundTag = roundTimestamp;
     
@@ -189,7 +192,6 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       if (statusList[i] == SET_CANDIDATE) validCount++;
     }
 
-    uint256[] memory powers;
     address[] memory candidates = new address[](validCount);
     uint256 j = 0;
     for (uint256 i = 0; i < candidateSize; i++) {
@@ -197,14 +199,11 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
         candidates[j++] = candidateSet[i].operateAddr;
       }
     }
-    // fetch hash power delegated on list of candidates
-    // which is used to calculate hybrid score for validators in the new round
-    powers = ILightClient(LIGHT_CLIENT_ADDR).getRoundPowers(roundTag-7, candidates);
 
     // calculate the hybrid score for all valid candidates and 
     // choose top ones to form the validator set of the new round
     (uint256[] memory scores) =
-      IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(candidates, powers, roundTag);
+      IStakeHub(STAKE_HUB_ADDR).getHybridScore(candidates, roundTag);
     address[] memory validatorList = getValidators(candidates, scores, validatorCount);
 
     // prepare arguments, and notify ValidatorSet contract
@@ -231,8 +230,8 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     // clean slash contract
     ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
 
-    // notify PledgeAgent contract
-    IPledgeAgent(PLEDGE_AGENT_ADDR).setNewRound(validatorList, roundTag);
+    // notify StakeHub contract
+    IStakeHub(STAKE_HUB_ADDR).setNewRound(validatorList, roundTag);
 
     // update validator jail status
     for (uint256 i = 0; i < candidateSize; i++) {
@@ -247,6 +246,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     for (uint256 i = 0; i < candidateSize; i++) {
       changeStatus(candidateSet[i], statusList[i]);
     }
+    emit turnedRound(roundTag);
   }
 
   /****************** register/unregister ***************************/
@@ -469,7 +469,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       }
       maxCommissionChange = newMaxCommissionChange;
     } else {
-      require(false, "unknown param");
+      revert UnsupportedGovParam(key);
     }
     emit paramChange(key, value);
   }
@@ -497,5 +497,11 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @return true/false
   function isJailed(address operateAddr) external view returns (bool) {
     return jailMap[operateAddr] >= roundTag;
+  }
+
+  /// Get init validator count
+  /// @return count of init validator
+  function getInitValidatorCount() external override pure returns(uint256) {
+    return INIT_VALIDATOR_COUNT;
   }
 }

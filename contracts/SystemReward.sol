@@ -34,7 +34,6 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   event rewardTo(address indexed to, uint256 amount);
   event rewardEmpty();
   event receiveDeposit(address indexed from, uint256 amount);
-  event paramChange(string key, bytes value);
 
   receive() external payable {
     if (msg.value != 0) {
@@ -100,7 +99,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
       require(newIsBurn <= 1, "the newIsBurn out of range");
       isBurn = newIsBurn == 1;
     } else {
-      require(false, "unknown param");
+      revert UnsupportedGovParam(key);
     }
     emit paramChange(key, value);
   }
