@@ -516,4 +516,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   function isJailed(address operateAddr) external view returns (bool) {
     return jailMap[operateAddr] >= roundTag;
   }
+
+  /// Get init validator count
+  /// @return count of init validator
+  function getInitValidatorCount() external override pure returns(uint256) {
+    return INIT_VALIDATOR_COUNT;
+  }
 }

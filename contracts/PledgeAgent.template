@@ -11,6 +11,7 @@ import "./lib/BitcoinHelper.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./System.sol";
+import "./interface/IPledge.sol";
 
 /// This contract manages user delegate, also known as stake
 /// Including both coin delegate and hash delegate
@@ -97,6 +98,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   uint256 public delegateBtcGasPrice;
 
+  // address of btclst contract
+  address public btcLstAddress;
+
   // HARDFORK V-1.0.7
   struct BtcReceipt {
     address agent;
@@ -152,6 +156,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 powerFactor;
     uint256 btc;
     uint256 btcFactor;
+    uint256 btcLstAmount;
+    uint32  validatorSize;
   }
 
   /*********************** events **************************/
@@ -175,10 +181,11 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 totalAmount
   );
   event btcPledgeExpired(bytes32 indexed txid, address indexed delegator);
-  event roundReward(address indexed agent, uint256 coinReward, uint256 powerReward, uint256 btcReward);
+  event roundReward(address indexed agent, uint256 coinReward, uint256 powerReward, uint256 btcReward, uint256 btcLstReward);
   event claimedReward(address indexed delegator, address indexed operator, uint256 amount, bool success);
   event transferredBtcFee(bytes32 indexed txid, address payable feeReceiver, uint256 fee);
   event failedTransferBtcFee(bytes32 indexed txid, address payable feeReceiver, uint256 fee);
+  event btcLstRewardFailed(address indexed addr, uint256 reward);
 
   /// The validator candidate is inactive, it is expected to be active
   /// @param candidate Address of the validator candidate
@@ -198,6 +205,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     minBtcValue = INIT_MIN_BTC_VALUE;
     roundTag = block.timestamp / ROUND_INTERVAL;
     alreadyInit = true;
+    btcLstAddress = 0x0000000000000000000000000000000000000000;
   }
 
   /*********************** Interface implementations ***************************/
@@ -213,6 +221,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 agentSize = agentList.length;
     require(agentSize == rewardList.length, "the length of agentList and rewardList should be equal");
     RoundState memory rs = stateMap[roundTag];
+    uint256 btcLstTotalReward;
     for (uint256 i = 0; i < agentSize; ++i) {
       Agent storage a = agentsMap[agentList[i]];
       if (a.rewardSet.length == 0) {
@@ -232,7 +241,14 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       uint256 coinReward = rewardList[i] * a.coin * rs.power / roundScore;
       uint256 powerReward = rewardList[i] * a.power * rs.coin / 10000 * rs.powerFactor / roundScore;
       uint256 btcReward = rewardList[i] * a.btc * rs.btcFactor * rs.power / roundScore;
-      emit roundReward(agentList[i], coinReward, powerReward, btcReward);
+      uint256 btcLstReward = rewardList[i] * a.btc * rs.btcLstAmount / rs.validatorSize * rs.power / roundScore;
+      btcLstTotalReward += btcLstReward;
+      emit roundReward(agentList[i], coinReward, powerReward, btcReward, btcLstReward);
+    }
+
+    (bool success,) = btcLstAddress.call{gas: 50000, value: btcLstTotalReward}(abi.encodeWithSignature("distributeReward(uint256)"));
+    if (!success) {
+      emit btcLstRewardFailed(btcLstAddress, btcLstTotalReward);
     }
   }
 
@@ -283,13 +299,22 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     
     uint256 bf = (btcFactor == 0 ? INIT_BTC_FACTOR : btcFactor) * BTC_UNIT_CONVERSION;
     uint256 pf = powerFactor;
-    
+
+    uint256 btcAmount = 0;
+    (bool success, bytes memory data) = btcLstAddress.call{gas: 50000}(abi.encodeWithSignature("getPledgeAmount()"));
+    if (success) {
+      btcAmount = abi.decode(data, (uint256));
+    }
+    totalBtc += btcAmount;
+    uint32 initValidatorCount = uint32(ICandidateHub(CANDIDATE_HUB_ADDR).getInitValidatorCount());
+    uint32 validatorSize = initValidatorCount < uint32(candidateSize) ? initValidatorCount : uint32(candidateSize);
+    uint256 btcLstScore = btcAmount * bf / validatorSize;
     // calc hybrid score
     // HARDFORK V-1.0.7 BTC staking is added when calculating the hybrid score
     scores = new uint256[](candidateSize);
     for (uint256 i = 0; i < candidateSize; ++i) {
       Agent storage a = agentsMap[candidates[i]];
-      scores[i] = a.power * (totalCoin + totalBtc * bf) * pf / 10000 + (a.coin + a.btc * bf) * totalPower;
+      scores[i] = a.power * (totalCoin + totalBtc * bf) * pf / 10000 + (a.coin + a.btc * bf + btcLstScore) * totalPower;
     }
 
     RoundState storage rs = stateMap[round];
@@ -298,6 +323,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     rs.powerFactor = pf;
     rs.btc = totalBtc;
     rs.btcFactor = bf;
+    rs.btcLstAmount = btcAmount;
+    rs.validatorSize = validatorSize;
   }
 
   /// Start new round, this is called by the CandidateHub contract
