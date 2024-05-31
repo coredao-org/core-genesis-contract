@@ -4,6 +4,7 @@ import "./System.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./lib/BytesLib.sol";
+import "./lib/SatoshiPlusHelper.sol";
 import "./interface/ISlashIndicator.sol";
 import "./interface/IValidatorSet.sol";
 import "./interface/IParamSubscriber.sol";
@@ -22,7 +23,6 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   uint256 public constant FELONY_THRESHOLD = 150;
   uint256 public constant DECREASE_RATE = 4;
   uint256 public constant INIT_REWARD_FOR_REPORT_DOUBLE_SIGN = 5e20;
-  uint32 public constant CHAINID = 1116;
   uint256 public constant INIT_FELONY_DEPOSIT = 1e21;
   uint256 public constant INIT_FELONY_ROUND = 2;
   uint256 public constant INFINITY_ROUND = 0xFFFFFFFFFFFFFFFF;
@@ -226,8 +226,8 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     bytes memory extra = items[12].toBytes();
     bytes memory sig = BytesLib.slice(extra, 32, 65);
     bytes[] memory rlpbytes_list = new bytes[](16);
-    rlpbytes_list[0] = RLPEncode.encodeUint(uint(CHAINID));
-    for(uint256 i = 0;i < 15;++i){
+    rlpbytes_list[0] = RLPEncode.encodeUint(uint(SatoshiPlusHelper.CHAINID));
+    for(uint256 i = 0; i < 15; ++i){
       if(i == 12){
         rlpbytes_list[13] = BytesLib.slice(extra, 0, 32).encodeBytes();
       } else {

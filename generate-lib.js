@@ -2,31 +2,35 @@ const program = require("commander");
 const fs = require("fs");
 const nunjucks = require("nunjucks");
 
+const init_cycle = require("./init_cycle")
+
 program.version("0.0.1");
 program.option(
     "-t, --template <template>",
-    "SlashIndicator template file",
-    "./contracts/SlashIndicator.template"
+    "SatoshiPlus template file",
+    "./contracts/lib/SatoshiPlusHelper.template"
 );
 
 program.option(
     "-o, --output <output-file>",
-    "SlashIndicator.sol",
-    "./contracts/SlashIndicator.sol"
+    "SatoshiPlusHelper.sol",
+    "./contracts/lib/SatoshiPlusHelper.sol"
 )
+
 program.option("--mock <mock>",
     "if use mock",
     false);
 program.option("-c, --chainid <chainid>", "chain id", "1116")
 
+
 program.parse(process.argv);
 
 const data = {
-  mock: program.mock,
-  chainid: program.chainid
+  chainid: program.chainid,
+  initRoundInterval: init_cycle.roundInterval,
 };
 
 const templateString = fs.readFileSync(program.template).toString();
 const resultString = nunjucks.renderString(templateString, data);
 fs.writeFileSync(program.output, resultString);
-console.log("SlashIndicator file updated.");
+console.log("SatoshiPlusHelper file updated.");
