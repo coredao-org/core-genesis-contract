@@ -18,6 +18,7 @@ contract System {
   address public constant PLEDGE_AGENT_ADDR = 0x0000000000000000000000000000000000001007;
   address public constant BURN_ADDR = 0x0000000000000000000000000000000000001008;
   address public constant FOUNDATION_ADDR = 0x0000000000000000000000000000000000001009;
+  address public constant STAKE_HUB_ADDR = 0x0000000000000000000000000000000000001010;
 
 
   modifier onlyCoinbase() {
@@ -66,6 +67,11 @@ contract System {
 
   modifier onlyRelayer() {
     require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender), "the msg sender is not a relayer");
+    _;
+  }
+
+  modifier onlyStakeHub() {
+    require(msg.sender == STAKE_HUB_ADDR, "the msg sender must be stake hub contract");
     _;
   }
 

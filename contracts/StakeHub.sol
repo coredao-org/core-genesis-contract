@@ -74,6 +74,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   function addRoundReward(
     address[] calldata validatorList,
     uint256[] calldata rewardList,
+    uint256 originValidatorSize,
     uint256 roundTag
   ) external payable override onlyValidator
   {
@@ -96,7 +97,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         }
         emit roundReward(collaterals[i].name, validator, rewards[j]);
       }
-      IAgent(collaterals[i].agent).distributeReward(validatorList, rewards);
+      IAgent(collaterals[i].agent).distributeReward(validatorList, rewards, originValidatorSize, roundTag);
     }
     // burn overflow reward of hardcap
     ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: burnReward }();
@@ -127,7 +128,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       hardcapSum += collaterals[i].hardcap;
 
       (uint256[] memory amounts, uint256 totalAmount) =
-        IAgent(collaterals[i].agent).getStakeAmount(candidates, validateSize);
+        IAgent(collaterals[i].agent).getStakeAmount(candidates, validateSize, roundTag);
       t = collaterals[i].factor;
       collateralScores[i] = totalAmount * t;
       for (uint256 j = 0; j < candidateSize; ++j) {

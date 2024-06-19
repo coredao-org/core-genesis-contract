@@ -5,6 +5,7 @@ interface IStakeHub {
   function addRoundReward(
     address[] calldata validatorList,
     uint256[] calldata rewardList,
+    uint256 originValidatorSize,
     uint256 roundTag) payable external;
   function getHybridScore(
     address[] calldata candidates,

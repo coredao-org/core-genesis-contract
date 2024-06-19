@@ -649,15 +649,16 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /// @param roundTimeTag The specific round time
   /// @param candidates The given candidates to get their powers
   /// @return powers The corresponding powers of given candidates
-  function getRoundPowers(uint256 roundTimeTag, address[] calldata candidates) external override view returns (uint256[] memory powers) {
+  function getRoundPowers(uint256 roundTimeTag, address[] calldata candidates) external override view returns (uint256[] memory powers, uint256 totalPower) {
     uint256 count = candidates.length;
     powers = new uint256[](count);
 
     RoundPower storage r = roundPowerMap[roundTimeTag];
     for (uint256 i = 0; i < count; ++i){
       powers[i] = r.powerMap[candidates[i]].miners.length;
+      totalPower += powers[i];
     }
-    return powers;
+    return (powers, totalPower);
   }
 
   /// Get miners (in the form of reward addresses) who delegated to a given candidate in a specific round
