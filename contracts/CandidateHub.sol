@@ -7,7 +7,7 @@ import "./interface/ICandidateHub.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/IPledgeAgent.sol";
 import "./interface/ISlashIndicator.sol";
-import "./interface/ILightClient.sol";
+import "./interface/IStakeHub.sol";
 import "./System.sol";
 import "./lib/Address.sol";
 
@@ -163,18 +163,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @dev this method is called by Golang consensus engine at the end of a round
   function turnRound() external onlyCoinbase onlyInit onlyZeroGasPrice {
     // distribute rewards for the about to end round
-    address[] memory lastCandidates = IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward();
+    IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward(roundTag);
 
-    // fetch BTC miners who delegated hash power in the about to end round; 
-    // and distribute rewards to them
-    uint256 lastCandidateSize = lastCandidates.length;
-    for (uint256 i = 0; i < lastCandidateSize; i++) {
-      address[] memory miners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(roundTag-7, lastCandidates[i]);
-      IPledgeAgent(PLEDGE_AGENT_ADDR).distributePowerReward(lastCandidates[i], miners);
-    }
-
-    // update the system round tag; new round starts
-    
+    // update the system round tag; new round starts    
     uint256 roundTimestamp = block.timestamp / roundInterval;
     require(roundTimestamp > roundTag, "not allowed to turn round, wait for more time");
     roundTag = roundTimestamp;
@@ -189,7 +180,6 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       if (statusList[i] == SET_CANDIDATE) validCount++;
     }
 
-    uint256[] memory powers;
     address[] memory candidates = new address[](validCount);
     uint256 j = 0;
     for (uint256 i = 0; i < candidateSize; i++) {
@@ -197,14 +187,11 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
         candidates[j++] = candidateSet[i].operateAddr;
       }
     }
-    // fetch hash power delegated on list of candidates
-    // which is used to calculate hybrid score for validators in the new round
-    powers = ILightClient(LIGHT_CLIENT_ADDR).getRoundPowers(roundTag-7, candidates);
 
     // calculate the hybrid score for all valid candidates and 
     // choose top ones to form the validator set of the new round
     (uint256[] memory scores) =
-      IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(candidates, powers, roundTag);
+      IStakeHub(STAKE_HUB_ADDR).getHybridScore(candidates, validatorCount, roundTag);
     address[] memory validatorList = getValidators(candidates, scores, validatorCount);
 
     // prepare arguments, and notify ValidatorSet contract
@@ -232,7 +219,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
 
     // notify PledgeAgent contract
-    IPledgeAgent(PLEDGE_AGENT_ADDR).setNewRound(validatorList, roundTag);
+    IStakeHub(STAKE_HUB_ADDR).setNewRound(validatorList, roundTag);
 
     // update validator jail status
     for (uint256 i = 0; i < candidateSize; i++) {

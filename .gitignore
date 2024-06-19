@@ -4,6 +4,7 @@ build/
 pids
 logs
 .idea/
+contracts/.prettierrc
 contracts/flattened/*.sol
 contracts/artifacts/*.json
 .DS_Store

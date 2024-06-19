@@ -42,6 +42,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   // value: useful state information of round
   mapping(uint256 => mapping(address => CollateralState) ) public stateMap;
 
+  uint256 roundValidatorSize;
+
   struct Collateral {
     string  name;
     address agent;
@@ -69,17 +71,16 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   /*********************** Interface implementations ***************************/
   /// Receive round rewards from ValidatorSet, which is triggered at the beginning of turn round
-  /// @param validatorList List of validator operator addresses
+  /// @param validators List of validator operator addresses
   /// @param rewardList List of reward amount
   function addRoundReward(
-    address[] calldata validatorList,
+    address[] calldata validators,
     uint256[] calldata rewardList,
-    uint256 originValidatorSize,
     uint256 roundTag
   ) external payable override onlyValidator
   {
-    uint256 validatorSize = validatorList.length;
-    require(validatorSize == rewardList.length, "the length of validatorList and rewardList should be equal");
+    uint256 validatorSize = validators.length;
+    require(validatorSize == rewardList.length, "the length of validators and rewardList should be equal");
     uint256 collateralSize = collaterals.length;
     uint256[] memory rewards = new uint256[](validatorSize);
     uint256 burnReward;
@@ -89,7 +90,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     for (uint256 i = 0; i < collateralSize; ++i) {
       CollateralState memory cs = stateMap[roundTag][collaterals[i].agent];
       for (uint256 j = 0; j < validatorSize; ++j) {
-        validator = validatorList[j];
+        validator = validators[j];
         r = rewardList[j] * candidateAmountMap[validator][i] * cs.factor / candidateScoreMap[validator];
         rewards[j] = r * cs.discount / DENOMINATOR;
         if (cs.discount != DENOMINATOR) {
@@ -97,7 +98,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         }
         emit roundReward(collaterals[i].name, validator, rewards[j]);
       }
-      IAgent(collaterals[i].agent).distributeReward(validatorList, rewards, originValidatorSize, roundTag);
+      IAgent(collaterals[i].agent).distributeReward(validators, rewards, roundValidatorSize, roundTag);
     }
     // burn overflow reward of hardcap
     ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: burnReward }();
@@ -145,7 +146,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
     for (uint256 j = 0; j < candidateSize; ++j) {
       candidateScoreMap[candidates[j]] = scores[j];
-    } 
+    }
 
     t = collateralScores[0] + collateralScores[1] + collateralScores[2];
     for (uint256 i = 0; i < collateralSize; ++i) {
@@ -158,6 +159,18 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         stateMap[roundTag][collaterals[i].agent].discount = collaterals[i].hardcap * t * DENOMINATOR / (hardcapSum * collateralScores[i]);
       }
     }
+  }
+
+  /// Start new round, this is called by the CandidateHub contract
+  /// @param validators List of elected validators in this round
+  /// @param roundTag The new round tag
+  function setNewRound(address[] calldata validators, uint256 roundTag) external override onlyCandidate {
+    uint256 collateralSize = collaterals.length;
+    for (uint256 i = 0; i < collateralSize; ++i) {
+      IAgent(collaterals[i].agent).setNewRound(validators, roundTag);
+    }
+
+    roundValidatorSize = validators.length;
   }
 
   /*********************** Governance ********************************/
