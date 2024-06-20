@@ -2,12 +2,9 @@
 pragma solidity 0.8.4;
 
 interface IAgent {
-  /// Receive round rewards from ValidatorSet, which is triggered at the beginning of turn round
-  /// @param validators List of validator operator addresses
-  /// @param rewardList List of reward amount
-  /// @param originValidatorSize The validator size at the begin of round.
-  /// @param roundTag The round tag
-  function distributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 originValidatorSize, uint256 roundTag) external payable;
+  /// Do some preparement before new round.
+  /// @param round The new round tag
+  function prepare(uint256 round) external;
   
   /// Get stake amount
   /// @param candidates List of candidate operator addresses
@@ -21,4 +18,11 @@ interface IAgent {
   /// @param validators List of elected validators in this round
   /// @param roundTag The new round tag
   function setNewRound(address[] calldata validators, uint256 roundTag) external;
+
+  /// Receive round rewards from ValidatorSet, which is triggered at the beginning of turn round
+  /// @param validators List of validator operator addresses
+  /// @param rewardList List of reward amount
+  /// @param originValidatorSize The validator size at the begin of round.
+  /// @param roundTag The round tag
+  function distributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 originValidatorSize, uint256 roundTag) external payable;
 }

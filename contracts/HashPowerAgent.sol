@@ -9,9 +9,8 @@ import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./System.sol";
 
-/// This contract manages user delegate, also known as stake
-/// Including both coin delegate and hash delegates
-contract HashStakeAgent is IAgent, System, IParamSubscriber {
+/// This contract manages Bitcoin miners delegate hash power.
+contract HashPowerAgent is IAgent, System, IParamSubscriber {
 
   // This field is used to store hash power reward of delegators
   // when turn round
@@ -28,7 +27,11 @@ contract HashStakeAgent is IAgent, System, IParamSubscriber {
   }
 
   /*********************** Interface implementations ***************************/
-
+  /// Do some preparement before new round.
+  /// @param round The new round tag
+  function prepare(uint256 /*round*/) external override {
+    // Nothing
+  }
 
   /// Receive round rewards from ValidatorSet, which is triggered at the beginning of turn round
   /// @param validatorList List of validator operator addresses

@@ -208,7 +208,26 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     btcLstAddress = 0x0000000000000000000000000000000000000000;
   }
 
-  /*********************** Interface implementations ***************************/
+  /*********************** Interface implementations ***************************/    /// HARDFORK V-1.0.10
+  /// Do some preparement before new round.
+  /// @param round The new round tag
+  function prepare(uint256 round) external override {
+    // the expired BTC staking values will be removed
+    for (uint256 r = roundTag + 1; r <= round; ++r) {
+      BtcExpireInfo storage expireInfo = round2expireInfoMap[r];
+      uint256 j = expireInfo.agentAddrList.length;
+      while (j > 0) {
+        j--;
+        address agent = expireInfo.agentAddrList[j];
+        agentsMap[agent].totalBtc -= expireInfo.agent2valueMap[agent];
+        expireInfo.agentAddrList.pop();
+        delete expireInfo.agent2valueMap[agent];
+        delete expireInfo.agentExistMap[agent];
+      }
+      delete round2expireInfoMap[r];
+    }
+  }
+
   /// Receive round rewards from ValidatorSet, which is triggered at the beginning of turn round
   /// @param agentList List of validator operator addresses
   /// @param rewardList List of reward amount
@@ -265,22 +284,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 candidateSize = candidates.length;
     require(candidateSize == powers.length, "the length of candidates and powers should be equal");
 
-    // HARDFORK V-1.0.7
-    // the expired BTC staking values will be removed before calculating hybrid score for validators
-    for (uint256 r = roundTag + 1; r <= round; ++r) {
-      BtcExpireInfo storage expireInfo = round2expireInfoMap[r];
-      uint256 j = expireInfo.agentAddrList.length;
-      while (j > 0) {
-        j--;
-        address agent = expireInfo.agentAddrList[j];
-        agentsMap[agent].totalBtc -= expireInfo.agent2valueMap[agent];
-        expireInfo.agentAddrList.pop();
-        delete expireInfo.agent2valueMap[agent];
-        delete expireInfo.agentExistMap[agent];
-      }
-      delete round2expireInfoMap[r];
-    }
-
     uint256 totalPower = 1;
     uint256 totalCoin = 1;
     uint256 totalBtc;
@@ -296,7 +299,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       totalCoin += a.coin;
       totalBtc += a.btc;
     }
-    
+
     uint256 bf = (btcFactor == 0 ? INIT_BTC_FACTOR : btcFactor) * BTC_UNIT_CONVERSION;
     uint256 pf = powerFactor;
     
@@ -401,6 +404,31 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         delete a.rewardSet[len-1];
       }
     }
+  }
+
+  function moveExpireBtc(uint256 newRound) external override onlyStakeHub {
+    for (uint256 r = roundTag + 1; r <= newRound; ++r) {
+      BtcExpireInfo storage expireInfo = round2expireInfoMap[r];
+      uint256 j = expireInfo.agentAddrList.length;
+      while (j > 0) {
+        j--;
+        address agent = expireInfo.agentAddrList[j];
+        agentsMap[agent].totalBtc -= expireInfo.agent2valueMap[agent];
+        expireInfo.agentAddrList.pop();
+        delete expireInfo.agent2valueMap[agent];
+        delete expireInfo.agentExistMap[agent];
+      }
+      delete round2expireInfoMap[r];
+    }
+  }
+
+  function getBTCAmount(address[] calldata candidates) external override returns (uint256[] memory amounts) {
+    uint256 candidateSize = candidates.length;
+    amounts = new uint256[](candidateSize);
+    for (uint256 i = 0; i < candidateSize; ++i) {
+      amounts[i] = agentsMap[candidates[i]].totalBtc;
+    }
+    return amounts;
   }
 
   /*********************** External methods ***************************/
@@ -831,7 +859,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         t := mload(loc)
     }
     return uint32(t.reverseUint256() & 0xFFFFFFFF);
-  } 
+  }
 
   function addExpire(BtcReceipt storage br) internal {
     BtcExpireInfo storage expireInfo = round2expireInfoMap[br.endRound];

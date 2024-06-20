@@ -120,14 +120,17 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     }
     uint256 collateralSize = collaterals.length;
 
+    uint256 hardcapSum;
+    for (uint256 i = 0; i < collateralSize; ++i) {
+      hardcapSum += collaterals[i].hardcap;
+      IAgent(collaterals[i].agent).prepare(roundTag);
+    }
+
     uint256[] memory collateralScores = new uint256[](collateralSize);
     scores = new uint256[](candidateSize);
     uint256 t;
-    uint256 hardcapSum;
     address candiate;
     for (uint256 i = 0; i < collateralSize; ++i) {
-      hardcapSum += collaterals[i].hardcap;
-
       (uint256[] memory amounts, uint256 totalAmount) =
         IAgent(collaterals[i].agent).getStakeAmount(candidates, validateSize, roundTag);
       t = collaterals[i].factor;
