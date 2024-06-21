@@ -10,7 +10,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "commander": "^3.0.1",
+    "commander": "^3.0.2",
     "es5-ext": "^0.10.64",
     "nunjucks": "^3.2.4",
     "rlp": "^2.2.7",

@@ -51,7 +51,8 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
        lockscripts.push(vout[i].pkscript)
        amounts.push(vout[i].value)
     }
-    lstToken.burned(lockscripts, amounts);
+    //whos tokens are being burned here? shouldn't the user begin the undelegate process by burning the LST tokens?
+    lstToken.burn(lockscripts, amounts); 
   }
 
   function distributeReward(uint256 reward, uint256 roundTag) external payable {
