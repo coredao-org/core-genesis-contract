@@ -11,16 +11,16 @@ contract BitcoinLSTMerkleToken is ERC20, Pausable {
     uint256 public lastRewardRoundEndTime; // End time of the last reward round
     uint256 public currentRound; // Current reward round number
 
-    mapping(address => uint256) public lastStakeTime; // Timestamp of the last stake
-    mapping(address => uint256) public claimedRewards; // Total claimed rewards per user
     mapping(address => uint256) public lastClaimedRound; // Last round a user claimed rewards
 
-    event RewardsDistributed(bytes32 merkleRoot, uint256 roundEndTime, uint256 roundNumber);
+    event RewardsAdded(bytes32 merkleRoot, uint256 roundEndTime, uint256 roundNumber);
     event RewardClaimed(address indexed account, uint256 amount);
+    event LSTBurned(address indexed account, uint256 amount, string bitcoinAddress);
 
     constructor(string memory _name, string memory _symbol, address _bitcoinLSTStake) ERC20(_name, _symbol) {
         bitcoinLSTStake = _bitcoinLSTStake;
         currentRound = 0;
+        currentRoundTime = block.timestamp;
     }
 
     modifier onlyBtcAgent() {
@@ -28,37 +28,35 @@ contract BitcoinLSTMerkleToken is ERC20, Pausable {
         _;
     }
 
-    function updateRewards(bytes32 _merkleRoot, uint256 _roundEndTime) external onlyBtcAgent whenPaused {
+    function updateRewards(bytes32 _merkleRoot, uint256 _roundEndTime) external payable onlyBtcAgent {
         merkleRoot = _merkleRoot;
         lastRewardRoundEndTime = _roundEndTime;
         currentRound++;
-
-        emit RewardsDistributed(merkleRoot, lastRewardRoundEndTime, currentRound);
+        emit RewardsAdded(merkleRoot, lastRewardRoundEndTime, roundNumber);
     }
+
 
     function mint(address to, uint256 amount) external onlyBtcAgent {
         _mint(to, amount);
-        lastStakeTime[to] = block.timestamp;
     }
 
-    function burn(uint256 amount) external {
+    //User must pass in the bitcoin address during a burn event, so we know where to send the unlocked BTC (important is LST has been traded)
+    function burn(uint256 amount, string memory bitcoinAddress) external {
         _burn(msg.sender, amount);
+        emit LSTBurned(msg.sender, amount, bitcoinAddress);
     }
 
     function claimReward(uint256 amount, bytes32[] calldata merkleProof) external whenNotPaused {
-        require(lastStakeTime[msg.sender] < lastRewardRoundEndTime, "Must be staked for at least one full round to claim rewards");
         require(lastClaimedRound[msg.sender] < currentRound, "Rewards already claimed for this round");
 
         bytes32 node = keccak256(abi.encodePacked(msg.sender, amount));
         require(MerkleProof.verify(merkleProof, merkleRoot, node), "Invalid Merkle proof");
 
-        uint256 claimableAmount = amount - claimedRewards[msg.sender];
-        claimedRewards[msg.sender] = amount;
         lastClaimedRound[msg.sender] = currentRound;
 
-        payable(msg.sender).transfer(claimableAmount);
+        payable(msg.sender).transfer(amount);
 
-        emit RewardClaimed(msg.sender, claimableAmount);
+        emit RewardClaimed(msg.sender, amount);
     }
 
     function pause() external onlyBtcAgent {
