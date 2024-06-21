@@ -36,29 +36,22 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
 
   function delegate(bytes memory payload, bytes memory script, uint256 value) external onlyBtcAgent {
 
-    uint256 delegator = parsePayload(payload);
+    address delegator = parsePayload(payload);
 
     require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender), "only delegator or relayer can submit the BTC transaction");
 
     lstToken.mint(delegator, value);
   }
 
-  function burn(uint256 amount) external {
-    // TODO
-    // Step 1
-    // 1. User commit a burn tx with amount,
-    // 2. burn btctoken from erc20
-    //    lstToken.burn(delegator, value);
-    // 3. calculate reward.
-    // 4. emit event
-    // Step 2 offline
-    // 1. multisig build a tx & PSBT process & broadcast to BTC network
-    // Step 3 
-    // 1. relayer submit a btc tx in BitcoinAgent.verifyBurnTx
-  }
-
   function undelegate(bytes btctx) external onlyBtcAgent {
     // TODO mark a burn workflow finish
+    bytes[] lockscripts;
+    uint256[] amounts;
+    for btctx.vout {
+       lockscripts.push(vout[i].pkscript)
+       amounts.push(vout[i].value)
+    }
+    lstToken.burned(lockscripts, amounts);
   }
 
   function distributeReward(uint256 reward, uint256 roundTag) external payable {
