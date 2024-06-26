@@ -45,7 +45,7 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
   event paramChange(string key, bytes value);
   event delegated(bytes32 indexed txid, address indexed delegator, uint256 amount);
   event redeemed(address indexed delegator, uint256 amount, uint256 utxoFee);
-  event undelegated(bytes32 indexed txid, address indexed delegator, uint256 amount);
+  event undelegated(bytes32 indexed txid, address indexed delegator, uint256 outputIndex, uint256 amount);
 
   function init() external onlyNotInit {
     utxoFee = INIT_UTXO_FEE;
@@ -58,12 +58,12 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
     fee = payload.indexUint(27, 1);
   }
 
-  function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 value) external override onlyBtcAgent returns (address delegator, uint256 fee) {
+  function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 value, uint256 outputIndex) external override onlyBtcAgent returns (address delegator, uint256 fee) {
     (delegator, fee) = parsePayload(payload);
     // check in walletStatus
     require(walletStatus[sha256(script)] != 0, "Unknown LST wallet");
     lstToken.mint(delegator, value);
-    delegated(txid, delegator, value);
+    delegated(txid, delegator, outputIndex, value);
   }
 
   function redeem(uint256 amount, bytes calldata btcAddress) external {
@@ -125,7 +125,7 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
     }
   }
 
-  function distributeReward(uint256 reward, uint256 roundTag) external override payable onlyBtcAgent{
+  function distributeReward(uint256 reward, uint256 roundTag) external override payable onlyBtcAgent {
     rewardPerBTC[roundTag] += rewardPerBTC[lastRoundTag] + reward * BTC_DECIMAL / totalAmount;
     lastRoundTag = roundTag;
   }

@@ -23,9 +23,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   uint256 public constant BTC_UNIT_CONVERSION = 1e10;
   uint256 public constant INIT_BTC_FACTOR = 2e4;
   uint256 public constant DENOMINATOR = 1e4;
-  address public constant CORE_AGENT_ADDR = 0x0000000000000000000000000000000000001007;
-  address public constant HASH_AGENT_ADDR = 0x0000000000000000000000000000000000001011;
-  address public constant BTC_AGENT_ADDR = 0x0000000000000000000000000000000000001012;
 
   // Collateral list.
   Collateral[] collaterals;

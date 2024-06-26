@@ -24,13 +24,13 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
 
   /*********************** events **************************/
   event paramChange(string key, bytes value);
-  event delegatedBtc(bytes32 indexed txid, address indexed agent, address indexed delegator, bytes script, uint32 blockHeight, uint256 outputIndex);
+  event delegatedBtc(bytes32 indexed txid, address indexed agent, address indexed delegator, bytes script, uint256 outputIndex, uint32 amount);
 
   /// The validator candidate is inactive, it is expected to be active
   /// @param candidate Address of the validator candidate
   error InactiveAgent(address candidate);
 
-  function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 amount) override external onlyBtcAgent returns (address delegator, uint256 fee) {
+  function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 amount,  uint256 outputIndex) override external onlyBtcAgent returns (address delegator, uint256 fee) {
     require(script[0] == bytes1(uint8(0x04)) && script[5] == bytes1(uint8(0xb1)), "not a valid redeem script");
 
     uint32 lockTime = parseLockTime(script);
@@ -39,7 +39,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
 
     IPledgeAgent(PLEDGE_AGENT_ADDR).delegateBtc(txid, lockTime, delegator, agent, amount);
 
-    emit delegatedBtc(txid, agent, delegator, script, 0, 0);
+    emit delegatedBtc(txid, agent, delegator, script, outputIndex, amount);
   }
 
   function undelegate(bytes32 txid, bytes memory stxos, bytes29 voutView) override external onlyBtcAgent {
