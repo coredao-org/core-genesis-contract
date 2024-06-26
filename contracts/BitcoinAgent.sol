@@ -19,6 +19,10 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   // Protocol MAGIC `SAT+`, represents the short name for Satoshi plus protocol.
   uint256 public constant BTC_STAKE_MAGIC = 0x5341542b;
   uint256 public constant BTC_DECIMAL = 1e8;
+  uint64 public constant INIT_MIN_BTC_VALUE = 1e4;
+  uint32 public constant INIT_BTC_CONFIRM_BLOCK = 3;
+  uint32 public constant BTC_STAKING_VERSION = 1;
+  uint32 public constant BTCLST_STAKING_VERSION = 2;
 
   address public btcStake; // oldBtcAddress is PledgeAgent
   address public btcLSTStake;
@@ -33,11 +37,28 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   // value: bitcoin receipt.
   mapping(bytes32 => BtcReceipt) btcReceiptMap;
 
+  // minimum acceptable value for a BTC staking transaction
+  uint64 public minBtcValue;
+
+  // the number of blocks to mark a BTC staking transaction as confirmed
+  uint32 public btcConfirmBlock;
+
+  // key: delegator, value: fee
+  mapping(address => uint256) liabilities;
+  // key: relayer, value: fee
+  mapping(address => uint256) creditors;
+
   struct BtcReceipt {
-    uint32 height;
-    uint32 outpointIndex; // output index.
     uint32 version;
+    uint32 outputIndex;
+    uint32 height;
     uint32 usedHeight;
+  }
+
+  struct STXO {
+    bytes32 txid;
+    uint32 outputIndex;
+    uint32 version;
   }
 
   /*********************** events **************************/
@@ -45,6 +66,8 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   event claimedReward(address indexed delegator, uint256 amount);
 
   function init() external onlyNotInit {
+    minBtcValue = INIT_MIN_BTC_VALUE;
+    btcConfirmBlock = INIT_BTC_CONFIRM_BLOCK;
     alreadyInit = true;
   }
 
@@ -130,42 +153,68 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /// @param index index of the tx in Merkle tree
   /// @param script the corresponding redeem script of the locked up output
   function verifyMintTx(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index, bytes memory script) external override {
+    require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender), "only relayer can submit the BTC transaction");
+
     bytes32 txid = btcTx.calculateTxId();
 
     BtcReceipt storage br = btcReceiptMap[txid];
     require(br.height == 0, "btc tx confirmed");
 
     require(ILightClient(LIGHT_CLIENT_ADDR).
-      checkTxProof(txid, blockHeight, (btcConfirmBlock == 0 ? INIT_BTC_CONFIRM_BLOCK : btcConfirmBlock), nodes, index), "btc tx not confirmed");
+      checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index), "btc tx not confirmed");
 
     (,,bytes29 voutView,) = btcTx.extractTx();
-    uint256 value;
-    bytes29 payload;
-    uint256 outputIndex;
-    (value, payload, outputIndex) = voutView.parseToScriptValueAndData(script);
-    require(br.value >= (minBtcValue == 0 ? INIT_MIN_BTC_VALUE : minBtcValue), "staked value does not meet requirement");
+    (uint64 value, bytes29 payload, uint32 outputIndex) = voutView.parseToScriptValueAndData(script);
+    require(value >= (minBtcValue == 0 ? INIT_MIN_BTC_VALUE : minBtcValue), "staked value does not meet requirement");
 
-    uint256 version = parsePayloadVersion(bytes29 payload);
+    uint32 version = parsePayloadVersionAndCheckProtocol(bytes29 payload);
     require(version == 1 || version == 2, "unsupport sat+ version");
+    address delegator;
+    uint256 fee;
     if (version == 1) {
-      btcStake.delegate(payload, script, value);
+      (delegator, fee) = btcStake.delegate(payload, script, value);
     } else
-      btcLSTStake.delegate(payload, script, value);
+      (delegator, fee) = btcLSTStake.delegate(payload, script, value);
+    }
+
+    if (fee != 0) {
+      liabilities[delegator] += fee;
+      creditors[msg.sender] += fee;
     }
     br.height = blockHeight;
-    br.outpointIndex = outputIndex;
+    br.outputIndex = outputIndex;
     br.version = version;
   }
 
   function verifyBurnTx(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index) external {
     bytes32 txid = btcTx.calculateTxId();
     require(ILightClient(LIGHT_CLIENT_ADDR).
-      checkTxProof(txid, blockHeight, (btcConfirmBlock == 0 ? INIT_BTC_CONFIRM_BLOCK : btcConfirmBlock), nodes, index), "btc tx not confirmed");
+      checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index), "btc tx not confirmed");
     (,bytes29 _vinView, bytes29 voutView,) = btcTx.extractTx();
-    // TODO iterate vin
-    // match outpoint in btcReceiptMap.
-    // update it btcReceiptMap[outpoint.hash].usedHeight = blockHeight
 
+    STXO[] memory stxos = parseVin(_vinView, blockHeight);
+
+    bool version1;
+    bool version2;
+
+    for (uint256 index = 0; index < stxos.length; ++index) {
+      if (stxos[index].version == BTC_STAKING_VERSION) {
+        version1 = true;
+      } else if (stxos[index].version == BTCLST_STAKING_VERSION) {
+        version2 = true;
+      } else {
+        break;
+      }
+    }
+
+    if (version1) {
+      btcStake.undelegate(stxos, voutView);
+    }
+    if (version2) {
+      btcLSTStake.undelegate(stxos, voutView);
+
+      // TODO voutView exchange set to btcReceiptMap.
+    }
   }
 
   /// Claim reward for miner
@@ -186,15 +235,44 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   }
 
   /*********************** Internal method ********************************/
-  function parsePayloadVersion(bytes29 payload) internal pure returns (uint256) {
-    require(payload.len() >= 48, "payload length is too small");
+  function parsePayloadVersionAndCheckProtocol(bytes29 payload) internal pure returns (uint32) {
+    require(payload.len() >= 7, "payload length is too small");
     require(payload.indexUint(0, 4) == BTC_STAKE_MAGIC, "wrong magic");
     require(payload.indexUint(5, 2) == CHAINID, "wrong chain id");
     return payload.indexUint(4, 1);
-    require(payload.indexUint(4, 1) == 1, "wrong version");
-    delegator= payload.indexAddress(7);
-    agent = payload.indexAddress(27);
-    fee = payload.indexUint(47, 1) * FEE_FACTOR;
+    #require(payload.indexUint(4, 1) == 1, "wrong version");
+    #delegator= payload.indexAddress(7);
+    #agent = payload.indexAddress(27);
+    #fee = payload.indexUint(47, 1) * FEE_FACTOR;
+  }
+
+
+  /// @notice             Parses the BTC vin and set btcReceipt as used.
+  ///
+  /// @param _vinView     The vin of a Bitcoin transaction
+  /// @param _blockHeight The block height where tx build in
+  /// @return stxos       The stxo records.
+  function parseVin(
+      bytes29 _vinView,
+      uint32 _blockHeight
+  ) internal typeAssert(_vinView, BTCTypes.Vin) returns (STXO[] memory stxos) {
+      bytes32 _txId;
+      uint _outputIndex;
+
+      // Finds total number of outputs
+      uint _numberOfInputs = uint256(indexCompactInt(_vinView, 0));
+      receipts = new STXO[](_numberOfInputs);
+      uint stxoIndex;
+
+      for (uint index = 0; index < _numberOfInputs; ++index) {
+          (_txId, _outputIndex) = extractOutpoint(_vinView, index);
+          BtcReceipt br storage = btcReceiptMap[_txId];
+          if (br.height != 0 && br.outputIndex == _outputIndex) {
+            br.usedHeight = _blockHeight;
+            stxos[stxoIndex] = STXO(_txId, _outputIndex, br.version);
+            ++stxoIndex;
+          }
+      }
   }
 
   /*********************** Governance ********************************/

@@ -250,6 +250,19 @@ library BitcoinHelper {
         _value = value(output);
     }
 
+    /// @notice              Finds the value of a specific output
+    /// @dev                 Reverts if vout is null
+    /// @param _voutView     The vout of a Bitcoin transaction
+    /// @param _index        Index of output
+    /// @return _value       Value of the specified output
+    /// @return _lockingScript            Parsed locking script
+    function parseOutputValueAndScript(bytes29 _voutView, uint _index) internal pure typeAssert(_voutView, BTCTypes.Vout) returns (uint64 _value, bytes memory _lockingScript) {
+        bytes29 output = indexVout(_voutView, _index);
+        _value = value(output);
+        bytes29 _lockingScriptBytes29 = scriptPubkey(output);
+        _lockingScript = _lockingScriptBytes29.clone();
+    }
+
     /// @notice                   Finds total outputs value
     /// @dev                      Reverts if vout is null
     /// @param _vout              The vout of a Bitcoin transaction
@@ -352,7 +365,7 @@ library BitcoinHelper {
         return parseValueHavingLockingScript(voutView, _lockingScript);
     }
 
-        /// @notice                           Parses the BTC amount of a transaction
+    /// @notice                           Parses the BTC amount of a transaction
     /// @dev                              Finds the BTC amount that has been sent to the locking script
     ///                                   Returns zero if no matching locking scrip is found
     /// @param _voutView                  The vout of a Bitcoin transaction

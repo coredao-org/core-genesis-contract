@@ -24,7 +24,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   }
 
   function undelegate(bytes memory btctx) internal {
-    // receiptMap[txid];
     // TODO clear the stake tx.
   }
 
@@ -35,13 +34,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
     if (value.length != 32) {
       revert MismatchParamLength(key);
-    }
-    if (Memory.compareStrings(key, "add")) {
-      addMultisigAddress(value);
-    } else if (Memory.compareStrings(key, "remove")) {
-      removeWallet(value);
-    } else {
-      require(false, "unknown param");
     }
     emit paramChange(key, value);
   }

@@ -23,6 +23,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   uint256 public constant BTC_UNIT_CONVERSION = 1e10;
   uint256 public constant INIT_BTC_FACTOR = 2e4;
   uint256 public constant DENOMINATOR = 1e4;
+  address public constant CORE_AGENT_ADDR = 0x0000000000000000000000000000000000001007;
   address public constant HASH_AGENT_ADDR = 0x0000000000000000000000000000000000001011;
   address public constant BTC_AGENT_ADDR = 0x0000000000000000000000000000000000001012;
 
@@ -48,7 +49,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     string  name;
     address agent;
     uint256 factor;
-    uint256  hardcap;
+    uint256 hardcap;
   }
 
   struct CollateralState {
@@ -63,7 +64,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   function init() external onlyNotInit {
     // add three collaterals into list
-    collaterals.push(Collateral("CORE", PLEDGE_AGENT_ADDR, 1, 6000));
+    collaterals.push(Collateral("CORE", CORE_AGENT_ADDR, 1, 6000));
     collaterals.push(Collateral("HASHPOWER", HASH_AGENT_ADDR, HASH_UNIT_CONVERSION * INIT_HASH_FACTOR, 2000));
     collaterals.push(Collateral("BTC", BTC_AGENT_ADDR, BTC_UNIT_CONVERSION * INIT_BTC_FACTOR, 4000));
     alreadyInit = true;
@@ -172,7 +173,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     for (uint256 i = 0; i < collateralSize; ++i) {
       IAgent(collaterals[i].agent).setNewRound(validators, roundTag);
     }
-
     roundValidatorSize = validators.length;
   }
 
@@ -184,6 +184,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }
+    // TODO
     emit paramChange(key, value);
   }
 
