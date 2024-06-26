@@ -80,6 +80,10 @@ contract System {
     _;
   }
 
+  modifier onlyBtcStake() {
+    require(msg.sender == BTC_STAKE_ADDR, "the msg sender must be bitcoin stake contract");
+    _;
+  }
   /// The length of param mismatch. Default is 32 bytes.
   /// @param name the name of param.
   error MismatchParamLength(string name);

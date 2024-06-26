@@ -527,7 +527,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param nodes part of the Merkle tree from the tx to the root in LE form (called Merkle proof)
   /// @param index index of the tx in Merkle tree
   /// @param script the corresponding redeem script of the locked up output
-  function delegateBtc(bytes32 txid, uint32 lockTime, address delegator, address agent, uint256 value) external override {
+  function delegateBtc(bytes32 txid, uint32 lockTime, address delegator, address agent, uint256 value) external override only onlyBtcStake{
     BtcReceipt storage br = btcReceiptMap[txid];
     require(br.value == 0, "btc tx confirmed");
 
