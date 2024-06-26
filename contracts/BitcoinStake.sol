@@ -22,13 +22,6 @@ import "./System.sol";
 contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   using TypedMemView for *;
 
-  uint256 public constant INIT_DELEGATE_BTC_GAS_PRICE = 1e12;
-  uint256 public constant BTC_STAKE_MAGIC = 0x5341542b;
-  uint256 public constant CHAINID = 1116;
-  uint256 public constant FEE_FACTOR = 1e18;
-
-  uint256 public delegateBtcGasPrice;
-
   /*********************** events **************************/
   event paramChange(string key, bytes value);
   event delegatedBtc(bytes32 indexed txid, address indexed agent, address indexed delegator, bytes script, uint32 blockHeight, uint256 outputIndex);
@@ -37,26 +30,31 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   /// @param candidate Address of the validator candidate
   error InactiveAgent(address candidate);
 
-  function delegate(uint32 blockHeight, bytes29 payload, bytes memory script, bytes32 txid, uint32 outputIndex) override external {
+  function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 amount) override external onlyBtcAgent returns (address delegator, uint256 fee) {
     require(script[0] == bytes1(uint8(0x04)) && script[5] == bytes1(uint8(0xb1)), "not a valid redeem script");
-    require(tx.gasprice <= (delegateBtcGasPrice == 0 ? INIT_DELEGATE_BTC_GAS_PRICE : delegateBtcGasPrice), "gas price is too high");
 
     uint32 lockTime = parseLockTime(script);
+    address agent;
+    (delegator, agent, fee) = parseAndCheckPayload(payload);
 
-    (address delegator, address agent, uint256 fee) = parseAndCheckPayload(payload);
-    if (!ICandidateHub(CANDIDATE_HUB_ADDR).isCandidateByOperate(agent)) {
-      revert InactiveAgent(agent);
-    }
+    IPledgeAgent(PLEDGE_AGENT_ADDR).delegateBtc(txid, lockTime, delegator, agent, amount);
 
-    require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender) || msg.sender == delegator, "only delegator or relayer can submit the BTC transaction");
-   
-    IPledgeAgent(PLEDGE_AGENT_ADDR).delegateBtc(blockHeight, payload, script, txid, lockTime, delegator, agent, fee);
-
-    emit delegatedBtc(txid, agent, delegator, script, blockHeight, outputIndex);
+    emit delegatedBtc(txid, agent, delegator, script, 0, 0);
   }
 
-  function undelegate(bytes memory btctx) override external {
+  function undelegate(bytes32 txid, bytes memory stxos, bytes29 voutView) override external onlyBtcAgent {
     // TODO clear the stake tx.
+  }
+
+  function distributeReward(uint256 reward, uint256 roundTag) external override payable onlyBtcAgent {
+    rewardPerBTC[roundTag] += rewardPerBTC[lastRoundTag] + reward * BTC_DECIMAL / totalAmount;
+    lastRoundTag = roundTag;
+  }
+  function getStakeAmount() external returns (uint256 totalAmount);
+  function getLastRoundStakeAmount() external returns (uint256 totalAmount);
+
+  function claimReward() {
+    (rewardPerBTC[roundTag-1] - rewardPerBTC[xxx]) * btcamount / BTC_DECIMAL;
   }
 
   /*********************** Governance ********************************/
@@ -91,11 +89,8 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
 
   function parseAndCheckPayload(bytes29 payload) internal pure returns (address delegator, address agent, uint256 fee) {
     require(payload.len() >= 48, "payload length is too small");
-    require(payload.indexUint(0, 4) == BTC_STAKE_MAGIC, "wrong magic");
-    require(payload.indexUint(4, 1) == 1, "wrong version");
-    require(payload.indexUint(5, 2) == CHAINID, "wrong chain id");
     delegator= payload.indexAddress(7);
     agent = payload.indexAddress(27);
-    fee = payload.indexUint(47, 1) * FEE_FACTOR;
+    fee = payload.indexUint(47, 1);
   }
 }

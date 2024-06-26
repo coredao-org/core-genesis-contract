@@ -13,9 +13,8 @@ import "./lib/BitcoinHelper.sol";
 import "./System.sol";
 
 contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
-  uint256 public constant ST_ACTIVE = 1;
-  uint256 public constant ST_INACTIVE = 2;
-  uint256 public constant CORE_DECIMAL = 1e18;
+  uint256 public constant WST_ACTIVE = 1;
+  uint256 public constant WST_INACTIVE = 2;
   uint256 public constant INIT_UTXO_FEE = 1e4;
 
   address public lstToken;
@@ -45,14 +44,8 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
 
   event paramChange(string key, bytes value);
   event delegated(bytes32 indexed txid, address indexed delegator, uint256 amount);
-  event transferredBtc(
-    bytes32 indexed txid,
-    address sourceAgent,
-    address targetAgent,
-    address delegator,
-    uint256 amount,
-    uint256 totalAmount
-  );
+  event redeemed(address indexed delegator, uint256 amount, uint256 utxoFee);
+  event undelegated(bytes32 indexed txid, address indexed delegator, uint256 amount);
 
   function init() external onlyNotInit {
     utxoFee = INIT_UTXO_FEE;
@@ -62,15 +55,18 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
   function parsePayload(bytes29 payload) internal pure returns (address delegator, uint256 fee) {
     require(payload.len() >= 28, "payload length is too small");
     delegator = payload.indexAddress(7);
-    fee = payload.indexUint(27, 1) * CORE_DECIMAL;
+    fee = payload.indexUint(27, 1);
   }
 
-  function delegate(bytes memory payload, bytes memory script, uint256 value) external onlyBtcAgent returns (address delegator, uint256 fee) {
+  function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 value) external override onlyBtcAgent returns (address delegator, uint256 fee) {
     (delegator, fee) = parsePayload(payload);
+    // check in walletStatus
+    require(walletStatus[sha256(script)] != 0, "Unknown LST wallet");
     lstToken.mint(delegator, value);
+    delegated(txid, delegator, value);
   }
 
-  function redeem(uint256 amount, bytes calldata pkscript) external {
+  function redeem(uint256 amount, bytes calldata btcAddress) external {
     // check there is enough balance.
     require(amount + utxoFee <= lstToken.balanceOf(msg.sender), "Not enough btc token");
     if (amount == 0) {
@@ -78,42 +74,58 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
       require (amount >= utxoFee, "The redeem amount is too small.");
     }
     lstToken.burn(msg.sender, amount + utxoFee);
-    redeemRequests.push[Redeem(msg.sender, amount, pkscript)];
+    // TODO decode btcAddress.
+    // push btcaddress into redeem.
+    redeemRequests.push[Redeem(msg.sender, amount, sha256(pkscript))];
     surplus += msg.sender;
     // TODO consider fee liabilities
+
+    redeemed(msg.sender, amount, utxoFee, pkscript);
   }
 
-  function undelegate(bytes memory stxos, bytes29 voutView) external onlyBtcAgent {
+  function undelegate(bytes32 txid, bytes memory stxos, bytes29 voutView) external onlyBtcAgent {
     // Finds total number of outputs
     uint _numberOfOutputs = uint256(indexCompactInt(voutView, 0));
-    uint64 _value;
-    bytes memory _lockingScript;
+    uint64 _amount;
+    bytes29 _pkScript;
     bytes32 pkScriptHash;
-    uint256 redeemIndex;
+    uint256 rIndex; // redeemIndex;
     uint256 redeemSize;
     uint256 changeIndex;
 
     for (uint index = 0; index < _numberOfOutputs; ++index) {
-      (_value, _lockingScript) = voutView.parseOutputValueAndScript(index);
-      pkScriptHash = keccak256(_lockingScript);
+      (_amount, _pkScript) = voutView.parseOutputValueAndScript(index);
+      pkScriptHash = sha256(_lockingScript);
       redeemSize = redeemRequests.length;
-      for (redeemIndex = 0; redeemIndex < redeemSize; ++redeemIndex) {
-        Redeem storage redeem = redeemRequests[redeemIndex];
-        if (redeem.amount == _value && redeem.pkscript == pkScriptHash) {
-          // TODO emit event
-          if (redeemIndex + 1 < redeemSize) {
-            redeemRequests[redeemIndex].pkscript = redeemRequests[redeemSize].pkscript;
-            redeemRequests[redeemIndex]._value = redeemRequests[redeemSize]._value;
-            redeemRequests[redeemIndex].delegator = redeemRequests[redeemSize].delegator;
+      for (rIndex = 0; rIndex < redeemSize; ++rIndex) {
+        Redeem storage redeem = redeemRequests[rIndex];
+        if (redeem.amount == _amount && redeem.pkscript == pkScriptHash) {
+          // emit event
+          undelegated(txid, redeem.delegator, _amount, _lockingScript);
+          if (rIndex + 1 < redeemSize) {
+            redeemRequests[rIndex].pkscript = redeemRequests[redeemSize].pkscript;
+            redeemRequests[rIndex].amount = redeemRequests[redeemSize].amount;
+            redeemRequests[rIndex].delegator = redeemRequests[redeemSize].delegator;
           }
           redeemRequests.pop();
           break;
         }
       }
+      if (rIndex == redeemSize) {
+        if (_lockingScript.length == 34 && _lockingScript[0] == 0 &&
+            _lockingScript[1] == 32 && _scriptPubkeyView.index(2, 32)) {
+          if (walletStatus[sha256(_scriptPubkeyView)])
+        }
+
+        (_scriptPubkeyView.len() == 34 && 
+                    _scriptPubkeyView.indexUint(0, 1) == 0 &&
+                    _scriptPubkeyView.indexUint(1, 1) == 32 &&
+                    _scriptPubkeyView.index(2, 32) == sha256(_script)
+      }
     }
   }
 
-  function distributeReward(uint256 reward, uint256 roundTag) external payable {
+  function distributeReward(uint256 reward, uint256 roundTag) external override payable onlyBtcAgent{
     rewardPerBTC[roundTag] += rewardPerBTC[lastRoundTag] + reward * BTC_DECIMAL / totalAmount;
     lastRoundTag = roundTag;
   }
@@ -160,5 +172,77 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
     // decode address -> bytes32addr, networkId
     // verify bitcoin networkId
     // walletStatus[addr] = ST_INACTIVE
+  }
+
+  function ExtractPkScriptAddrs(bytes memory pkScript) internal {
+    /***
+    // Check for pay-to-pubkey-hash script.
+    if hash := extractPubKeyHash(pkScript); hash != nil {
+      return PubKeyHashTy, pubKeyHashToAddrs(hash, chainParams), 1, nil
+    }
+
+    // Check for pay-to-script-hash.
+    if hash := extractScriptHash(pkScript); hash != nil {
+      return ScriptHashTy, scriptHashToAddrs(hash, chainParams), 1, nil
+    }
+
+    // Check for pay-to-pubkey script.
+    if data := extractPubKey(pkScript); data != nil {
+      var addrs []btcutil.Address
+      addr, err := btcutil.NewAddressPubKey(data, chainParams)
+      if err == nil {
+        addrs = append(addrs, addr)
+      }
+      return PubKeyTy, addrs, 1, nil
+    }
+
+    // Check for multi-signature script.
+    #const scriptVersion = 0
+    #details := extractMultisigScriptDetails(scriptVersion, pkScript, true)
+    #if details.valid {
+    #  // Convert the public keys while skipping any that are invalid.
+    #  addrs := make([]btcutil.Address, 0, len(details.pubKeys))
+    #  for _, pubkey := range details.pubKeys {
+    #    addr, err := btcutil.NewAddressPubKey(pubkey, chainParams)
+    #    if err == nil {
+    #      addrs = append(addrs, addr)
+    #    }
+    #  }
+    #  return MultiSigTy, addrs, details.requiredSigs, nil
+    #}
+
+    // Check for null data script.
+    if isNullDataScript(scriptVersion, pkScript) {
+      // Null data transactions have no addresses or required signatures.
+      return NullDataTy, nil, 0, nil
+    }
+
+    if hash := extractWitnessPubKeyHash(pkScript); hash != nil {
+      var addrs []btcutil.Address
+      addr, err := btcutil.NewAddressWitnessPubKeyHash(hash, chainParams)
+      if err == nil {
+        addrs = append(addrs, addr)
+      }
+      return WitnessV0PubKeyHashTy, addrs, 1, nil
+    }
+
+    if hash := extractWitnessV0ScriptHash(pkScript); hash != nil {
+      var addrs []btcutil.Address
+      addr, err := btcutil.NewAddressWitnessScriptHash(hash, chainParams)
+      if err == nil {
+        addrs = append(addrs, addr)
+      }
+      return WitnessV0ScriptHashTy, addrs, 1, nil
+    }
+
+    if rawKey := extractWitnessV1KeyBytes(pkScript); rawKey != nil {
+      var addrs []btcutil.Address
+      addr, err := btcutil.NewAddressTaproot(rawKey, chainParams)
+      if err == nil {
+        addrs = append(addrs, addr)
+      }
+      return WitnessV1TaprootTy, addrs, 1, nil
+    }
+    **/
   }
 }

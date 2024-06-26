@@ -6,11 +6,11 @@ import "./SafeCast.sol";
 
 enum ScriptTypes {
     P2PK, // 32 bytes
-    P2PKH, // 20 bytes        
-    P2SH, // 20 bytes          
-    P2WPKH, // 20 bytes          
+    P2PKH, // 20 bytes
+    P2SH, // 20 bytes
+    P2WPKH, // 20 bytes
     P2WSH, // 32 bytes
-    P2TR // 32 bytes               
+    P2TR // 32 bytes
 }
 
 library BitcoinHelper {
@@ -256,11 +256,11 @@ library BitcoinHelper {
     /// @param _index        Index of output
     /// @return _value       Value of the specified output
     /// @return _lockingScript            Parsed locking script
-    function parseOutputValueAndScript(bytes29 _voutView, uint _index) internal pure typeAssert(_voutView, BTCTypes.Vout) returns (uint64 _value, bytes memory _lockingScript) {
+    function parseOutputValueAndScript(bytes29 _voutView, uint _index) internal pure typeAssert(_voutView, BTCTypes.Vout) returns (uint64 _value, bytes29 _pkScriptView) {
         bytes29 output = indexVout(_voutView, _index);
         _value = value(output);
-        bytes29 _lockingScriptBytes29 = scriptPubkey(output);
-        _lockingScript = _lockingScriptBytes29.clone();
+        _pkScriptView = scriptPubkey(output);
+        //_lockingScript = _lockingScriptBytes29.clone();
     }
 
     /// @notice                   Finds total outputs value

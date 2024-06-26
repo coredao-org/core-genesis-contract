@@ -19,6 +19,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   // Protocol MAGIC `SAT+`, represents the short name for Satoshi plus protocol.
   uint256 public constant BTC_STAKE_MAGIC = 0x5341542b;
   uint256 public constant BTC_DECIMAL = 1e8;
+  uint256 public constant CORE_DECIMAL = 1e18;
   uint64 public constant INIT_MIN_BTC_VALUE = 1e4;
   uint32 public constant INIT_BTC_CONFIRM_BLOCK = 3;
   uint32 public constant BTC_STAKING_VERSION = 1;
@@ -165,19 +166,22 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
 
     (,,bytes29 voutView,) = btcTx.extractTx();
     (uint64 value, bytes29 payload, uint32 outputIndex) = voutView.parseToScriptValueAndData(script);
-    require(value >= (minBtcValue == 0 ? INIT_MIN_BTC_VALUE : minBtcValue), "staked value does not meet requirement");
+    require(value >= minBtcValue, "staked value does not meet requirement");
 
     uint32 version = parsePayloadVersionAndCheckProtocol(bytes29 payload);
     require(version == 1 || version == 2, "unsupport sat+ version");
     address delegator;
     uint256 fee;
     if (version == 1) {
-      (delegator, fee) = btcStake.delegate(payload, script, value);
+      (delegator, fee) = btcStake.delegate(txid, payload, script, value);
     } else
-      (delegator, fee) = btcLSTStake.delegate(payload, script, value);
+      (delegator, fee) = btcLSTStake.delegate(txid, payload, script, value);
     }
 
+    require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender) || msg.sender == delegator, "only delegator or relayer can submit the BTC transaction");
+
     if (fee != 0) {
+      fee *= CORE_DECIMAL;
       liabilities[delegator] += fee;
       creditors[msg.sender] += fee;
     }
@@ -208,10 +212,10 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     }
 
     if (version1) {
-      btcStake.undelegate(stxos, voutView);
+      btcStake.undelegate(txid, stxos, voutView);
     }
     if (version2) {
-      btcLSTStake.undelegate(stxos, voutView);
+      btcLSTStake.undelegate(txid, stxos, voutView);
 
       // TODO voutView exchange set to btcReceiptMap.
     }

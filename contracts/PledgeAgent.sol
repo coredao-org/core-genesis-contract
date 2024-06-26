@@ -524,11 +524,10 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   //         <abstract locktime> OP_CLTV OP_DROP M <pubKey1> <pubKey1> ... <pubKeyN> N OP_CHECKMULTISIG
   /// delegate BTC to Core network
   /// @param btcTx the BTC transaction data
-  /// @param blockHeight block height of the transaction
   /// @param nodes part of the Merkle tree from the tx to the root in LE form (called Merkle proof)
   /// @param index index of the tx in Merkle tree
   /// @param script the corresponding redeem script of the locked up output
-  function delegateBtc(uint32 blockHeight, bytes29 payload, bytes memory script, bytes32 txid, uint32 lockTime, address delegator, address agent, uint256 fee) external override {
+  function delegateBtc(bytes32 txid, uint32 lockTime, address delegator, address agent, uint256 value) external override {
     BtcReceipt storage br = btcReceiptMap[txid];
     require(br.value == 0, "btc tx confirmed");
 
@@ -537,15 +536,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
     br.delegator = delegator;
     br.agent = agent;
-
-    require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender) || msg.sender == br.delegator, "only delegator or relayer can submit the BTC transaction");
-
-    emit delegatedBtc(txid, br.agent, br.delegator, script, blockHeight, outputIndex);
-
-    if (fee != 0) {
-      br.fee = fee;
-      br.feeReceiver = payable(msg.sender);
-    }
+    br.value = value;
 
     Agent storage a = agentsMap[br.agent];
     br.rewardIndex = a.rewardSet.length;
