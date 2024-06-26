@@ -32,14 +32,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   uint32 public constant INIT_BTC_CONFIRM_BLOCK = 3;
   uint256 public constant INIT_MIN_BTC_LOCK_ROUND = 7;
   uint256 public constant ROUND_INTERVAL = 86400;
-  uint256 public constant INIT_MIN_BTC_VALUE = 1e6;
   uint256 public constant INIT_BTC_FACTOR = 5e4;
-  uint256 public constant BTC_STAKE_MAGIC = 0x5341542b;
-  uint256 public constant CHAINID = 1116;
-  uint256 public constant FEE_FACTOR = 1e18;
   int256 public constant CLAIM_ROUND_LIMIT = 500;
   uint256 public constant BTC_UNIT_CONVERSION = 1e10;
-  uint256 public constant INIT_DELEGATE_BTC_GAS_PRICE = 1e12;
 
   uint256 public requiredCoinDeposit;
 
@@ -92,11 +87,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   // the number of blocks to mark a BTC staking transaction as confirmed
   uint32 public btcConfirmBlock;
-
-  // minimum value to stake for a BTC staking transaction
-  uint256 public minBtcValue;
-
-  uint256 public delegateBtcGasPrice;
 
   // address of btclst contract
   address public btcLstAddress;
@@ -202,7 +192,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     btcFactor = INIT_BTC_FACTOR;
     minBtcLockRound = INIT_MIN_BTC_LOCK_ROUND;
     btcConfirmBlock = INIT_BTC_CONFIRM_BLOCK;
-    minBtcValue = INIT_MIN_BTC_VALUE;
     roundTag = block.timestamp / ROUND_INTERVAL;
     alreadyInit = true;
     btcLstAddress = 0x0000000000000000000000000000000000000000;
@@ -539,34 +528,17 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param nodes part of the Merkle tree from the tx to the root in LE form (called Merkle proof)
   /// @param index index of the tx in Merkle tree
   /// @param script the corresponding redeem script of the locked up output
-  function delegateBtc(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index, bytes memory script) external override {
-    require(script[0] == bytes1(uint8(0x04)) && script[5] == bytes1(uint8(0xb1)), "not a valid redeem script");
-
-    bytes32 txid = btcTx.calculateTxId();
-    require(ILightClient(LIGHT_CLIENT_ADDR).
-      checkTxProof(txid, blockHeight, (btcConfirmBlock == 0 ? INIT_BTC_CONFIRM_BLOCK : btcConfirmBlock), nodes, index), "btc tx not confirmed");
-
+  function delegateBtc(uint32 blockHeight, bytes29 payload, bytes memory script, bytes32 txid, uint32 lockTime, address delegator, address agent, uint256 fee) external override {
     BtcReceipt storage br = btcReceiptMap[txid];
     require(br.value == 0, "btc tx confirmed");
 
-    uint32 lockTime = parseLockTime(script);
     br.endRound = lockTime / ROUND_INTERVAL;
     require(br.endRound > roundTag + (minBtcLockRound == 0 ? INIT_MIN_BTC_LOCK_ROUND : minBtcLockRound), "insufficient lock round");
 
-    (,,bytes29 voutView,)  = btcTx.extractTx();
-    bytes29 payload;
-    uint256 outputIndex;
-    (br.value, payload, outputIndex) = voutView.parseToScriptValueAndData(script);
-    require(br.value >= (minBtcValue == 0 ? INIT_MIN_BTC_VALUE : minBtcValue), "staked value does not meet requirement");
-
-    uint256 fee;
-    (br.delegator, br.agent, fee) = parseAndCheckPayload(payload);
-    if (!ICandidateHub(CANDIDATE_HUB_ADDR).isCandidateByOperate(br.agent)) {
-      revert InactiveAgent(br.agent);
-    }
+    br.delegator = delegator;
+    br.agent = agent;
 
     require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender) || msg.sender == br.delegator, "only delegator or relayer can submit the BTC transaction");
-    require(tx.gasprice <= (delegateBtcGasPrice == 0 ? INIT_DELEGATE_BTC_GAS_PRICE : delegateBtcGasPrice), "gas price is too high");
 
     emit delegatedBtc(txid, br.agent, br.delegator, script, blockHeight, outputIndex);
 
@@ -842,25 +814,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return rewardAmount;
   }
 
-  function parseAndCheckPayload(bytes29 payload) internal pure returns (address delegator, address agent, uint256 fee) {
-    require(payload.len() >= 48, "payload length is too small");
-    require(payload.indexUint(0, 4) == BTC_STAKE_MAGIC, "wrong magic");
-    require(payload.indexUint(4, 1) == 1, "wrong version");
-    require(payload.indexUint(5, 2) == CHAINID, "wrong chain id");
-    delegator= payload.indexAddress(7);
-    agent = payload.indexAddress(27);
-    fee = payload.indexUint(47, 1) * FEE_FACTOR;
-  }
-
-  function parseLockTime(bytes memory script) internal pure returns (uint32) {
-    uint256 t;
-    assembly {
-        let loc := add(script, 0x21)
-        t := mload(loc)
-    }
-    return uint32(t.reverseUint256() & 0xFFFFFFFF);
-  }
-
   function addExpire(BtcReceipt storage br) internal {
     BtcExpireInfo storage expireInfo = round2expireInfoMap[br.endRound];
     if (expireInfo.agentExistMap[br.agent] == 0) {
@@ -959,18 +912,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         revert OutOfBounds(key, newBtcConfirmBlock, 1, type(uint256).max);
       }
       btcConfirmBlock = uint32(newBtcConfirmBlock);
-    } else if (Memory.compareStrings(key, "minBtcValue")) {
-      uint256 newMinBtcValue = BytesToTypes.bytesToUint256(32, value);
-      if (newMinBtcValue == 0) {
-        revert OutOfBounds(key, newMinBtcValue, 1e4, type(uint256).max);
-      }
-      minBtcValue = newMinBtcValue;
-    } else if (Memory.compareStrings(key,"delegateBtcGasPrice")) {
-      uint256 newDelegateBtcGasPrice = BytesToTypes.bytesToUint256(32, value);
-      if (newDelegateBtcGasPrice < 1e9) {
-        revert OutOfBounds(key, newDelegateBtcGasPrice, 1e9, type(uint256).max);
-      }
-      delegateBtcGasPrice = newDelegateBtcGasPrice;
     } else {
       require(false, "unknown param");
     }
