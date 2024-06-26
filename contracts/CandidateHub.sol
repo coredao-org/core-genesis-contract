@@ -59,6 +59,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
   uint256 public roundTag;
   
+  bool public controlRoundTimeTag = false;
+  bool public turnroundFailed = false;
+  
 
   struct Candidate {
     address operateAddr;
@@ -94,6 +97,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     maxCommissionChange = MAX_COMMISSION_CHANGE;
     roundTag = block.timestamp / INIT_ROUND_INTERVAL;
     alreadyInit = true;
+  }
+  
+  function setControlRoundTimeTag(bool value) external {
+    controlRoundTimeTag = value;
   }
   
   /********************* ICandidateHub interface ****************************/
@@ -162,13 +169,25 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// The `turn round` workflow
   /// @dev this method is called by Golang consensus engine at the end of a round
   function turnRound() external onlyCoinbase onlyInit onlyZeroGasPrice {
+    
+      if (turnroundFailed == true){
+      require(false, "turnRound failed");
+    }
+    
     // distribute rewards for the about to end round
     IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward(roundTag);
 
-    // update the system round tag; new round starts    
+    // update the system round tag; new round starts
+    
+    if (controlRoundTimeTag == false) {
+    
     uint256 roundTimestamp = block.timestamp / roundInterval;
     require(roundTimestamp > roundTag, "not allowed to turn round, wait for more time");
     roundTag = roundTimestamp;
+    
+    } else {
+        roundTag++;
+    }
     
 
     // reset validator flags for all candidates.
@@ -191,7 +210,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     // calculate the hybrid score for all valid candidates and 
     // choose top ones to form the validator set of the new round
     (uint256[] memory scores) =
-      IStakeHub(STAKE_HUB_ADDR).getHybridScore(candidates, validatorCount, roundTag);
+      IStakeHub(STAKE_HUB_ADDR).getHybridScore(candidates, getHybridScore, roundTag);
     address[] memory validatorList = getValidators(candidates, scores, validatorCount);
 
     // prepare arguments, and notify ValidatorSet contract
@@ -218,7 +237,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     // clean slash contract
     ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
 
-    // notify PledgeAgent contract
+    // notify StakeHub contract
     IStakeHub(STAKE_HUB_ADDR).setNewRound(validatorList, roundTag);
 
     // update validator jail status

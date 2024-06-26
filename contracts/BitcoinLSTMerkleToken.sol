@@ -35,7 +35,6 @@ contract BitcoinLSTMerkleToken is ERC20, Pausable {
         emit RewardsAdded(merkleRoot, lastRewardRoundEndTime, roundNumber);
     }
 
-
     function mint(address to, uint256 amount) external onlyBtcAgent {
         _mint(to, amount);
     }
