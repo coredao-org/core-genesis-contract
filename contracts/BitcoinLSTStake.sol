@@ -125,7 +125,12 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
     }
   }
 
-  function distributeReward(uint256 reward, uint256 roundTag) external override payable onlyBtcAgent {
+  function distributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 roundTag) external override payable onlyBtcAgent {
+    uint256 reward;
+    uint256 validatorSize = validators.length;
+    for (uint256 i = 0; i < validatorSize; ++i) {
+      reward += rewardList[i];
+    }
     rewardPerBTC[roundTag] += rewardPerBTC[lastRoundTag] + reward * BTC_DECIMAL / totalAmount;
     lastRoundTag = roundTag;
   }

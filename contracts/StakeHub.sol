@@ -55,6 +55,12 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     uint256 discount;
   }
 
+  // key: delegator
+  // value: score = sum(delegated core * delegated time)
+  // When user claim reward of btc, it will cost score.
+  // If the score is not enough, reward should be discount.
+  mapping(address => uint256) rewardScoreMap;
+
   /*********************** events **************************/
   event roundReward(string indexed name, address indexed validator, uint256 amounted);
   event paramChange(string key, bytes value);
@@ -171,6 +177,16 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       IAgent(collaterals[i].agent).setNewRound(validators, roundTag);
     }
     roundValidatorSize = validators.length;
+  }
+
+  /// Claim reward for miner
+  /// The param represents list of validators to claim rewards on.
+  /// this contract implement is ignore.
+  /// @return rewardAmount Amount claimed
+  function claimReward() external returns (uint256 rewardAmount) {
+    // TODO
+    // delegator.core, btc, agents
+    // btc reward depends on core delegated amount.
   }
 
   /*********************** Governance ********************************/

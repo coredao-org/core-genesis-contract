@@ -28,12 +28,6 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   address public btcStake; // oldBtcAddress is PledgeAgent
   address public btcLSTStake;
 
-  // This field is used to store hash power reward of delegators
-  // when turn round
-  // key: delegator address
-  // value: amount of CORE tokens claimable
-  mapping(address => uint256) public rewardMap;
-
   // key: bitcoin tx id
   // value: bitcoin receipt.
   mapping(bytes32 => BtcReceipt) btcReceiptMap;
@@ -88,25 +82,30 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     uint256 validatorSize = validatorList.length;
     require(validatorSize == rewardList.length, "the length of validatorList and rewardList should be equal");
 
-    uint256 lstAmount = btcLST.getLastRoundStakeAmount();
-    uint256 avgLstAmount = lstAmount / originValidatorSize;
+    uint256[] memory lstAmounts = btcLST.getLastRoundBTCAmount(validatorList);
+    uint256[] memory amounts = IPledgeAgent(PLEDGE_AGENT_ADDR).getLastRoundBTCAmount(validatorList);
 
-    uint256[] memory amounts = IPledgeAgent(PLEDGE_AGENT_ADDR).getLastBTCAmount(validatorList);
-
-    uint256 lstReward;
-    uint256 btcReward;
+    uint256[] rewards = new uint256[](validatorSize);
     uint256 avgReward;
+    uint256 rewardValue;
     for (uint256 i = 0; i < validatorSize; ++i) {
       if (rewardList[i] == 0) {
         continue;
       }
-      avgReward = rewardList[i] * BTC_DECIMAL / (avgLstAmount + amounts[i]);
-      lstReward += avgReward * avgLstAmount / BTC_DECIMAL;
-      rewardList[i] = avgReward * amounts[i] / BTC_DECIMAL;
-      btcReward += rewardList[i];
+      avgReward = rewardList[i] * BTC_DECIMAL / (lstAmounts[i] + amounts[i]);
+      rewards[i] = avgReward * lstAmounts[i] / BTC_DECIMAL;
+      rewardValue += rewards[i];
     }
-    btcLST.distributeReward{ value: lstReward }(lstReward, roundTag);
-    btcStake.distributeReward{ value: btcReward }(validatorList, rewardList, roundTag);
+    btcLST.distributeReward{ value: rewardValue }(validatorList, rewards, roundTag);
+    rewardValue = 0;
+    for (uint256 i = 0; i < validatorSize; ++i) {
+      if (rewardList[i] == 0) {
+        continue;
+      }
+      rewards[i] = rewardList[i] - rewards[i];
+      rewardValue += rewards[i];
+    }
+    btcStake.distributeReward{ value: rewardValue }(validatorList, rewards, roundTag);
   }
 
   /// Get stake amount
@@ -154,7 +153,6 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /// @param index index of the tx in Merkle tree
   /// @param script the corresponding redeem script of the locked up output
   function verifyMintTx(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index, bytes memory script) external override {
-    require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender), "only relayer can submit the BTC transaction");
 
     bytes32 txid = btcTx.calculateTxId();
 
@@ -224,18 +222,13 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /// Claim reward for miner
   /// The param represents list of validators to claim rewards on.
   /// this contract implement is ignore.
-  /// @return (Amount claimed, Are all rewards claimed)
-  function claimReward(address[] calldata) external returns (uint256, bool) {
-    uint256 rewardSum = rewardMap[msg.sender];
-    if (rewardSum != 0) {
-      rewardMap[msg.sender] = 0;
-      Address.sendValue(payable(msg.sender), rewardSum);
-      emit claimedReward(msg.sender, rewardSum);
-    }
+  /// @return rewardAmount Amount claimed
+  function claimReward(address[] calldata) external returns (uint256 rewardAmount) {
+    btcStake.claimReward();
 
     IPledgeAgent(PLEDGE_AGENT_ADDR).claimReward(candidates);
 
-    return (rewardSum, true);
+    return (rewardSum);
   }
 
   /*********************** Internal method ********************************/

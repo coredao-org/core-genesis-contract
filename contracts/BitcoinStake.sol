@@ -46,7 +46,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     // TODO clear the stake tx.
   }
 
-  function distributeReward(uint256 reward, uint256 roundTag) external override payable onlyBtcAgent {
+  function distributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 roundTag) external override payable onlyBtcAgent {
     rewardPerBTC[roundTag] += rewardPerBTC[lastRoundTag] + reward * BTC_DECIMAL / totalAmount;
     lastRoundTag = roundTag;
   }
