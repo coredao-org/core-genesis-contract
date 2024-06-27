@@ -13,7 +13,7 @@ interface IPledgeAgent {
   function transferCoin(address sourceAgent, address targetAgent) external;
   function transferCoin(address sourceAgent, address targetAgent, uint256 amount) external;
   function claimReward(address[] calldata agentList) external returns (uint256, bool);
-  function delegateBtc(uint32 blockHeight, bytes29 payload, bytes memory script, bytes32 txid, uint32 lockTime, address delegator, address agent, uint256 fee) external;
+  function delegateBtc(bytes32 txid, uint32 lockTime, address delegator, address agent, uint256 value) external;
   function transferBtc(bytes32 txid, address targetAgent) external;
   function claimBtcReward(bytes32[] calldata txidList) external returns (uint256 rewardSum);
 }

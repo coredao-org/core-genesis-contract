@@ -84,6 +84,12 @@ contract System {
     require(msg.sender == BTC_STAKE_ADDR, "the msg sender must be bitcoin stake contract");
     _;
   }
+
+  modifier onlyBtcAgent() {
+    require(msg.sender == BTC_AGENT_ADDR, "the msg sender must be bitcoin agent contract");
+    _;
+  }
+
   /// The length of param mismatch. Default is 32 bytes.
   /// @param name the name of param.
   error MismatchParamLength(string name);
