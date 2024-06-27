@@ -40,8 +40,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   // value: useful state information of round
   mapping(uint256 => mapping(address => CollateralState) ) public stateMap;
 
-  uint256 roundValidatorSize;
-
   struct Collateral {
     string  name;
     address agent;
@@ -91,18 +89,21 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
     uint256 r;
     address validator;
+    uint256 rewardValue;
     for (uint256 i = 0; i < collateralSize; ++i) {
       CollateralState memory cs = stateMap[roundTag][collaterals[i].agent];
+      rewardValue = 0;
       for (uint256 j = 0; j < validatorSize; ++j) {
         validator = validators[j];
         r = rewardList[j] * candidateAmountMap[validator][i] * cs.factor / candidateScoreMap[validator];
         rewards[j] = r * cs.discount / DENOMINATOR;
+        rewardValue += rewards[j];
         if (cs.discount != DENOMINATOR) {
           burnReward += (r - rewards[j]);
         }
         emit roundReward(collaterals[i].name, validator, rewards[j]);
       }
-      IAgent(collaterals[i].agent).distributeReward(validators, rewards, roundValidatorSize, roundTag);
+      IAgent(collaterals[i].agent).distributeReward{ value: rewardValue }(validators, rewards, roundTag);
     }
     // burn overflow reward of hardcap
     ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: burnReward }();
@@ -110,18 +111,13 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   /// Calculate hybrid score for all candidates
   /// @param candidates List of candidate operator addresses
-  /// @param validateSize The validate size of this round
   /// @param roundTag The new round tag
   /// @return scores List of hybrid scores of all validator candidates in this round
   function getHybridScore(
     address[] calldata candidates,
-    uint256 validateSize,
     uint256 roundTag
   ) external override onlyCandidate returns (uint256[] memory scores) {
     uint256 candidateSize = candidates.length;
-    if (validateSize > candidateSize) {
-      validateSize = candidateSize;
-    }
     uint256 collateralSize = collaterals.length;
 
     uint256 hardcapSum;
@@ -136,7 +132,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     address candiate;
     for (uint256 i = 0; i < collateralSize; ++i) {
       (uint256[] memory amounts, uint256 totalAmount) =
-        IAgent(collaterals[i].agent).getStakeAmount(candidates, validateSize, roundTag);
+        IAgent(collaterals[i].agent).getStakeAmount(candidates, roundTag);
       t = collaterals[i].factor;
       collateralScores[i] = totalAmount * t;
       for (uint256 j = 0; j < candidateSize; ++j) {
@@ -176,7 +172,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     for (uint256 i = 0; i < collateralSize; ++i) {
       IAgent(collaterals[i].agent).setNewRound(validators, roundTag);
     }
-    roundValidatorSize = validators.length;
   }
 
   /// Claim reward for miner

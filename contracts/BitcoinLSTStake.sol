@@ -137,7 +137,7 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
 
   /// Get stake amount
   /// @return totalAmount The sum of all amounts of valid/invalid candidates.
-  function getStakeAmount() external view returns (uint256 totalAmount) {
+  function getStakeAmounts(address[] calldata candidates) external view returns (uint256 totalAmount) {
     return lstToken.totalSupply();
   }
 

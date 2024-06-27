@@ -64,11 +64,10 @@ contract HashPowerAgent is IAgent, System, IParamSubscriber {
 
   /// Get stake amount
   /// @param candidates List of candidate operator addresses
-  /// param validateSize The validate size of this round
   /// @param roundTag The new round tag
   /// @return amounts List of amounts of all special candidates in this round
   /// @return totalAmount The sum of all amounts of valid/invalid candidates.
-  function getStakeAmount(address[] calldata candidates, uint256 /*validateSize*/, uint256 roundTag) external override view returns (uint256[] memory amounts, uint256 totalAmount) {
+  function getStakeAmounts(address[] calldata candidates, uint256 roundTag) external override view returns (uint256[] memory amounts, uint256 totalAmount) {
     // fetch hash power delegated on list of candidates
     // which is used to calculate hybrid score for validators in the new round
     (amounts, totalAmount) = ILightClient(LIGHT_CLIENT_ADDR).getRoundPowers(roundTag-7, candidates);

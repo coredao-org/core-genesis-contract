@@ -6,6 +6,6 @@ interface IBitcoinStake {
   function undelegate(bytes32 txid, bytes memory stxos, bytes29 voutView) external;
 
   function distributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 roundTag) external payable;
-  function getStakeAmount() external returns (uint256 totalAmount);
-  function getLastRoundStakeAmount() external returns (uint256 totalAmount);
+  function getStakeAmounts(address[] calldata candidators) external returns (uint256[] memory amounts);
+  function getLastRoundBTCAmounts(address[] calldata validators) external returns (uint256[] memory amounts);
 }

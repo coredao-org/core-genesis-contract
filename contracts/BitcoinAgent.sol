@@ -4,22 +4,24 @@ pragma solidity 0.8.4;
 import "./interface/IAgent.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/ILightClient.sol";
-import "./interface/IBitcoinLST.sol";
+import "./interface/IBitcoinStake.sol";
 import "./interface/IPledgeAgent.sol";
+import "./interface/IRelayerHub.sol";
 import "./lib/Address.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./lib/BitcoinHelper.sol";
+import "./lib/SatoshiPlusHelper.sol";
 import "./System.sol";
 
 /// This contract manages user delegate BTC.
 /// Including both BTC independent delegate and LST delegate.
 contract BitcoinAgent is IAgent, System, IParamSubscriber {
+  using BitcoinHelper for *;
+  using SatoshiPlusHelper for *;
+  using TypedMemView for *;
 
-  // Protocol MAGIC `SAT+`, represents the short name for Satoshi plus protocol.
-  uint256 public constant BTC_STAKE_MAGIC = 0x5341542b;
-  uint256 public constant BTC_DECIMAL = 1e8;
-  uint256 public constant CORE_DECIMAL = 1e18;
+  uint256 public constant CHAINID = 1116;
   uint64 public constant INIT_MIN_BTC_VALUE = 1e4;
   uint32 public constant INIT_BTC_CONFIRM_BLOCK = 3;
   uint32 public constant BTC_STAKING_VERSION = 1;
@@ -76,27 +78,26 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /// Receive round rewards from ValidatorSet, which is triggered at the beginning of turn round
   /// @param validatorList List of validator operator addresses
   /// @param rewardList List of reward amount
-  /// param originValidatorSize The validator size at the begin of round.
   /// @param roundTag The round tag
-  function distributeReward(address[] calldata validatorList, uint256[] calldata rewardList, uint256 originValidatorSize, uint256 roundTag) external payable override onlyStakeHub {
+  function distributeReward(address[] calldata validatorList, uint256[] calldata rewardList, uint256 roundTag) external payable override onlyStakeHub {
     uint256 validatorSize = validatorList.length;
     require(validatorSize == rewardList.length, "the length of validatorList and rewardList should be equal");
 
-    uint256[] memory lstAmounts = btcLST.getLastRoundBTCAmount(validatorList);
-    uint256[] memory amounts = IPledgeAgent(PLEDGE_AGENT_ADDR).getLastRoundBTCAmount(validatorList);
+    uint256[] memory lstAmounts = IBitcoinStake(btcLSTStake).getLastRoundBTCAmounts(validatorList);
+    uint256[] memory amounts = IBitcoinStake(btcStake).getLastRoundBTCAmounts(validatorList);
 
-    uint256[] rewards = new uint256[](validatorSize);
+    uint256[] memory rewards = new uint256[](validatorSize);
     uint256 avgReward;
     uint256 rewardValue;
     for (uint256 i = 0; i < validatorSize; ++i) {
       if (rewardList[i] == 0) {
         continue;
       }
-      avgReward = rewardList[i] * BTC_DECIMAL / (lstAmounts[i] + amounts[i]);
-      rewards[i] = avgReward * lstAmounts[i] / BTC_DECIMAL;
+      avgReward = rewardList[i] * SatoshiPlusHelper.BTC_DECIMAL / (lstAmounts[i] + amounts[i]);
+      rewards[i] = avgReward * lstAmounts[i] / SatoshiPlusHelper.BTC_DECIMAL;
       rewardValue += rewards[i];
     }
-    btcLST.distributeReward{ value: rewardValue }(validatorList, rewards, roundTag);
+    IBitcoinStake(btcLSTStake).distributeReward{ value: rewardValue }(validatorList, rewards, roundTag);
     rewardValue = 0;
     for (uint256 i = 0; i < validatorSize; ++i) {
       if (rewardList[i] == 0) {
@@ -105,32 +106,21 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
       rewards[i] = rewardList[i] - rewards[i];
       rewardValue += rewards[i];
     }
-    btcStake.distributeReward{ value: rewardValue }(validatorList, rewards, roundTag);
+    IBitcoinStake(btcStake).distributeReward{ value: rewardValue }(validatorList, rewards, roundTag);
   }
 
   /// Get stake amount
   /// @param candidates List of candidate operator addresses
-  /// param validateSize The validate size of this round
   /// @param roundTag The new round tag
   /// @return amounts List of amounts of all special candidates in this round
   /// @return totalAmount The sum of all amounts of valid/invalid candidates.
-  function getStakeAmount(address[] calldata candidates, uint256 validateSize, uint256 roundTag) external override view returns (uint256[] memory amounts, uint256 totalAmount) {
+  function getStakeAmounts(address[] calldata candidates, uint256 roundTag) external override view returns (uint256[] memory amounts, uint256 totalAmount) {
     uint256 candidateSize = candidates.length;
-    if (validateSize > candidateSize) {
-      validateSize = candidateSize;
-    }
-    require(validateSize > 0, "validateSize should be positive")
-    (bool success, bytes memory data) = btcLST.call{gas: 50000}(abi.encodeWithSignature("getStakeAmount()"));
-    if (success) {
-      totalAmount = abi.decode(data, (uint256));
-    }
-    uint256 avgSharedAmount = totalAmount / validateSize;
+    uint256[] memory lstAmounts = IBitcoinStake(btcLSTStake).getStakeAmounts(candidates);
+    amounts = IBitcoinStake(btcStake).getStakeAmounts(candidates);
 
-    // fetch hash power delegated on list of candidates
-    // which is used to calculate hybrid score for validators in the new round
-    amounts = IPledgeAgent(PLEDGE_AGENT_ADDR).getBTCAmount(candidates);
     for (uint256 i = 0; i < candidateSize; ++i) {
-      amounts[i] += avgSharedAmount;
+      amounts[i] += lstAmounts[i];
       totalAmount += amounts[i];
     }
   }
@@ -166,20 +156,20 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     (uint64 value, bytes29 payload, uint32 outputIndex) = voutView.parseToScriptValueAndData(script);
     require(value >= minBtcValue, "staked value does not meet requirement");
 
-    uint32 version = parsePayloadVersionAndCheckProtocol(bytes29 payload);
+    uint32 version = parsePayloadVersionAndCheckProtocol(payload);
     require(version == 1 || version == 2, "unsupport sat+ version");
     address delegator;
     uint256 fee;
     if (version == 1) {
-      (delegator, fee) = btcStake.delegate(txid, payload, script, value);
-    } else
-      (delegator, fee) = btcLSTStake.delegate(txid, payload, script, value);
+      (delegator, fee) = IBitcoinStake(btcStake).delegate(txid, payload, script, value);
+    } else {
+      (delegator, fee) = IBitcoinStake(btcLSTStake).delegate(txid, payload, script, value);
     }
 
     require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender) || msg.sender == delegator, "only delegator or relayer can submit the BTC transaction");
 
     if (fee != 0) {
-      fee *= CORE_DECIMAL;
+      fee *= SatoshiPlusHelper.CORE_DECIMAL;
       liabilities[delegator] += fee;
       creditors[msg.sender] += fee;
     }
@@ -199,10 +189,10 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     bool version1;
     bool version2;
 
-    for (uint256 index = 0; index < stxos.length; ++index) {
-      if (stxos[index].version == BTC_STAKING_VERSION) {
+    for (uint256 i = 0; i < stxos.length; ++i) {
+      if (stxos[i].version == BTC_STAKING_VERSION) {
         version1 = true;
-      } else if (stxos[index].version == BTCLST_STAKING_VERSION) {
+      } else if (stxos[i].version == BTCLST_STAKING_VERSION) {
         version2 = true;
       } else {
         break;
@@ -210,10 +200,10 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     }
 
     if (version1) {
-      btcStake.undelegate(txid, stxos, voutView);
+      IBitcoinStake(btcStake).undelegate(txid, stxos, voutView);
     }
     if (version2) {
-      btcLSTStake.undelegate(txid, stxos, voutView);
+      IBitcoinStake(btcLSTStake).undelegate(txid, stxos, voutView);
 
       // TODO voutView exchange set to btcReceiptMap.
     }
@@ -224,23 +214,17 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /// this contract implement is ignore.
   /// @return rewardAmount Amount claimed
   function claimReward(address[] calldata) external returns (uint256 rewardAmount) {
-    btcStake.claimReward();
+    // TODO
 
-    IPledgeAgent(PLEDGE_AGENT_ADDR).claimReward(candidates);
-
-    return (rewardSum);
+    return 0;
   }
 
   /*********************** Internal method ********************************/
   function parsePayloadVersionAndCheckProtocol(bytes29 payload) internal pure returns (uint32) {
     require(payload.len() >= 7, "payload length is too small");
-    require(payload.indexUint(0, 4) == BTC_STAKE_MAGIC, "wrong magic");
+    require(payload.indexUint(0, 4) == SatoshiPlusHelper.BTC_STAKE_MAGIC, "wrong magic");
     require(payload.indexUint(5, 2) == CHAINID, "wrong chain id");
-    return payload.indexUint(4, 1);
-    #require(payload.indexUint(4, 1) == 1, "wrong version");
-    #delegator= payload.indexAddress(7);
-    #agent = payload.indexAddress(27);
-    #fee = payload.indexUint(47, 1) * FEE_FACTOR;
+    return uint32(payload.indexUint(4, 1));
   }
 
 
@@ -252,24 +236,25 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   function parseVin(
       bytes29 _vinView,
       uint32 _blockHeight
-  ) internal typeAssert(_vinView, BTCTypes.Vin) returns (STXO[] memory stxos) {
-      bytes32 _txId;
-      uint _outputIndex;
+  ) internal returns (STXO[] memory stxos) {
+    _vinView.assertType(uint40(BitcoinHelper.BTCTypes.Vin));
+    bytes32 _txId;
+    uint _outputIndex;
 
-      // Finds total number of outputs
-      uint _numberOfInputs = uint256(indexCompactInt(_vinView, 0));
-      receipts = new STXO[](_numberOfInputs);
-      uint stxoIndex;
+    // Finds total number of outputs
+    uint _numberOfInputs = uint256(_vinView.indexCompactInt(0));
+    stxos = new STXO[](_numberOfInputs);
+    uint256 stxoIndex;
 
-      for (uint index = 0; index < _numberOfInputs; ++index) {
-          (_txId, _outputIndex) = extractOutpoint(_vinView, index);
-          BtcReceipt br storage = btcReceiptMap[_txId];
-          if (br.height != 0 && br.outputIndex == _outputIndex) {
-            br.usedHeight = _blockHeight;
-            stxos[stxoIndex] = STXO(_txId, _outputIndex, br.version);
-            ++stxoIndex;
-          }
+    for (uint index = 0; index < _numberOfInputs; ++index) {
+      (_txId, _outputIndex) = _vinView.extractOutpoint(index);
+      BtcReceipt storage br = btcReceiptMap[_txId];
+      if (br.height != 0 && br.outputIndex == _outputIndex) {
+        br.usedHeight = _blockHeight;
+        stxos[stxoIndex] = STXO(_txId, uint32(_outputIndex), br.version);
+        ++stxoIndex;
       }
+    }
   }
 
   /*********************** Governance ********************************/

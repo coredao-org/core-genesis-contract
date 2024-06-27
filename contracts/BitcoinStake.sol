@@ -13,6 +13,7 @@ import "./lib/Memory.sol";
 import "./lib/BitcoinHelper.sol";
 import "./System.sol";
 
+
 // Bitcoin Stake is planned to move from PledgeAgent to this independent contract.
 // This contract will implement the current deposit.
 // The reward of current deposit can be claimed after the UTXO unlocked.
@@ -21,16 +22,9 @@ import "./System.sol";
 contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   using TypedMemView for *;
 
-  // Reward of per btc per validator per round
-  // round => (validator => preBtcReward)
-  mapping(uint256 => mapping(address => uint256)) public rewardPerBTCMap;
-
-  // The latest round tag
-  uint256 public lastRoundTag;
-
   /*********************** events **************************/
   event paramChange(string key, bytes value);
-  event delegatedBtc(bytes32 indexed txid, address indexed agent, address indexed delegator, bytes script, uint256 outputIndex, uint256 amount);
+  event delegatedBtc(bytes32 indexed txid, address indexed agent, address indexed delegator, bytes script, uint256 outputIndex, uint32 amount);
 
   /// The validator candidate is inactive, it is expected to be active
   /// @param candidate Address of the validator candidate
@@ -53,26 +47,18 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   }
 
   function distributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 roundTag) external override payable onlyBtcAgent {
-    uint256 length = validators.length;
-    
-    
-    // rewardPerBTC[roundTag] += rewardPerBTC[lastRoundTag] + reward * BTC_DECIMAL / totalAmount;
+    rewardPerBTC[roundTag] += rewardPerBTC[lastRoundTag] + reward * BTC_DECIMAL / totalAmount;
     lastRoundTag = roundTag;
-    // 某一轮某一个agent发放的奖励
-    // 有些数据需要去PladgeAgent获取，比如质押数据
-    // 奖励数据在这里领
+  }
+  function getStakeAmounts(address[] calldata candidates) external returns (uint256 totalAmount) {
+    return IPledgeAgent(PLEDGE_AGENT_ADDR).getBTCAmount(candidates);
+  }
+  function getLastRoundStakeAmounts(address[] calldata validators) external returns (uint256[] memory amounts) {
+  
   }
 
-  function getStakeAmount() external override returns (uint256 totalAmount) {
-
-  }
-
-  function getLastRoundStakeAmount() external override returns (uint256 totalAmount) {
-
-  }
-
-  function claimReward() external {
-    // (rewardPerBTC[roundTag-1] - rewardPerBTC[xxx]) * btcamount / BTC_DECIMAL;
+  function claimReward() {
+    (rewardPerBTC[roundTag-1] - rewardPerBTC[xxx]) * btcamount / BTC_DECIMAL;
   }
 
   /*********************** Governance ********************************/
@@ -84,6 +70,15 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
       revert MismatchParamLength(key);
     }
 
+    if (Memory.compareStrings(key,"delegateBtcGasPrice")) {
+      uint256 newDelegateBtcGasPrice = BytesToTypes.bytesToUint256(32, value);
+      if (newDelegateBtcGasPrice < 1e9) {
+        revert OutOfBounds(key, newDelegateBtcGasPrice, 1e9, type(uint256).max);
+      }
+      delegateBtcGasPrice = newDelegateBtcGasPrice;
+    } else {
+      require(false, "unknown param");
+    }
     emit paramChange(key, value);
   }
 
