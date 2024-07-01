@@ -15,4 +15,5 @@ interface IPledgeAgent {
   function delegateBtc(bytes32 txid, uint32 lockTime, address delegator, address agent, uint256 value) external;
   function transferBtc(bytes32 txid, address targetAgent) external;
   function claimBtcReward(bytes32[] calldata txidList) external returns (uint256 rewardSum);
+  function getBTCAmount(address[] calldata candidates) external returns(uint256[] memory amounts);
 }

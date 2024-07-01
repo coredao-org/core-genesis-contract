@@ -7,5 +7,7 @@ interface IBitcoinStake {
 
   function distributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 roundTag) external payable;
   function getStakeAmounts(address[] calldata candidators) external returns (uint256[] memory amounts);
-  function getLastRoundBTCAmounts(address[] calldata validators) external returns (uint256[] memory amounts);
+  function getLastRoundBTCAmounts(address[] calldata validators) external view returns (uint256[] memory amounts);
+
+  function setNewRound(address[] calldata validators, uint256 roundTag) external;
 }
