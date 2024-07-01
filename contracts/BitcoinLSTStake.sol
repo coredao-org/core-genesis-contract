@@ -17,6 +17,10 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
   uint256 public constant WST_INACTIVE = 2;
   uint256 public constant INIT_UTXO_FEE = 1e4;
 
+  // Key: candidator
+  // value: btc amount;
+  mapping (address => uint256) candidators;
+
   address public lstToken;
 
   uint256 public utxoFee;
@@ -25,7 +29,7 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
 
   // key: roundtag
   // value: reward per BTC accumulated
-  mapping(uint256 => uint256) rewardPerBTC;
+  mapping(uint256 => uint256) accuredRewardPerBTCMap;
 
   // delegated value in the current round.
   uint256 public totalAmount;
@@ -52,35 +56,15 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
     alreadyInit = true;
   }
 
-  function parsePayload(bytes29 payload) internal pure returns (address delegator, uint256 fee) {
-    require(payload.len() >= 28, "payload length is too small");
-    delegator = payload.indexAddress(7);
-    fee = payload.indexUint(27, 1);
-  }
+  
 
+  /*********************** Interface implementations ***************************/
   function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 value, uint256 outputIndex) external override onlyBtcAgent returns (address delegator, uint256 fee) {
     (delegator, fee) = parsePayload(payload);
     // check in walletStatus
     require(walletStatus[sha256(script)] != 0, "Unknown LST wallet");
     lstToken.mint(delegator, value);
     delegated(txid, delegator, outputIndex, value);
-  }
-
-  function redeem(uint256 amount, bytes calldata btcAddress) external {
-    // check there is enough balance.
-    require(amount + utxoFee <= lstToken.balanceOf(msg.sender), "Not enough btc token");
-    if (amount == 0) {
-      amount = lstToken.balanceOf(msg.sender) - utxoFee;
-      require (amount >= utxoFee, "The redeem amount is too small.");
-    }
-    lstToken.burn(msg.sender, amount + utxoFee);
-    // TODO decode btcAddress.
-    // push btcaddress into redeem.
-    redeemRequests.push[Redeem(msg.sender, amount, sha256(pkscript))];
-    surplus += msg.sender;
-    // TODO consider fee liabilities
-
-    redeemed(msg.sender, amount, utxoFee, pkscript);
   }
 
   function undelegate(bytes32 txid, bytes memory stxos, bytes29 voutView) external onlyBtcAgent {
@@ -131,20 +115,53 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
     for (uint256 i = 0; i < validatorSize; ++i) {
       reward += rewardList[i];
     }
-    rewardPerBTC[roundTag] += rewardPerBTC[lastRoundTag] + reward * BTC_DECIMAL / totalAmount;
+    accuredRewardPerBTCMap[roundTag] += accuredRewardPerBTCMap[lastRoundTag] + reward * BTC_DECIMAL / totalAmount;
     lastRoundTag = roundTag;
   }
 
   /// Get stake amount
-  /// @return totalAmount The sum of all amounts of valid/invalid candidates.
-  function getStakeAmounts(address[] calldata candidates) external view returns (uint256 totalAmount) {
-    return lstToken.totalSupply();
+  /// @param candidates List of candidate operator addresses
+  /// @return amounts List of amounts of all special candidates in this round
+  function getStakeAmounts(address[] calldata candidators) external returns (uint256[] memory amounts) {
+    // TODO Use the stake strategy of btc stake.
+    // how much btc should be staked on each candiator.
   }
 
-  /// Get stake amount
-  /// @return totalAmount The sum of all amounts of valid/invalid candidates.
-  function getLastStakeAmount() external view returns (uint256 totalAmount) {
-    return totalAmount;
+  /// Get stake amount of the passed round
+  /// @param candidates List of candidate operator addresses
+  /// @return amounts List of amounts of all special candidates in this round
+  function getLastRoundBTCAmounts(address[] calldata validators) external returns (uint256[] memory amounts) {
+    // TODO return the amount which is set when new round start.
+  }
+
+  /// Start new round, this is called by the CandidateHub contract
+  /// @param validators List of elected validators in this round
+  /// @param roundTag The new round tag
+  function setNewRound(address[] calldata validators, uint256 roundTag) external {
+    // set candidators
+  }
+
+  /*********************** External implementations ***************************/
+  function redeem(uint256 amount, bytes calldata btcAddress) external {
+    // check there is enough balance.
+    require(amount + utxoFee <= lstToken.balanceOf(msg.sender), "Not enough btc token");
+    if (amount == 0) {
+      amount = lstToken.balanceOf(msg.sender) - utxoFee;
+      require (amount >= utxoFee, "The redeem amount is too small.");
+    }
+    lstToken.burn(msg.sender, amount + utxoFee);
+    // TODO decode btcAddress.
+    // push btcaddress into redeem.
+    redeemRequests.push[Redeem(msg.sender, amount, sha256(pkscript))];
+    surplus += msg.sender;
+    // TODO consider fee liabilities
+
+    redeemed(msg.sender, amount, utxoFee, pkscript);
+  }
+
+  /// Claim the reward
+  function claimReward(uint256 amount) external {
+    // (accuredRewardPerBTCMap[roundTag-1] - accuredRewardPerBTCMap[xxx]) * amount / BTC_DECIMAL;
   }
 
   /*********************** Governance ********************************/
@@ -249,5 +266,11 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
       return WitnessV1TaprootTy, addrs, 1, nil
     }
     **/
+  }
+
+  function parsePayload(bytes29 payload) internal pure returns (address delegator, uint256 fee) {
+    require(payload.len() >= 28, "payload length is too small");
+    delegator = payload.indexAddress(7);
+    fee = payload.indexUint(27, 1);
   }
 }

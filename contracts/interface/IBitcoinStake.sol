@@ -9,5 +9,8 @@ interface IBitcoinStake {
   function getStakeAmounts(address[] calldata candidators) external returns (uint256[] memory amounts);
   function getLastRoundBTCAmounts(address[] calldata validators) external view returns (uint256[] memory amounts);
 
+  /// Start new round, this is called by the CandidateHub contract
+  /// @param validators List of elected validators in this round
+  /// @param roundTag The new round tag
   function setNewRound(address[] calldata validators, uint256 roundTag) external;
 }
