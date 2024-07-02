@@ -17,19 +17,21 @@ contract BitcoinLSTStake is IBitcoinLSTStake, System, IParamSubscriber {
   uint256 public constant WST_INACTIVE = 2;
   uint256 public constant INIT_UTXO_FEE = 1e4;
 
+  // The lst token contract's address.
+  address public lstToken;
+
   // Key: candidator
   // value: btc amount;
   mapping (address => uint256) candidators;
 
-  address public lstToken;
+  // key: roundtag
+  // value: reward per BTC accumulated
+  mapping(uint256 => uint256) accuredRewardPerBTCMap;
 
   uint256 public utxoFee;
   bytes32[] public wallets;
   mapping(byte32 => uint256) walletStatus;
 
-  // key: roundtag
-  // value: reward per BTC accumulated
-  mapping(uint256 => uint256) accuredRewardPerBTCMap;
 
   // delegated value in the current round.
   uint256 public totalAmount;

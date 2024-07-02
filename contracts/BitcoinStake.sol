@@ -28,16 +28,40 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   // validator => (round => preBtcReward)
   mapping(address => mapping(uint256 => uint256)) public rewardPerBTCMap;
 
-  // Key: candidator
-  // value: btc amount;
-  // TODO need call setNewRound()
-  mapping (address => uint256) candidators;
-
   // The latest round tag
   uint256 public lastRoundTag;
 
   // Initial round
   uint256 public initRound;
+
+  // Key: delegator address.
+  // Value: Delegator infomation
+  mapping(address => Delegator) delegatorMap;
+
+  // Key: candidator
+  // value: Candidate information;
+  mapping(address => Candidate) candidateMap;
+
+  // Delegator
+  struct Delegator {
+    DepositReceipt[] receipts;
+  }
+
+  // The deposit receipt between delegate and candidate.
+  struct DepositReceipt {
+    address candidate;
+    uint256 amount;
+    uint256 round;
+    uint256 locktime;
+  }
+
+  // The Candidate amount.
+  struct Candidate {
+    // This value is set in setNewRound
+    uint256 amount;
+    // It is changed when delegate/undelegate/tranfer
+    uint256 realAmount;
+  }
 
   /*********************** events **************************/
   event paramChange(string key, bytes value);
@@ -59,7 +83,8 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     address agent;
     (delegator, agent, fee) = parseAndCheckPayload(payload);
 
-    IPledgeAgent(PLEDGE_AGENT_ADDR).delegateBtc(txid, lockTime, delegator, agent, amount);
+    delegatorMap[delegator].receipts.push(DepositReceipt(agent, amount, roundTag, lockTime));
+    candidateMap[agent].realAmount += amount;
 
     emit delegatedBtc(txid, agent, delegator, script, outputIndex, amount);
   }
@@ -94,16 +119,20 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   }
 
   function getStakeAmounts(address[] calldata candidates) external override returns (uint256[] memory amounts) {
-    return IPledgeAgent(PLEDGE_AGENT_ADDR).getBTCAmount(candidates);
+    // TODO consider the round of hardfork.
+    uint256 length = candidates.length;
+    amounts = new uint256[](length);
+    for (uint256 i = 0; i < length; i++) {
+      amounts[i] = candidateMap[validator].realAmount;
+    }
   }
 
   function getLastRoundBTCAmounts(address[] calldata validators) external view override returns (uint256[] memory amounts) {
     uint256 validatorSize = validators.length;
     amounts = new uint256[](validatorSize);
     for (uint256 i = 0; i < validatorSize; ++i) {
-      amounts[i] = candidators[validators[i]];
+      amounts[i] = candidateMap[validator].amount;
     }
-    return amounts;
   }
 
   function claimReward() external {
@@ -115,13 +144,15 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   /// @param validators List of elected validators in this round
   /// @param roundTag The new round tag
   function setNewRound(address[] calldata validators, uint256 roundTag) external override{
-    uint256[] memory amounts = IPledgeAgent(PLEDGE_AGENT_ADDR).getBTCAmount(validators);
-    
     uint256 length = validators.length;
+    address validator;
     for (uint256 i = 0; i < length; i++) {
-      candidators[validators[i]] = amounts[i];
+      validator = validators[i];
+      candidateMap[validator].amount = candidateMap[validator].realAmount;
     }
   }
+
+  // TODO add a function for move btc delegate infor from pledge agent.
 
   /*********************** Governance ********************************/
   /// Update parameters through governance vote
