@@ -8,6 +8,7 @@ import "./interface/IBitcoinStake.sol";
 import "./interface/IPledgeAgent.sol";
 import "./interface/ICandidateHub.sol";
 import "./lib/Address.sol";
+import "./lib/BytesLib.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./lib/BitcoinHelper.sol";
@@ -21,6 +22,7 @@ import "./System.sol";
 // The relayer should also transfer unlock tx to Core chain via BitcoinAgent.verifyBurnTx
 contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   using TypedMemView for *;
+  using BytesLib for *;
 
   uint256 public constant BTC_DECIMAL = 1e8;
 
@@ -59,7 +61,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   // The deposit receipt between delegate and candidate.
   struct DepositReceipt {
     bytes32 btctxid;
-    uint32  outputIndex;
+    uint256  outputIndex;
     address candidate;
     uint256 amount;
     uint256 round;
@@ -89,7 +91,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     require(script[0] == bytes1(uint8(0x04)) && script[5] == bytes1(uint8(0xb1)), "not a valid redeem script");
 
     uint32 lockTime = parseLockTime(script);
-    require(lockTime > block.time, "lockTime should be a tick in future.");
+    require(lockTime > block.timestamp, "lockTime should be a tick in future.");
     address candidate;
     (delegator, candidate, fee) = parseAndCheckPayload(payload);
 
@@ -101,7 +103,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   }
 
   function undelegate(bytes32 txid, bytes memory stxoBytes, bytes29 voutView) override external onlyBtcAgent {
-    uint256 length = stxos.length;
+    uint256 length = stxoBytes.length;
     require(length % 36 == 0, "outpoint size mismatch");
     bytes32 outpointHash;
     uint32 outputIndex;
@@ -111,14 +113,14 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
       outpointHash = stxoBytes.toBytes32(i);
       outputIndex = stxoBytes.toUint32(i+32);
       delegator = txidMap[outpointHash];
-      if (delegator == 0x0) {
+      if (delegator == address(0)) {
         continue;
       }
       size = delegatorMap[delegator].receipts.length;
       for (uint256 j = 0; j < size; ++j) {
         DepositReceipt storage dr = delegatorMap[delegator].receipts[j];
-        if (dr.btctxid = outpointHash && dr.outputIndex == outputIndex) {
-          candidateMap[candidate].realAmount -= dr.amount;
+        if (dr.btctxid == outpointHash && dr.outputIndex == outputIndex) {
+          candidateMap[dr.candidate].realAmount -= dr.amount;
           emit undelegatedBtc(txid, dr.candidate, delegator, outpointHash, outputIndex, dr.amount);
           if (j + 1 != size) {
             dr = delegatorMap[delegator].receipts[size - 1];
@@ -149,7 +151,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
       }
 
       // Calculate reward of per btc per validator per round
-      m[roundTag] = historyReward + rewardList[i] * BTC_DECIMAL / candidators[validator];
+      m[roundTag] = historyReward + rewardList[i] * BTC_DECIMAL / candidateMap[validator].amount;
     }
     
     lastRoundTag = roundTag;
@@ -160,7 +162,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     uint256 length = candidates.length;
     amounts = new uint256[](length);
     for (uint256 i = 0; i < length; i++) {
-      amounts[i] = candidateMap[validator].realAmount;
+      amounts[i] = candidateMap[candidates[i]].realAmount;
     }
   }
 
@@ -168,13 +170,12 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     uint256 validatorSize = validators.length;
     amounts = new uint256[](validatorSize);
     for (uint256 i = 0; i < validatorSize; ++i) {
-      amounts[i] = candidateMap[validator].amount;
+      amounts[i] = candidateMap[validators[i]].amount;
     }
   }
 
-  function claimReward() external {
+  function claimReward(uint256 roundTag) external {
     // (rewardPerBTC[roundTag-1] - rewardPerBTC[xxx]) * btcamount / BTC_DECIMAL;
-
   }
 
   /// Start new round, this is called by the CandidateHub contract
