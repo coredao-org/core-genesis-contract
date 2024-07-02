@@ -21,6 +21,8 @@ networks:
 compiler:
   solc:
     version: 0.8.4
+    remappings:
+      - '@openzeppelin/contracts=node_modules/@openzeppelin/contracts'
 
 hypothesis:
   max_examples: 10
