@@ -21,7 +21,6 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   using SatoshiPlusHelper for *;
   using TypedMemView for *;
 
-  uint256 public constant CHAINID = 1116;
   uint64 public constant INIT_MIN_BTC_VALUE = 1e4;
   uint32 public constant INIT_BTC_CONFIRM_BLOCK = 3;
   uint32 public constant BTC_STAKING_VERSION = 1;
@@ -71,8 +70,9 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /*********************** Interface implementations ***************************/
   /// Do some preparement before new round.
   /// @param round The new round tag
-  function prepare(uint256 /*round*/) external override {
-    // Nothing
+  function prepare(uint256 round) external override {
+    btcStake.prepare(round);
+    btcLSTStake.prepare(round);
   }
 
   /// Receive round rewards from ValidatorSet, which is triggered at the beginning of turn round

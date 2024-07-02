@@ -12,6 +12,7 @@ import "./lib/BytesLib.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./lib/BitcoinHelper.sol";
+import "./lib/SatoshiPlusHelper.sol";
 import "./System.sol";
 
 
@@ -24,8 +25,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   using TypedMemView for *;
   using BytesLib for *;
 
-  uint256 public constant BTC_DECIMAL = 1e8;
-
   // Reward of per btc per validator per round
   // validator => (round => preBtcReward)
   mapping(address => mapping(uint256 => uint256)) public rewardPerBTCMap;
@@ -35,11 +34,13 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   // It is initialized to 1.
   uint256 public roundTag;
 
-  // The latest round tag
-  uint256 public lastRoundTag;
-
   // Initial round
   uint256 public initRound;
+
+  // receiptMap keeps all deposite receipts of BTC on CORE
+  // Key: txid of bitcoin
+  // value: DepositReceipt.
+  mapping(bytes32 => DepositReceipt) public receiptMap;
 
   // Key: delegator address.
   // Value: Delegator infomation
@@ -49,31 +50,38 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   // value: Candidate information;
   mapping(address => Candidate) candidateMap;
 
-  // Key: txid of bitcoin
-  // value: delegator address.
-  mapping(bytes32 => address) txidMap;
+  // round2expireInfoMap keeps the amount of expired BTC staking value for each round
+  mapping(uint256 => FixedExpireInfo) round2expireInfoMap;
 
   // Delegator
   struct Delegator {
-    DepositReceipt[] receipts;
+    bytes32[] txids;
   }
 
   // The deposit receipt between delegate and candidate.
   struct DepositReceipt {
-    bytes32 btctxid;
-    uint256  outputIndex;
+    uint256 outputIndex;
     address candidate;
+    address delegator;
     uint256 amount;
     uint256 round;
-    uint256 locktime;
+    uint256 lockTime;
   }
 
   // The Candidate amount.
   struct Candidate {
     // This value is set in setNewRound
-    uint256 amount;
+    uint256 fixAmount;
+    uint256 flexAmount;
     // It is changed when delegate/undelegate/tranfer
-    uint256 realAmount;
+    uint256 realFixAmount;
+    uint256 realFlexAmount;
+  }
+
+  struct FixedExpireInfo {
+    address[] candidateList;
+    mapping(address => uint256) amountMap;
+    mapping(address => uint256) existMap;
   }
 
   /*********************** events **************************/
@@ -84,10 +92,11 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   function init() external onlyNotInit {
     initRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
     roundTag = initRound;
-    lastRoundTag = initRound - 1;
   }
 
   function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 amount, uint256 outputIndex) override external onlyBtcAgent returns (address delegator, uint256 fee) {
+    DepositReceipt storage receipt = receiptMap[txid];
+    require(receipt.amount == 0, "btc tx confirmed");
     require(script[0] == bytes1(uint8(0x04)) && script[5] == bytes1(uint8(0xb1)), "not a valid redeem script");
 
     uint32 lockTime = parseLockTime(script);
@@ -95,44 +104,27 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     address candidate;
     (delegator, candidate, fee) = parseAndCheckPayload(payload);
 
-    delegatorMap[delegator].receipts.push(DepositReceipt(txid, outputIndex, candidate, amount, roundTag, lockTime));
-    candidateMap[candidate].realAmount += amount;
-    txidMap[txid] = delegator;
+
+    delegatorMap[delegator].txids.push(txid);
+    candidateMap[candidate].realFixAmount += amount;
+
+    receipt.outputIndex = outputIndex;
+    receipt.candidate = candidate;
+    receipt.delegator = delegator;
+    receipt.amount = amount;
+    receipt.round = roundTag;
+    receipt.lockTime = lockTime;
+
+    addExpire(receipt);
 
     emit delegatedBtc(txid, candidate, delegator, script, outputIndex, amount);
   }
 
   function undelegate(bytes32 txid, bytes memory stxoBytes, bytes29 voutView) override external onlyBtcAgent {
-    uint256 length = stxoBytes.length;
-    require(length % 36 == 0, "outpoint size mismatch");
-    bytes32 outpointHash;
-    uint32 outputIndex;
-    address delegator;
-    uint256 size;
-    for (uint256 i = 0; i < length; i += 36) {
-      outpointHash = stxoBytes.toBytes32(i);
-      outputIndex = stxoBytes.toUint32(i+32);
-      delegator = txidMap[outpointHash];
-      if (delegator == address(0)) {
-        continue;
-      }
-      size = delegatorMap[delegator].receipts.length;
-      for (uint256 j = 0; j < size; ++j) {
-        DepositReceipt storage dr = delegatorMap[delegator].receipts[j];
-        if (dr.btctxid == outpointHash && dr.outputIndex == outputIndex) {
-          candidateMap[dr.candidate].realAmount -= dr.amount;
-          emit undelegatedBtc(txid, dr.candidate, delegator, outpointHash, outputIndex, dr.amount);
-          if (j + 1 != size) {
-            dr = delegatorMap[delegator].receipts[size - 1];
-          }
-          delegatorMap[delegator].receipts.pop();
-          break;
-        }
-      }
-    }
+    // TODO implement in version with fixed | flexible term.
   }
 
-  function distributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 roundTag) external override payable onlyBtcAgent {
+  function distributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 /*round*/) external override payable onlyBtcAgent {
     uint256 length = validators.length;
 
     for (uint256 i = 0; i < length; i++) {
@@ -151,18 +143,16 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
       }
 
       // Calculate reward of per btc per validator per round
-      m[roundTag] = historyReward + rewardList[i] * BTC_DECIMAL / candidateMap[validator].amount;
+      m[roundTag] = historyReward + rewardList[i] * SatoshiPlusHelper.BTC_DECIMAL / candidateMap[validator].fixAmount;
     }
-    
-    lastRoundTag = roundTag;
   }
 
-  function getStakeAmounts(address[] calldata candidates) external override returns (uint256[] memory amounts) {
+  function getStakeAmounts(address[] calldata candidates) external override view returns (uint256[] memory amounts) {
     // TODO consider the round of hardfork.
     uint256 length = candidates.length;
     amounts = new uint256[](length);
     for (uint256 i = 0; i < length; i++) {
-      amounts[i] = candidateMap[candidates[i]].realAmount;
+      amounts[i] = candidateMap[candidates[i]].realFixAmount;
     }
   }
 
@@ -170,11 +160,11 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     uint256 validatorSize = validators.length;
     amounts = new uint256[](validatorSize);
     for (uint256 i = 0; i < validatorSize; ++i) {
-      amounts[i] = candidateMap[validators[i]].amount;
+      amounts[i] = candidateMap[validators[i]].fixAmount;
     }
   }
 
-  function claimReward(uint256 roundTag) external {
+  function claimReward() external {
     // (rewardPerBTC[roundTag-1] - rewardPerBTC[xxx]) * btcamount / BTC_DECIMAL;
   }
 
@@ -186,12 +176,34 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     address validator;
     for (uint256 i = 0; i < length; i++) {
       validator = validators[i];
-      candidateMap[validator].amount = candidateMap[validator].realAmount;
+      candidateMap[validator].fixAmount = candidateMap[validator].realFixAmount;
     }
     roundTag = round;
   }
 
+  /// Do some preparement before new round.
+  /// @param round The new round tag
+  function prepare(uint256 round) external override {
+    // the expired BTC staking values will be removed
+    uint256 j;
+    for (uint256 r = roundTag + 1; r <= round; ++r) {
+      FixedExpireInfo storage expireInfo = round2expireInfoMap[r];
+      j = expireInfo.candidateList.length;
+      while (j != 0) {
+        j--;
+        address candidate = expireInfo.candidateList[j];
+        candidateMap[candidate].realFixAmount -= expireInfo.amountMap[candidate];
+        expireInfo.candidateList.pop();
+        delete expireInfo.amountMap[candidate];
+        delete expireInfo.existMap[candidate];
+      }
+      delete round2expireInfoMap[r];
+    }
+  }
+
   // TODO add a function for move btc delegate infor from pledge agent.
+
+  // TODO add a transfer function.
 
   /*********************** Governance ********************************/
   /// Update parameters through governance vote
@@ -219,5 +231,15 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     delegator= payload.indexAddress(7);
     agent = payload.indexAddress(27);
     fee = payload.indexUint(47, 1);
+  }
+
+  function addExpire(DepositReceipt storage receipt) internal {
+    uint256 endRound = receipt.lockTime / SatoshiPlusHelper.ROUND_INTERVAL;
+    FixedExpireInfo storage expireInfo = round2expireInfoMap[endRound];
+    if (expireInfo.existMap[receipt.candidate] == 0) {
+      expireInfo.candidateList.push(receipt.candidate);
+      expireInfo.existMap[receipt.candidate] = 1;
+    }
+    expireInfo.amountMap[receipt.candidate] += receipt.amount;
   }
 }

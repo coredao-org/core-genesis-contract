@@ -255,7 +255,7 @@ library BitcoinHelper {
     /// @param _voutView     The vout of a Bitcoin transaction
     /// @param _index        Index of output
     /// @return _value       Value of the specified output
-    /// @return _lockingScript            Parsed locking script
+    /// @return _pkScriptView  Parsed pk script view
     function parseOutputValueAndScript(bytes29 _voutView, uint _index) internal pure typeAssert(_voutView, BTCTypes.Vout) returns (uint64 _value, bytes29 _pkScriptView) {
         bytes29 output = indexVout(_voutView, _index);
         _value = value(output);
