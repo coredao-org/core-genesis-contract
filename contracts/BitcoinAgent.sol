@@ -199,11 +199,13 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
       }
     }
 
+    bytes memory stxoBytes = encode(stxos);
+
     if (version1) {
-      IBitcoinStake(btcStake).undelegate(txid, stxos, voutView);
+      IBitcoinStake(btcStake).undelegate(txid, stxoBytes, voutView);
     }
     if (version2) {
-      IBitcoinStake(btcLSTStake).undelegate(txid, stxos, voutView);
+      IBitcoinStake(btcLSTStake).undelegate(txid, stxoBytes, voutView);
 
       // TODO voutView exchange set to btcReceiptMap.
     }
