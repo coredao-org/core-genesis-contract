@@ -18,30 +18,55 @@ contract System {
   address public PLEDGE_AGENT_ADDR;
   address public BURN_ADDR;
   address public FOUNDATION_ADDR;
+  address public STAKE_HUB_ADDR;
+  address public BTC_STAKE_ADDR;
+  address public BTC_AGENT_ADDR;
+  address public BTCLST_STAKE_ADDR;
+  address public CORE_AGENT_ADDR;
+  address public HASH_AGENT_ADDR;
+  address public BTCLST_TOKEN_ADDR;
 
-  function updateContractAddr(
-    address valAddr,
-    address slashAddr,
-    address rewardAddr,
-    address lightAddr,
-    address relayerHubAddr,
-    address candidateHubAddr,
-    address govHubAddr,
-    address pledgeAgentAddr,
-    address burnAddr,
-    address foundationAddr
-  ) external {
-    VALIDATOR_CONTRACT_ADDR = valAddr;
-    SLASH_CONTRACT_ADDR = slashAddr;
-    SYSTEM_REWARD_ADDR = rewardAddr;
-    LIGHT_CLIENT_ADDR = lightAddr;
-    RELAYER_HUB_ADDR = relayerHubAddr;
-    CANDIDATE_HUB_ADDR = candidateHubAddr;
-    GOV_HUB_ADDR = govHubAddr;
-    PLEDGE_AGENT_ADDR = pledgeAgentAddr;
-    BURN_ADDR = burnAddr;
-    FOUNDATION_ADDR = foundationAddr;
-  }{% else %}
+  struct SystemContractAddr {
+    address validator;
+    address slash;
+    address systemReward;
+    address lightClient;
+    address relayerHub;
+    address candidateHub;
+    address govHub;
+    address pledgeAgent;
+    address burn;
+    address foundation;
+    address stakeHub;
+    address btcStake;
+    address btcAgent;
+    address btcLSTStake;
+    address coreAgent;
+    address hashAgent;
+    address btcLstToken;
+  }
+
+  function updateContractAddr(bytes memory _systemContractAddr) external {
+    SystemContractAddr memory systemContractAddr = abi.decode(_systemContractAddr, (SystemContractAddr));
+    VALIDATOR_CONTRACT_ADDR = systemContractAddr.validator;
+    SLASH_CONTRACT_ADDR = systemContractAddr.slash;
+    SYSTEM_REWARD_ADDR = systemContractAddr.systemReward;
+    LIGHT_CLIENT_ADDR = systemContractAddr.lightClient;
+    RELAYER_HUB_ADDR = systemContractAddr.relayerHub;
+    CANDIDATE_HUB_ADDR = systemContractAddr.candidateHub;
+    GOV_HUB_ADDR = systemContractAddr.govHub;
+    PLEDGE_AGENT_ADDR = systemContractAddr.pledgeAgent;
+    BURN_ADDR = systemContractAddr.burn;
+    FOUNDATION_ADDR = systemContractAddr.foundation;
+    STAKE_HUB_ADDR = systemContractAddr.stakeHub;
+    BTC_STAKE_ADDR = systemContractAddr.btcStake;
+    BTC_AGENT_ADDR = systemContractAddr.btcAgent;
+    BTCLST_STAKE_ADDR = systemContractAddr.btcLSTStake;
+    CORE_AGENT_ADDR = systemContractAddr.coreAgent;
+    HASH_AGENT_ADDR = systemContractAddr.hashAgent;
+    BTCLST_TOKEN_ADDR = systemContractAddr.btcLstToken;
+  }
+  {% else %}
   address public constant VALIDATOR_CONTRACT_ADDR = 0x0000000000000000000000000000000000001000;
   address public constant SLASH_CONTRACT_ADDR = 0x0000000000000000000000000000000000001001;
   address public constant SYSTEM_REWARD_ADDR = 0x0000000000000000000000000000000000001002;

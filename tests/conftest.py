@@ -1,6 +1,7 @@
 import pytest
-from web3 import Web3
+from eth_abi import encode
 from brownie import *
+from web3 import Web3
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -56,6 +57,7 @@ def relay_hub(accounts):
     c.init()
     if is_development:
         c.developmentInit()
+
     return c
 
 
@@ -102,8 +104,55 @@ def burn(accounts):
 
 
 @pytest.fixture(scope="module")
+def core_agent(accounts):
+    c = accounts[0].deploy(CoreAgentMock)
+    c.init()
+    if is_development:
+        c.developmentInit()
+    return c
+
+
+@pytest.fixture(scope="module")
 def foundation(accounts):
     c = accounts[0].deploy(Foundation)
+    return c
+
+
+@pytest.fixture(scope="module")
+def stake_hub(accounts):
+    c = accounts[0].deploy(StakeHubMock)
+    return c
+
+
+@pytest.fixture(scope="module")
+def btc_stake(accounts):
+    c = accounts[0].deploy(BitcoinStakeMock)
+    return c
+
+
+@pytest.fixture(scope="module")
+def btc_agent(accounts):
+    c = accounts[0].deploy(BitcoinAgentMock)
+    c.init()
+    return c
+
+
+@pytest.fixture(scope="module")
+def btc_lst_stake(accounts):
+    c = accounts[0].deploy(BitcoinLSTStakeMock)
+    return c
+
+
+@pytest.fixture(scope="module")
+def lst_token(accounts):
+    c = accounts[0].deploy(BitcoinLSTToken, 'STBtc', 'BTCLST')
+    return c
+
+
+@pytest.fixture(scope="module")
+def hash_power_agent(accounts):
+    c = accounts[0].deploy(HashPowerAgent)
+    c.init()
     return c
 
 
@@ -116,40 +165,47 @@ def test_lib_memory(accounts):
 
 @pytest.fixture(scope="module", autouse=True)
 def set_system_contract_address(
-    candidate_hub,
-    btc_light_client,
-    gov_hub,
-    relay_hub,
-    slash_indicator,
-    system_reward,
-    validator_set,
-    pledge_agent,
-    burn,
-    foundation
+        candidate_hub,
+        btc_light_client,
+        gov_hub,
+        relay_hub,
+        slash_indicator,
+        system_reward,
+        validator_set,
+        pledge_agent,
+        burn,
+        foundation,
+        stake_hub,
+        btc_stake,
+        btc_agent,
+        btc_lst_stake,
+        core_agent,
+        hash_power_agent,
+        lst_token
 ):
-    args = [validator_set.address, slash_indicator.address, system_reward.address,
-            btc_light_client.address, relay_hub.address, candidate_hub.address,
-            gov_hub.address, pledge_agent.address, burn.address, foundation]
+    contracts = [
+        validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub, gov_hub,
+        pledge_agent, burn, foundation, stake_hub, btc_stake, btc_agent, btc_lst_stake, core_agent, hash_power_agent,
+        lst_token
+    ]
+    args = encode(['address'] * len(contracts), [c.address for c in contracts])
 
-    candidate_hub.updateContractAddr(*args)
-    btc_light_client.updateContractAddr(*args)
-    gov_hub.updateContractAddr(*args)
-    relay_hub.updateContractAddr(*args)
-    slash_indicator.updateContractAddr(*args)
-    system_reward.updateContractAddr(*args)
-    validator_set.updateContractAddr(*args)
-    pledge_agent.updateContractAddr(*args)
-    burn.updateContractAddr(*args)
-    foundation.updateContractAddr(*args)
+    for c in contracts:
+        getattr(c, "updateContractAddr")(args)
 
-    system_reward.init()
     candidate_hub.setControlRoundTimeTag(True)
-    # used for distribute reward
-    # accounts[-2].transfer(validator_set.address, Web3.toWei(100000, 'ether'))
+    accounts[-20].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
+    # init after set system contract
+    system_reward.init()
+    btc_stake.init()
+    btc_lst_stake.init()
+    stake_hub.init()
+    if is_development:
+        btc_stake.developmentInit()
+        btc_lst_stake.developmentInit()
+        stake_hub.developmentInit()
 
 
 @pytest.fixture(scope="module")
 def min_init_delegate_value(pledge_agent):
     return pledge_agent.requiredCoinDeposit()
-
-
