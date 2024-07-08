@@ -1,6 +1,6 @@
 # Core Genesis Contracts
 
-This repo holds all the genesis contracts on Core blockchain, which are part of the core implementations of Satoshi Plus consensus. For more information about Core blockchain and Satoshi Plus consensus, please read the [technical whitepaper](https://docs.coredao.org/core-white-paper-v1.0.5/).
+This repo holds all the genesis contracts on Core blockchain, which are part of the core implementations of Satoshi Plus consensus. For more information about Core blockchain and Satoshi Plus consensus, please read the [technical whitepaper](https://whitepaper.coredao.org/core-white-paper-v1.0.7).
 
 
 
