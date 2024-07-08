@@ -9,7 +9,7 @@ contract ReentryCandidateHubProxy is BaseProxy {
     event proxyRegister(address consensusAddr);
     event proxyUnregister(bool success, string msg);
 
-    constructor(address _candidateHub) BaseProxy(_candidateHub) {}
+    constructor(address _candidateHub,address _stakeHub) BaseProxy(_candidateHub,_stakeHub) {}
 
     function register(address consensusAddr, address payable feeAddr, uint32 commissionThousandths)
         external
@@ -37,7 +37,7 @@ contract ReentryCandidateHubProxy is BaseProxy {
 
 contract UnRegisterReentry is ReentryCandidateHubProxy {
     event InReceive();
-    constructor(address _candidateHub) ReentryCandidateHubProxy(_candidateHub) {}
+    constructor(address _candidateHub,address _stakeHub) ReentryCandidateHubProxy(_candidateHub,_stakeHub) {}
 
     receive() external payable {
         emit InReceive();

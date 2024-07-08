@@ -35,12 +35,17 @@ npm install
 ```shell
 # install test dependency
 pip install -r requirements.txt
+brownie pm install OpenZeppelin/openzeppelin-contracts@4.9.6
 
 # generate contracts for testing
 ./generate-test-contracts.sh
 
 # run brownie tests
 brownie test -v --stateful false
+# run brownie tests in a single file
+brownie test tests/{the-file-name.py} -v
+# run brownie with a single testcase
+brownie test -k <method-name> -v
 ```
 
 

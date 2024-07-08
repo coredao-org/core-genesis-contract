@@ -1,7 +1,8 @@
 import pytest
 import brownie
+from eth_abi import encode
 from web3 import Web3
-from brownie import accounts
+from brownie import *
 from brownie.network import gas_price
 from .utils import expect_event, get_tracker, padding_left, encode_args_with_signature
 from .common import register_relayer
@@ -16,7 +17,7 @@ def teardown_module():
 def set_up(system_reward, btc_light_client):
     register_relayer()
     # deposit to system reward contract
-    accounts[0].transfer(system_reward.address, Web3.toWei(10, 'ether'))
+    accounts[0].transfer(system_reward.address, Web3.to_wei(10, 'ether'))
     # set store block header gas price
     global store_block_header_tx_gas_price
     store_block_header_tx_gas_price = btc_light_client.storeBlockGasPrice()
@@ -31,34 +32,32 @@ def isolation():
 
 
 @pytest.fixture(scope="function")
-def init_gov_address(validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub,
-                     gov_hub, pledge_agent, burn, foundation):
-    VALIDATOR_CONTRACT_ADDR = validator_set.address
-    SLASH_CONTRACT_ADDR = slash_indicator.address
-    SYSTEM_REWARD_ADDR = system_reward.address
-    LIGHT_CLIENT_ADDR = btc_light_client.address
-    RELAYER_HUB_ADDR = relay_hub.address
-    CANDIDATE_HUB_ADDR = candidate_hub.address
-    GOV_HUB_ADDR = gov_hub.address
-    PLEDGE_AGENT_ADDR = pledge_agent.address
-    BURN_ADDR = burn.address
-    FOUNDATION_ADDR = foundation.address
-    btc_light_client.updateContractAddr(
-        VALIDATOR_CONTRACT_ADDR,
-        SLASH_CONTRACT_ADDR,
-        SYSTEM_REWARD_ADDR,
-        LIGHT_CLIENT_ADDR,
-        RELAYER_HUB_ADDR,
-        CANDIDATE_HUB_ADDR,
-        accounts[0],
-        PLEDGE_AGENT_ADDR,
-        BURN_ADDR,
-        FOUNDATION_ADDR,
-    )
+def init_gov_address():
+    contracts = [
+        ValidatorSetMock[0].address,
+        SlashIndicatorMock[0].address,
+        SystemRewardMock[0].address,
+        BtcLightClientMock[0].address,
+        RelayerHubMock[0].address,
+        CandidateHubMock[0].address,
+        accounts[0].address,
+        PledgeAgentMock[0].address,
+        Burn[0].address,
+        Foundation[0].address,
+        StakeHubMock[0].address,
+        BitcoinStakeMock[0].address,
+        BitcoinAgentMock[0].address,
+        BitcoinLSTStakeMock[0].address,
+        CoreAgentMock[0].address,
+        HashPowerAgent[0].address,
+        BitcoinLSTToken[0].address
+    ]
+    args = encode(['address'] * len(contracts), [c for c in contracts])
+    getattr(BtcLightClientMock[0], "updateContractAddr")(args)
 
 
 def update_default_block_gasprice(btc_light_client):
-    hex_value = padding_left(Web3.toHex(store_block_header_tx_gas_price), 64)
+    hex_value = padding_left(Web3.to_hex(store_block_header_tx_gas_price), 64)
     btc_light_client.updateParam('storeBlockGasPrice', hex_value, {'from': accounts[0]})
 
 
@@ -115,7 +114,6 @@ def test_store_duplicate_block(btc_light_client):
 def test_distribute_relayer_reward(btc_light_client, system_reward):
     chain_tip = btc_light_client.getChainTip()
     idx = btc_light_client.getHeight(chain_tip) - btc_light_client.INIT_CHAIN_HEIGHT()
-    count_in_round = btc_light_client.countInRound()
     before_reward = btc_light_client.relayerRewardVault(accounts[0])
 
     while True:
@@ -125,7 +123,6 @@ def test_distribute_relayer_reward(btc_light_client, system_reward):
         if count_in_round == 0:
             # already distributed reward
             break
-
     after_reward = btc_light_client.relayerRewardVault(accounts[0])
     assert after_reward > before_reward
 
@@ -175,8 +172,9 @@ def test_get_adjustment_index(btc_light_client):
 def test_get_round_powers(btc_light_client):
     btc_light_client.setMiners(1, accounts[0], accounts[2:3])
     btc_light_client.setMiners(1, accounts[1], accounts[3:5])
+    total_power = len(accounts[2:3]) + len(accounts[3:5])
     round_powers = btc_light_client.getRoundPowers(1, accounts[:2])
-    assert round_powers == [1, 2]
+    assert round_powers == ([1, 2], total_power)
 
 
 def test_get_round_miners(btc_light_client):
@@ -207,25 +205,25 @@ def test_store_btc_block_gasprice_limit_failed(btc_light_client):
     assert btc_light_client.storeBlockGasPrice() == store_block_header_tx_gas_price == tx.gas_price
 
 
-@pytest.mark.parametrize("gasprice", [1, 10, 101, 1000, 10000,10000.1, 1000000000,10000000000000000000])
+@pytest.mark.parametrize("gasprice", [1, 10, 101, 1000, 10000, 10000.1, 1000000000, 10000000000000000000])
 def test_update_param_store_block_gasprice_success(btc_light_client, gasprice, init_gov_address):
-    gasprice = Web3.toWei(gasprice, 'gwei')
-    hex_value = padding_left(Web3.toHex(gasprice), 64)
+    gasprice = Web3.to_wei(gasprice, 'gwei')
+    hex_value = padding_left(Web3.to_hex(gasprice), 64)
     tx = btc_light_client.updateParam('storeBlockGasPrice', hex_value, {'from': accounts[0]})
     expect_event(tx, 'paramChange', {'key': 'storeBlockGasPrice', 'value': hex_value})
     assert btc_light_client.storeBlockGasPrice() == gasprice
     update_default_block_gasprice(btc_light_client)
 
 
-@pytest.mark.parametrize("gasprice", [0.1, 0.99,0.5])
+@pytest.mark.parametrize("gasprice", [0.1, 0.99, 0.5])
 def test_update_param_store_block_gasprice_failed(btc_light_client, gasprice, init_gov_address):
-    gasprice = Web3.toWei(gasprice, 'gwei')
+    gasprice = Web3.to_wei(gasprice, 'gwei')
     uint256_max = 2 ** 256 - 1
-    hex_value = padding_left(Web3.toHex(gasprice), 64)
+    hex_value = padding_left(Web3.to_hex(gasprice), 64)
     error_msg = encode_args_with_signature(
         "OutOfBounds(string,uint256,uint256,uint256)",
         ["storeBlockGasPrice", gasprice, int(1e9), uint256_max]
     )
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         btc_light_client.updateParam('storeBlockGasPrice', hex_value, {'from': accounts[0]})
     update_default_block_gasprice(btc_light_client)
