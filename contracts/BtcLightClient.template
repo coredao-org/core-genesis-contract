@@ -327,6 +327,11 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
   function checkTxProofAndGetTime(bytes32 txid, uint32 blockHeight, uint32 confirmBlock, bytes32[] calldata nodes, uint256 index) external view override returns (bool, uint64) {
     bool r = checkTxProof(txid, blockHeight, confirmBlock, nodes, index);
+    {% if mock %}
+    if (checkResult == true){
+      return (checkResult,timesTamp);
+    }
+    {% endif %}
     if (r) {
       bytes32 blockHash = height2HashMap[blockHeight];
       uint64 timestamp = getTimestamp(blockHash);
@@ -702,6 +707,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   }
   {% if mock %}
   bool public checkResult;
+  uint64 public timesTamp;
   {% endif %}
   
 }

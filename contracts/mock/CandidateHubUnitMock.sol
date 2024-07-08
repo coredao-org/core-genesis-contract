@@ -34,10 +34,9 @@ contract CandidateHubUnitMock is CandidateHub {
     return candidateSet[operateMap[k] - 1];
   }
 
-  function getScoreMock(address[] memory candidates, uint256[] memory powers, uint256 round) external {
-    scores = IPledgeAgent(PLEDGE_AGENT_ADDR).getHybridScore(
-      candidates,
-      powers, 
+  function getScoreMock(address[] memory candidates, uint256 round) external {
+    scores = IStakeHub(PLEDGE_AGENT_ADDR).getHybridScore(
+      candidates, 
       round
     );
   }

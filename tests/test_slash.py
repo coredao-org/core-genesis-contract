@@ -106,13 +106,13 @@ def test_deduct_margin(slash_indicator, candidate_hub):
 
     for _ in range(felonyThreshold):
         slash_indicator.slash(consensus1)
-    candidate = candidate_hub.candidateSet(candidate_hub.operateMap(operator1)-1).dict()
+    candidate = candidate_hub.candidateSet(candidate_hub.operateMap(operator1) - 1).dict()
     assert candidate['margin'] == candidate_hub.requiredMargin() - slash_indicator.felonyDeposit()
 
 
 def test_clean(slash_indicator, validator_set):
     decrease_value = felonyThreshold // slash_indicator.DECREASE_RATE()
-    st = strategy("uint8", max_value=felonyThreshold-1)
+    st = strategy("uint8", max_value=felonyThreshold - 1)
 
     for _ in range(10):
         slash_accounts = [Account.create(str(random.random())) for _ in range(random.randint(1, 10))]
@@ -124,6 +124,3 @@ def test_clean(slash_indicator, validator_set):
         turn_round()
         for account, count in zip(slash_accounts, counts):
             assert slash_indicator.getSlashIndicator(account.address)[1] == max([count - decrease_value, 0])
-
-
-
