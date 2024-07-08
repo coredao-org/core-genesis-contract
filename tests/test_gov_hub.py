@@ -2,10 +2,9 @@ import pytest
 from web3 import Web3, constants
 import brownie
 from brownie import *
-from eth_abi import encode_abi
+from eth_abi import encode
 from .utils import expect_event, padding_left, expect_event_not_emitted, encode_args_with_signature
 from .common import execute_proposal
-
 
 origin_members = ["0x9fB29AAc15b9A4B7F17c3385939b007540f4d791", "0x96C42C56fdb78294F96B0cFa33c92bed7D75F96a"]
 
@@ -16,18 +15,27 @@ def set_up():
 
 
 def fake_gov():
-    GovHubMock[0].updateContractAddr(
+    contracts = [
         ValidatorSetMock[0].address,
         SlashIndicatorMock[0].address,
         SystemRewardMock[0].address,
         BtcLightClientMock[0].address,
         RelayerHubMock[0].address,
         CandidateHubMock[0].address,
-        accounts[0],
+        accounts[0].address,
         PledgeAgentMock[0].address,
         Burn[0].address,
-        Foundation[0].address
-    )
+        Foundation[0].address,
+        StakeHubMock[0].address,
+        BitcoinStakeMock[0].address,
+        BitcoinAgentMock[0].address,
+        BitcoinLSTStakeMock[0].address,
+        CoreAgentMock[0].address,
+        HashPowerAgent[0].address,
+        BitcoinLSTToken[0].address,
+    ]
+    args = encode(['address'] * len(contracts), [c for c in contracts])
+    getattr(GovHubMock[0], "updateContractAddr")(args)
 
 
 def test_receive_money(gov_hub):
@@ -42,19 +50,20 @@ def test_receive_money_with_zero_value(gov_hub):
 
 def test_update_param_failed_with_address_which_is_not_gov(gov_hub):
     with brownie.reverts("the msg sender must be governance contract"):
-        gov_hub.updateParam("proposalMaxOperations", "0x0000000000000000000000000000000000000000000000000000000000000001")
+        gov_hub.updateParam("proposalMaxOperations",
+                            "0x0000000000000000000000000000000000000000000000000000000000000001")
 
 
 def test_update_param_failed_with_unknown_key(gov_hub):
     fake_gov()
-    with brownie.reverts("unknown param"):
+    with brownie.reverts("UnsupportedGovParam: jkxjfi"):
         gov_hub.updateParam("jkxjfi", "0x0000000000000000000000000000000000000000000000000000000000000001")
 
 
 def test_update_param_failed_about_key_proposalMaxOperations_with_invalid_length(gov_hub):
     fake_gov()
     error_msg = encode_args_with_signature('MismatchParamLength(string)', ['proposalMaxOperations'])
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         gov_hub.updateParam("proposalMaxOperations", "0x00000000000000000000000000000000000001")
 
 
@@ -62,15 +71,17 @@ def test_update_param_failed_about_key_proposalMaxOperations_out_of_range(gov_hu
     fake_gov()
     error_msg = encode_args_with_signature(
         "OutOfBounds(string,uint256,uint256,uint256)",
-        ["proposalMaxOperations", 0, 1, Web3.toInt(hexstr=constants.MAX_INT)]
+        ["proposalMaxOperations", 0, 1, Web3.to_int(hexstr=constants.MAX_INT)]
     )
-    with brownie.reverts(f"typed error: {error_msg}"):
-        gov_hub.updateParam("proposalMaxOperations", "0x0000000000000000000000000000000000000000000000000000000000000000")
+    with brownie.reverts(f"{error_msg}"):
+        gov_hub.updateParam("proposalMaxOperations",
+                            "0x0000000000000000000000000000000000000000000000000000000000000000")
 
 
 def test_update_param_success_about_key_proposalMaxOperations(gov_hub):
     fake_gov()
-    tx = gov_hub.updateParam("proposalMaxOperations", "0x0000000000000000000000000000000000000000000000000000000000000001")
+    tx = gov_hub.updateParam("proposalMaxOperations",
+                             "0x0000000000000000000000000000000000000000000000000000000000000001")
     expect_event(tx, "paramChange", {
         "key": "proposalMaxOperations",
         "value": "0x0000000000000000000000000000000000000000000000000000000000000001"
@@ -81,7 +92,7 @@ def test_update_param_success_about_key_proposalMaxOperations(gov_hub):
 def test_update_param_failed_about_key_votingPeriod_with_invalid_length(gov_hub):
     fake_gov()
     error_msg = encode_args_with_signature('MismatchParamLength(string)', ['votingPeriod'])
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         gov_hub.updateParam("votingPeriod", "0x00000000000000000000000000000000000001")
 
 
@@ -90,9 +101,9 @@ def test_update_param_failed_about_key_votingPeriod_out_of_range(gov_hub):
     value = "0x0000000000000000000000000000000000000000000000000000000000007079"
     error_msg = encode_args_with_signature(
         "OutOfBounds(string,uint256,uint256,uint256)",
-        ["votingPeriod", Web3.toInt(hexstr=value), 28800, Web3.toInt(hexstr=constants.MAX_INT)]
+        ["votingPeriod", Web3.to_int(hexstr=value), 28800, Web3.to_int(hexstr=constants.MAX_INT)]
     )
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         gov_hub.updateParam('votingPeriod', value)
 
 
@@ -191,7 +202,7 @@ def test_remove_member_success_through_propose(gov_hub):
         [gov_hub.address],
         [0],
         ["removeMember(address)"],
-        [encode_abi(['address'], [accounts[6].address])],
+        [encode(['address'], [accounts[6].address])],
         "remove member"
     )
     propose_id = gov_hub.latestProposalIds(accounts[0])
@@ -216,7 +227,7 @@ def test_add_duplicate_member_through_propose(gov_hub):
         [gov_hub.address],
         [0],
         ["addMember(address)"],
-        [encode_abi(['address'], [accounts[2].address])],
+        [encode(['address'], [accounts[2].address])],
         "add new member"
     )
     propose_id = gov_hub.latestProposalIds(accounts[0])
@@ -237,7 +248,7 @@ def test_add_member_through_propose(gov_hub):
         [gov_hub.address],
         [0],
         ["addMember(address)"],
-        [encode_abi(['address'], [accounts[2].address])],
+        [encode(['address'], [accounts[2].address])],
         "add new member"
     )
     propose_id = gov_hub.latestProposalIds(accounts[0])
@@ -258,12 +269,12 @@ def test_add_member_through_propose(gov_hub):
 def test_update_param_through_propose(gov_hub):
     current_proposalMaxOperations = gov_hub.proposalMaxOperations()
     new_value = current_proposalMaxOperations + 1
-    padding_value = Web3.toBytes(hexstr=padding_left(Web3.toHex(new_value), 64))
+    padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(new_value), 64))
 
     execute_proposal(
         gov_hub.address, 0,
         "updateParam(string,bytes)",
-        encode_abi(['string', 'bytes'], ['proposalMaxOperations', padding_value]),
+        encode(['string', 'bytes'], ['proposalMaxOperations', padding_value]),
         "update parameter"
     )
     assert gov_hub.proposalMaxOperations() == new_value
@@ -271,11 +282,11 @@ def test_update_param_through_propose(gov_hub):
 
 def test_update_param_voting_period_through_propose(gov_hub):
     new_value = 28800
-    padding_value = padding_left(Web3.toHex(new_value), 64)
+    padding_value = padding_left(Web3.to_hex(new_value), 64)
     execute_proposal(
         gov_hub.address, 0,
         "updateParam(string,bytes)",
-        encode_abi(['string', 'bytes'], ['votingPeriod', Web3.toBytes(hexstr=padding_value)]),
+        encode(['string', 'bytes'], ['votingPeriod', Web3.to_bytes(hexstr=padding_value)]),
         "update voting period"
     )
     assert gov_hub.votingPeriod() == 28800
@@ -405,11 +416,11 @@ def test_execute_proposal_failed_with_execute_exception(gov_hub):
 def test_execute_proposal_success(gov_hub):
     current_proposalMaxOperations = gov_hub.proposalMaxOperations()
     new_value = current_proposalMaxOperations + 1
-    padding_value = padding_left(Web3.toHex(new_value), 64)
+    padding_value = padding_left(Web3.to_hex(new_value), 64)
     execute_proposal(
         gov_hub.address, 0,
         "updateParam(string,bytes)",
-        encode_abi(['string', 'bytes'], ['proposalMaxOperations', Web3.toBytes(hexstr=padding_value)]),
+        encode(['string', 'bytes'], ['proposalMaxOperations', Web3.to_bytes(hexstr=padding_value)]),
         "update param"
     )
     assert gov_hub.proposalMaxOperations() == new_value
@@ -468,6 +479,6 @@ def __add_member(c, member_address):
         c.address,
         0,
         "addMember(address)",
-        encode_abi(['address'], [member_address]),
+        encode(['address'], [member_address]),
         "add new member"
     )
