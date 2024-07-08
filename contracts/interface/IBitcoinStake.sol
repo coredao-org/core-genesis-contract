@@ -10,17 +10,16 @@ interface IBitcoinStake {
   ///                under satoshi+ protocol
   /// @param script it is used to verify the target txout
   /// @param amount amount of the target txout
-  /// @param outputIndex The index of the target txout.
   /// @return delegator a Coredao address who delegate the Bitcoin
   /// @return fee pay for relayer's fee.
-  function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 amount, uint256 outputIndex) external returns (address delegator, uint256 fee);
+  function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 amount) external returns (address delegator, uint256 fee);
 
   /// Bitcoin undelegate, it is called by relayer via BitcoinAgent.verifyBurnTx
   ///
   /// @param txid the bitcoin tx hash
-  /// @param outpoints outpoints from tx inputs.
+  /// @param outpointHashs outpoints from tx inputs.
   /// @param voutView tx outs as bytes29.
-  function undelegate(bytes32 txid, BitcoinHelper.OutPoint[] memory outpoints, bytes29 voutView) external;
+  function undelegate(bytes32 txid, bytes32[] memory outpointHashs, bytes29 voutView) external;
 
   /// Do some preparement before new round.
   /// @param round The new round tag

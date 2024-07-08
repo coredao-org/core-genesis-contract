@@ -3,18 +3,18 @@ pragma solidity 0.8.4;
 
 import "./interface/IBitcoinStake.sol";
 import "./interface/IParamSubscriber.sol";
-import "./interface/ILightClient.sol";
 import "./interface/IValidatorSet.sol";
 import "./interface/ICandidateHub.sol";
+import "./interface/IBitcoinLSTToken.sol";
 import "./lib/Address.sol";
 import "./lib/BytesLib.sol";
-import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./lib/BitcoinHelper.sol";
 import "./lib/SatoshiPlusHelper.sol";
 import "./System.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber {
+contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuard {
   using BitcoinHelper for *;
   using TypedMemView for *;
   using BytesLib for *;
@@ -49,9 +49,22 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber {
   // The lst token contract's address.
   address public lstToken;
 
+  // delegated real value.
+  uint256 public totalAmount;
+
+  // key: delegator
+  // value: stake info.
+  mapping(address => UserStakeInfo) public userStakeInfo;
+
   // key: roundtag
   // value: reward per BTC accumulated
   mapping(uint256 => uint256) accuredRewardPerBTCMap;
+
+  // the current round, it is updated in setNewRound.
+  uint256 public roundTag;
+
+  // Initial round
+  uint256 public initRound;
 
   // wallet lists
   WalletInfo[] public wallets;
@@ -59,17 +72,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber {
   // The btc fee which is cost when redeem btc.
   uint256 public utxoFee;
 
-  // delegated real value.
-  uint256 public totalAmount;
-
-  uint256 public roundTag;
-
-  // Initial round
-  uint256 public initRound;
-
   Redeem[] public redeemRequests;
-
-  uint256 public surplus;
 
   struct Redeem {
     address delegator;
@@ -84,10 +87,23 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber {
     uint32 status;
   }
 
+  // User stake information
+  struct UserStakeInfo {
+    uint256 newAmount;   // Amount of BTC staked which is staked in changeRound
+    uint256 changeRound; // the round of any op, including mint/burn/transfer/claim.
+    uint256 stakedAmount;// Amount of BTC staked which can claim reward.
+  }
+
   event paramChange(string key, bytes value);
   event delegated(bytes32 indexed txid, address indexed delegator, uint256 amount);
   event redeemed(address indexed delegator, uint256 amount, uint256 utxoFee, bytes pkscript);
   event undelegated(bytes32 indexed txid, address indexed delegator, uint256 amount, bytes pkscript);
+  event claimedReward(address indexed delegator, uint256 reward);
+
+  modifier onlyBtcLSTToken() {
+    require(msg.sender == lstToken, 'only btc lst token can call this function');
+    _;
+  }
 
   function init() external onlyNotInit {
     utxoFee = INIT_UTXO_FEE;
@@ -110,10 +126,9 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber {
   ///                under satoshi+ protocol
   /// @param script it is used to verify the target txout
   /// @param amount amount of the target txout
-  /// @param outputIndex The index of the target txout.
   /// @return delegator a Coredao address who delegate the Bitcoin
   /// @return fee pay for relayer's fee.
-  function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 amount, uint256 outputIndex) external override onlyBtcAgent returns (address delegator, uint256 fee) {
+  function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 amount) external override nonReentrant onlyBtcAgent returns (address delegator, uint256 fee) {
     (delegator, fee) = parsePayload(payload);
     // check in wallet Status
     (bytes32 _hash, uint64 _type) = extractPkScriptAddr(script);
@@ -126,8 +141,12 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber {
       }
     }
     require(_match, "not target wallet.");
-    // TODO lstToken.mint(delegator, amount);
+
+    IBitcoinLSTToken(lstToken).mint(delegator, amount);
     emit delegated(txid, delegator, amount);
+
+    _afterMint(delegator, amount);
+
     totalAmount += amount;
   }
 
@@ -135,9 +154,8 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber {
   /// This method is used to clear redeem requests.
   ///
   /// @param txid the bitcoin tx hash
-  /// @param outpoints outpoints from tx inputs.
   /// @param voutView tx outs as bytes29.
-  function undelegate(bytes32 txid, BitcoinHelper.OutPoint[] memory outpoints, bytes29 voutView) external override onlyBtcAgent {
+  function undelegate(bytes32 txid, bytes32[] memory /*outpointHashs*/, bytes29 voutView) external override nonReentrant onlyBtcAgent {
     // Finds total number of outputs
     uint _numberOfOutputs = uint256(voutView.indexCompactInt(0));
     uint64 _amount;
@@ -187,7 +205,11 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber {
     for (uint256 i = 0; i < validatorSize; ++i) {
       reward += rewardList[i];
     }
-    accuredRewardPerBTCMap[roundTag] += accuredRewardPerBTCMap[roundTag-1] + reward * SatoshiPlusHelper.BTC_DECIMAL / totalAmount;
+    if (totalAmount == 0) {
+      accuredRewardPerBTCMap[roundTag] = accuredRewardPerBTCMap[roundTag-1];
+    } else {
+      accuredRewardPerBTCMap[roundTag] = accuredRewardPerBTCMap[roundTag-1] + reward * SatoshiPlusHelper.BTC_DECIMAL / totalAmount;
+    }
   }
 
   /// Get stake amount.
@@ -229,8 +251,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber {
   /// Claim reward for delegator
   /// @return rewardAmount Amount claimed
   function claimReward() external override returns (uint256 rewardAmount) {
-    // TODO
-    // (accuredRewardPerBTCMap[roundTag-1] - accuredRewardPerBTCMap[xxx]) * amount / BTC_DECIMAL;
+    rewardAmount = _updateUserRewards(msg.sender);
   }
 
   /*********************** External implementations ***************************/
@@ -238,20 +259,19 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber {
   ///
   /// @param amount redeem amount
   /// @param pkscript pkscript used in txout
-  function redeem(uint256 amount, bytes calldata pkscript) external {
-    // TODO check there is enough balance.
-    // require(amount + utxoFee <= lstToken.balanceOf(msg.sender), "Not enough btc token");
-    if (amount == 0) {
-      // TODO
-      // require (lstToken.balanceOf(msg.sender) >= 2 * utxoFee, "The redeem amount is too small.");
-      // amount = lstToken.balanceOf(msg.sender) - utxoFee;
-    }
-    // TODO
-    // lstToken.burn(msg.sender, amount + utxoFee);
+  function redeem(uint256 amount, bytes calldata pkscript) external nonReentrant {
+    (, uint64 txType) = extractPkScriptAddr(pkscript);
+    require(txType != WTYPE_UNKNOWN, "invalid pkscript");
 
-    require(pkscript.length <= 64, "invalid pkscript");
+    UserStakeInfo storage user = userStakeInfo[msg.sender];
+    uint256 balance = user.newAmount + user.stakedAmount;
+    // check there is enough balance.
+    require(amount + utxoFee <= balance, "Not enough btc token");
+    if (amount == 0) {
+      require (balance >= 2 * utxoFee, "The redeem amount is too small.");
+      amount = balance - utxoFee;
+    }
     uint8 pklen = uint8(pkscript.length);
-    require(pklen <= 64, "valid pkscript should be less than 64.");
     bytes32 pk0;
     bytes32 pk1;
     if (pklen <= 32) {
@@ -262,10 +282,18 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber {
     }
     // push btcaddress into redeem.
     redeemRequests.push(Redeem(msg.sender, amount, pk0, pk1));
-    surplus += utxoFee;
-    // TODO burn lst token.
 
+    uint256 burnAmount = amount + utxoFee;
+    IBitcoinLSTToken(lstToken).burn(msg.sender, burnAmount);
     emit redeemed(msg.sender, amount, utxoFee, pkscript);
+
+    _afterBurn(msg.sender, burnAmount);
+  }
+
+  /// callback when btclst token transferred.
+  function onTokenTransfer(address from, address to, uint256 value) external onlyBtcLSTToken {
+    _afterBurn(from, value);
+    _afterMint(to, value);
   }
 
   /*********************** Governance ********************************/
@@ -280,7 +308,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber {
       addWallet(value);
     } else if (Memory.compareStrings(key, "remove")) {
       removeWallet(value);
-    } else if (Memory.compareStrings(key, "setlstAddress")) {
+    } else if (Memory.compareStrings(key, "setLstAddress")) {
       setLstAddress(value);
     } else {
       require(false, "unknown param");
@@ -290,20 +318,34 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber {
 
   /*********************** Inner Methods *****************************/
   function addWallet(bytes memory pkscript) internal {
-    // decode address -> bytes32addr, networkId
-    // verify bitcoin networkId
-    // wallets.push(bytes32addr)
-    // walletStatus[addr] = INACTIVE
+    (bytes32 _hash, uint64 _type) = extractPkScriptAddr(pkscript);
+    require(_type != WTYPE_UNKNOWN, "Invalid BTC wallet");
+
+    for (uint256 i = 0; i != wallets.length; ++i) {
+      if (wallets[i].hash == _hash && wallets[i].typeMask == _type) {
+        wallets[i].status = WST_ACTIVE;
+        return;
+      }
+    }
+
+    wallets.push(WalletInfo(_hash, _type, WST_ACTIVE));
   }
 
   function removeWallet(bytes memory pkscript) internal {
-    // decode address -> bytes32addr, networkId
-    // verify bitcoin networkId
-    // walletStatus[addr] = ST_INACTIVE
+    (bytes32 _hash, uint64 _type) = extractPkScriptAddr(pkscript);
+    require(_type != WTYPE_UNKNOWN, "Invalid BTC wallet");
+
+    for (uint256 i = 0; i != wallets.length; ++i) {
+      if (wallets[i].hash == _hash && wallets[i].typeMask == _type) {
+        wallets[i].status = WST_INACTIVE;
+        return;
+      }
+    }
+    require(false, "Wallet not found");
   }
 
   function setLstAddress(bytes memory addr) internal {
-    // lstToken = addr.indexUint(0,20);
+    lstToken = addr.toAddress(0);
   }
 
   function extractPkScriptAddr(bytes memory pkScript) internal pure returns (bytes32 whash, uint64 txType) {
@@ -345,5 +387,68 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber {
     require(payload.len() >= 28, "payload length is too small");
     delegator = payload.indexAddress(7);
     fee = payload.indexUint(27, 1);
+  }
+
+  function getRoundRewardPerBTC(uint256 round) internal view returns (uint256 reward) {
+    if (round <= initRound) {
+      return 0;
+    }
+    for (;round != initRound; --round) {
+      reward = accuredRewardPerBTCMap[round];
+      if (reward != 0) {
+        return reward;
+      }
+    }
+    return 0;
+  }
+
+  function _updateUserRewards(address userAddress) internal returns (uint256 reward) {
+
+    UserStakeInfo storage user = userStakeInfo[userAddress];
+    uint256 changeRound = user.changeRound;
+    if (changeRound != 0 && changeRound < roundTag) {
+      uint256 lastRoundTag = roundTag - 1;
+      uint256 lastRoundReward = getRoundRewardPerBTC(lastRoundTag);
+      reward = user.stakedAmount * (lastRoundReward - getRoundRewardPerBTC(changeRound - 1)) / SatoshiPlusHelper.BTC_DECIMAL;
+
+      if (user.newAmount != 0 && changeRound < lastRoundTag) {
+        reward += user.newAmount * (lastRoundReward - getRoundRewardPerBTC(changeRound)) / SatoshiPlusHelper.BTC_DECIMAL;
+        user.stakedAmount += user.newAmount;
+        user.newAmount = 0;
+      }
+      if (reward != 0) {
+        Address.sendValue(payable(userAddress), reward);
+        emit claimedReward(userAddress, reward);
+      }
+    }
+    if (changeRound != roundTag) {
+      user.changeRound = roundTag;
+    }
+  }
+
+  function _afterBurn(address from, uint256 value) internal {
+    require(from != address(0), "invalid sender");
+    UserStakeInfo storage user = userStakeInfo[from];
+    uint256 balance = user.newAmount + user.stakedAmount;
+    require(value <= balance, "Insufficient balance");
+    _updateUserRewards(from);
+    if (user.newAmount != 0) {
+      if (user.newAmount >= value) {
+        user.newAmount -= value;
+        value = 0;
+      } else {
+        user.newAmount = 0;
+        value -= user.newAmount;
+      }
+    }
+    if (value != 0) {
+      user.stakedAmount -= value;
+    }
+  }
+
+  function _afterMint(address to, uint256 value) internal {
+    require(to != address(0), "invalid receiver");
+    _updateUserRewards(to);
+    userStakeInfo[to].newAmount += value;
   }
 }

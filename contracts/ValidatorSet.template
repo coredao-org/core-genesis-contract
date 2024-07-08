@@ -213,6 +213,17 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     return consensusAddrs;
   }
 
+  /// Get ops list of validators in the current round
+  /// @return List of validator consensus addresses
+  function getValidatorOps() external override view returns (address[] memory) {
+    uint256 validatorSize = currentValidatorSet.length;
+    address[] memory opAddrs = new address[](validatorSize);
+    for (uint256 i = 0; i < validatorSize; i++) {
+      opAddrs[i] = currentValidatorSet[i].operateAddress;
+    }
+    return opAddrs;
+  }
+
   /// Get incoming, which is the reward to distribute at the end of the round, of a validator
   /// @param validator The validator address
   /// @return The incoming reward of the validator

@@ -3,22 +3,19 @@ pragma solidity 0.8.4;
 
 import "./interface/IAgent.sol";
 import "./interface/IParamSubscriber.sol";
-import "./interface/ILightClient.sol";
 import "./interface/IBitcoinStake.sol";
 import "./interface/ICandidateHub.sol";
 import "./lib/Address.sol";
 import "./lib/BytesLib.sol";
-import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./lib/BitcoinHelper.sol";
 import "./lib/SatoshiPlusHelper.sol";
 import "./System.sol";
 
 
-// Bitcoin Stake is planned to move from PledgeAgent to this independent contract.
-// This contract will implement the current deposit.
+// This contract will implement the btc stake.
+// It will move old data from PledgeAgent.
 // The reward of current deposit can be claimed after the UTXO unlocked.
-// At v1.1.10, this contract only implement delegate transform & claim reward.
 // The relayer should also transfer unlock tx to Core chain via BitcoinAgent.verifyBurnTx
 contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   using TypedMemView for *;
@@ -32,9 +29,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   // the valid value should be greater than 10,000 since the chain started.
   // It is initialized to 1.
   uint256 public roundTag;
-
-  // Initial round
-  uint256 public initRound;
 
   // receiptMap keeps all deposite receipts of BTC on CORE
   // Key: txid of bitcoin
@@ -61,15 +55,14 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
 
   // The deposit receipt between delegate and candidate.
   struct DepositReceipt {
-    uint256 outputIndex;
     address candidate;
     address delegator;
     uint256 amount;
-    uint256 round;
+    uint256 round; // delegator can claim reward after this round
     uint256 lockTime;
   }
 
-  // The Candidate amount.
+  // The Candidate information.
   struct Candidate {
     // This value is set in setNewRound
     uint256 fixAmount;
@@ -77,6 +70,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     // It is changed when delegate/undelegate/tranfer
     uint256 realFixAmount;
     uint256 realFlexAmount;
+    uint256[] continuousRewardEndRounds;
   }
 
   struct FixedExpireInfo {
@@ -87,17 +81,24 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
 
   /*********************** events **************************/
   event paramChange(string key, bytes value);
-  event delegatedBtc(bytes32 indexed txid, address indexed candidate, address indexed delegator, bytes script, uint256 outputIndex, uint256 amount);
-  event undelegatedBtc(bytes32 indexed txid, address indexed candidate, address indexed delegator, bytes32 outpointHash, uint256 outpointIndex, uint256 amount);
+  event delegatedBtc(bytes32 indexed txid, address indexed candidate, address indexed delegator, bytes script, uint256 amount);
+  event undelegatedBtc(bytes32 indexed txid, address indexed candidate, address indexed delegator, bytes32 outpointHash, uint256 amount);
   event migrated(bytes32 indexed txid);
+  event transferredBtc(
+    bytes32 indexed txid,
+    address sourceAgent,
+    address targetAgent,
+    address delegator,
+    uint256 amount
+  );
+  event claimedReward(address indexed delegator, address indexed operator, uint256 amount);
 
   /// The validator candidate is inactive, it is expected to be active
   /// @param candidate Address of the validator candidate
   error InactiveCandidate(address candidate);
 
   function init() external onlyNotInit {
-    initRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
-    roundTag = initRound;
+    roundTag = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
   }
 
   /// Bitcoin delegate, it is called by relayer via BitcoinAgent.verifyMintTx
@@ -118,10 +119,9 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   ///                under satoshi+ protocol
   /// @param script it is used to verify the target txout
   /// @param amount amount of the target txout
-  /// @param outputIndex The index of the target txout.
   /// @return delegator a Coredao address who delegate the Bitcoin
   /// @return fee pay for relayer's fee.
-  function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 amount, uint256 outputIndex) override external onlyBtcAgent returns (address delegator, uint256 fee) {
+  function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 amount) override external onlyBtcAgent returns (address delegator, uint256 fee) {
     DepositReceipt storage receipt = receiptMap[txid];
     require(receipt.amount == 0, "btc tx confirmed");
     require(script[0] == bytes1(uint8(0x04)) && script[5] == bytes1(uint8(0xb1)), "not a valid redeem script");
@@ -134,7 +134,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     delegatorMap[delegator].txids.push(txid);
     candidateMap[candidate].realFixAmount += amount;
 
-    receipt.outputIndex = outputIndex;
     receipt.candidate = candidate;
     receipt.delegator = delegator;
     receipt.amount = amount;
@@ -143,15 +142,15 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
 
     addExpire(receipt);
 
-    emit delegatedBtc(txid, candidate, delegator, script, outputIndex, amount);
+    emit delegatedBtc(txid, candidate, delegator, script, amount);
   }
 
   /// Bitcoin undelegate, it is called by relayer via BitcoinAgent.verifyBurnTx
   ///
   /// @param txid the bitcoin tx hash
-  /// @param outpoints outpoints from tx inputs.
+  /// @param outpointHashs outpoints from tx inputs.
   /// @param voutView tx outs as bytes29.
-  function undelegate(bytes32 txid, BitcoinHelper.OutPoint[] memory outpoints, bytes29 voutView) external override onlyBtcAgent {
+  function undelegate(bytes32 txid, bytes32[] memory outpointHashs, bytes29 voutView) external override onlyBtcAgent {
     // TODO implement in furtue. In version with fixed | flexible term.
   }
 
@@ -161,23 +160,30 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   function distributeReward(address[] calldata validators, uint256[] calldata rewardList) external override payable onlyBtcAgent {
     uint256 length = validators.length;
 
+    uint256 historyReward;
+    uint256 lastRewardRound;
+    uint256 l;
+    address validator;
     for (uint256 i = 0; i < length; i++) {
       if (rewardList[i] == 0) {
         continue;
       }
-      // Iterate to find the validator history reward amount
-      uint256 historyReward = 0;
-      address validator = validators[i];
+      historyReward = 0;
+      validator = validators[i];
       mapping(uint256 => uint256) storage m = accuredRewardPerBTCMap[validator];
-      for (uint256 j = roundTag - 1; j > initRound; j--) {
-        if(m[j] != 0) {
-          historyReward = m[j];
-          break;
-        }
+      Candidate storage c = candidateMap[validator];
+      l = c.continuousRewardEndRounds.length;
+      if (l != 0) {
+        lastRewardRound = c.continuousRewardEndRounds[l - 1];
+        historyReward = m[lastRewardRound];
       }
-
       // Calculate reward of per btc per validator per round
-      m[roundTag] = historyReward + rewardList[i] * SatoshiPlusHelper.BTC_DECIMAL / candidateMap[validator].fixAmount;
+      m[roundTag] = historyReward + rewardList[i] * SatoshiPlusHelper.BTC_DECIMAL / c.fixAmount;
+      if (lastRewardRound + 1 == roundTag) {
+        c.continuousRewardEndRounds[l - 1] = roundTag;
+      } else {
+        c.continuousRewardEndRounds.push(roundTag);
+      }
     }
   }
 
@@ -192,22 +198,57 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     }
   }
 
+  function getRoundRewardPerBTC(address candidate, uint256 round) internal view returns (uint256 reward) {
+    reward = accuredRewardPerBTCMap[candidate][round];
+    if (reward != 0) {
+      return reward;
+    }
+    // if there's no field with the round,
+    // use binary search to get the previous nearest round.
+    Candidate storage c = candidateMap[candidate];
+    uint256 b = c.continuousRewardEndRounds.length;
+    if (b == 0) {
+      return 0;
+    }
+    b -= 1;
+    uint256 a;
+    uint256 m;
+    uint256 tr;
+    while (a <= b) {
+      m = (a + b) / 2;
+      tr = c.continuousRewardEndRounds[m];
+      // tr should never be equal to round because the above reward value is zero.
+      if (tr < round) {
+        reward = accuredRewardPerBTCMap[candidate][tr];
+        a = m + 1;
+      } else if (m == 0) {
+        return 0;
+      } else {
+        b = m - 1;
+      }
+    }
+    return reward;
+  }
+
   /// Claim reward for delegator
-  /// @return rewardAmount Amount claimed
-  function claimReward() external override returns (uint256 rewardAmount) {
-    // Delegator storage delegator = delegatorMap[msg.sender];
-    rewardAmount = 0;
+  /// @return Amount claimed
+  function claimReward() external override returns (uint256) {
+    uint256 rewardAmount;
     bytes32[] storage txids = delegatorMap[msg.sender].txids;
-    for (uint256 i = txids.length; i !=0; i--) {
-      bytes32 txid = txids[i-1];
-      DepositReceipt storage depositReceipt = receiptMap[txid];
-      uint256 unlockRound = depositReceipt.lockTime / SatoshiPlusHelper.ROUND_INTERVAL;
-      
-      if (depositReceipt.round < roundTag && unlockRound > roundTag) {
+    for (uint256 i = txids.length; i != 0; i--) {
+      bytes32 txid = txids[i - 1];
+      DepositReceipt storage dr = receiptMap[txid];
+      uint256 unlockRound = dr.lockTime / SatoshiPlusHelper.ROUND_INTERVAL;
+
+      if (dr.round < roundTag - 1 && dr.round < unlockRound) {
+        uint256 minRound = roundTag - 1 < unlockRound ? roundTag - 1 : unlockRound;
         // Calculate reward
-        uint256 reward = (accuredRewardPerBTCMap[depositReceipt.candidate][roundTag - 1] - accuredRewardPerBTCMap[depositReceipt.candidate][depositReceipt.round]) * depositReceipt.amount / SatoshiPlusHelper.BTC_DECIMAL;
+        uint256 reward = (getRoundRewardPerBTC(dr.candidate, minRound) - getRoundRewardPerBTC(dr.candidate, dr.round)) * dr.amount / SatoshiPlusHelper.BTC_DECIMAL;
         rewardAmount += reward;
-        depositReceipt.round = roundTag;
+        dr.round = roundTag - 1;
+        if (reward != 0) {
+           emit claimedReward(msg.sender, dr.candidate, reward);
+        }
       }
 
       // Remove txid and deposit receipt
@@ -217,13 +258,14 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
         }
         txids.pop();
         delete receiptMap[txid];
-      }  
+      }
     }
 
     // Send reward to delegator
     if (rewardAmount != 0) {
       Address.sendValue(payable(msg.sender), rewardAmount);
     }
+    return rewardAmount;
   }
 
   function transferBtc(bytes32 txid, address targetCandidate) external {
@@ -246,6 +288,8 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     // Set candidate to targetCandidate
     depositReceipt.candidate = targetCandidate;
     depositReceipt.round = roundTag;
+
+    emit transferredBtc(txid, depositReceipt.candidate, targetCandidate, msg.sender, depositReceipt.amount);
   }
 
   // Upgrade function.
@@ -256,7 +300,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     for (uint256 i = 0; i < txLength; i++) {
       txid = txids[i];
       (bool success, bytes memory data) = PLEDGE_AGENT_ADDR.call{gas: 50000}(abi.encodeWithSignature("cleanDelegateInfo(bytes32)", txid));
-      require (success, "PLEDGE_AGENT_ADDR.cleanDelegateInfo failed.");
+      require (success, "call PLEDGE_AGENT_ADDR.cleanDelegateInfo failed.");
       (address candidate, address delegator, uint256 amount, uint256 round, uint256 lockTime) = abi.decode(data, (address,address,uint256,uint256,uint256));
       if (receiptMap[txid].amount != 0) {
         continue;
@@ -264,7 +308,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
 
       // Set receiptMap
       DepositReceipt storage depositReceipt = receiptMap[txids[i]];
-      depositReceipt.outputIndex = 0;
       depositReceipt.candidate = candidate;
       depositReceipt.delegator = delegator;
       depositReceipt.amount = amount;

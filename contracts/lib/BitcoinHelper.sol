@@ -51,11 +51,6 @@ library BitcoinHelper {
         MerkleArray         // 0x14
     }
 
-    struct OutPoint {
-      bytes32 txid;
-      uint32 outputIndex;
-    }
-
     /// @notice             requires `memView` to be of a specified type
     /// @dev                passes if it is the correct type, errors if not
     /// @param memView      a 29-byte view with a 5-byte type
@@ -153,7 +148,7 @@ library BitcoinHelper {
     function extractOutpoint(
         bytes memory _vin,
         uint _index
-    ) internal pure returns (bytes32, uint) {
+    ) internal pure returns (bytes32, uint32) {
         bytes29 vin = tryAsVin(_vin.ref(uint40(BTCTypes.Unknown)));
         require(!vin.isNull(), "BitcoinHelper: vin is null");
         return extractOutpoint(vin, _index);
@@ -168,7 +163,7 @@ library BitcoinHelper {
     function extractOutpoint(
         bytes29 _vinView,
         uint _index
-    ) internal pure typeAssert(_vinView, BTCTypes.Vin) returns (bytes32 _txId, uint _outputIndex) {
+    ) internal pure typeAssert(_vinView, BTCTypes.Vin) returns (bytes32 _txId, uint32 _outputIndex) {
         bytes29 input = indexVin(_vinView, _index);
         bytes29 _outpoint = outpoint(input);
         _txId = txidLE(_outpoint);
@@ -465,7 +460,7 @@ library BitcoinHelper {
     function parseToScriptValueAndData(
         bytes29 _voutView,
         bytes memory _script
-    ) internal pure typeAssert(_voutView, BTCTypes.Vout) returns (uint64 bitcoinAmount, bytes29 arbitraryData, uint256 outputIndex) {
+    ) internal pure typeAssert(_voutView, BTCTypes.Vout) returns (uint64 bitcoinAmount, bytes29 arbitraryData, uint32 outputIndex) {
         bytes29 _outputView;
         bytes29 _scriptPubkeyView;
         bytes29 _scriptPubkeyWithLength;
@@ -495,7 +490,7 @@ library BitcoinHelper {
                     _scriptPubkeyView.index(2, 32) == sha256(_script))
                 ) {
                     bitcoinAmount = value(_outputView);
-                    outputIndex = index;
+                    outputIndex = uint32(index);
                 }
             } else {
                 // Returns the whole bytes array

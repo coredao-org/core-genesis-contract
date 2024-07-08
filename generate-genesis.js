@@ -26,7 +26,6 @@ require("./generate-validatorset");
 require("./generate-btclightclient");
 require("./generate-govhub");
 require("./generate-candidatehub");
-require("./generate-pledgeagent");
 
 program.version("0.0.1")
 program.option(
@@ -45,6 +44,7 @@ program.parse(process.argv)
 function compileContract(key, contractFile, contractName) {
   return new Promise((resolve, reject) => {
     const ls = spawn("solc", [
+      "@openzeppelin/=./node_modules/@openzeppelin/",
       "--bin-runtime",
       "/=/",
       "--optimize",
