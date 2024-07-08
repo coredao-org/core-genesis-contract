@@ -1,11 +1,10 @@
 import pytest
 import brownie
 from web3 import Web3, constants
-from eth_abi import encode_abi
+from eth_abi import encode
 from brownie import accounts, SelfDestroy
 from .utils import expect_event, get_tracker, padding_left, encode_args_with_signature
 from .common import execute_proposal
-
 
 VALIDATOR_CONTRACT_ADDR = None
 SLASH_CONTRACT_ADDR = None
@@ -17,11 +16,18 @@ GOV_HUB_ADDR = None
 PLEDGE_AGENT_ADDR = None
 BURN_ADDR = None
 FOUNDATION_ADDR = None
+STAKE_HUB_ADDR = None
+BTC_STAKE_ADDR = None
+BTC_AGENT_ADDR = None
+BTC_LST_STAKE_ADDR = None
+CORE_AGENT_ADDR = None
+HASH_POWER_AGENT_ADDR = None
 
 
 @pytest.fixture(scope="module", autouse=True)
 def set_up(validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub,
-           gov_hub, pledge_agent, burn, foundation):
+           gov_hub, pledge_agent, burn, foundation, stake_hub, btc_stake, btc_agent, btc_lst_stake, core_agent,
+           hash_power_agent, lst_token):
     global VALIDATOR_CONTRACT_ADDR
     global SLASH_CONTRACT_ADDR
     global SYSTEM_REWARD_ADDR
@@ -32,6 +38,13 @@ def set_up(validator_set, slash_indicator, system_reward, btc_light_client, rela
     global PLEDGE_AGENT_ADDR
     global BURN_ADDR
     global FOUNDATION_ADDR
+    global STAKE_HUB_ADDR
+    global BTC_STAKE_ADDR
+    global BTC_AGENT_ADDR
+    global BTC_LST_STAKE_ADDR
+    global CORE_AGENT_ADDR
+    global HASH_POWER_AGENT_ADDR
+    global BTCLST_TOKEN_ADDR
     VALIDATOR_CONTRACT_ADDR = validator_set.address
     SLASH_CONTRACT_ADDR = slash_indicator.address
     SYSTEM_REWARD_ADDR = system_reward.address
@@ -42,21 +55,24 @@ def set_up(validator_set, slash_indicator, system_reward, btc_light_client, rela
     PLEDGE_AGENT_ADDR = pledge_agent.address
     BURN_ADDR = burn.address
     FOUNDATION_ADDR = foundation.address
+    STAKE_HUB_ADDR = stake_hub.address
+    BTC_STAKE_ADDR = btc_stake.address
+    BTC_AGENT_ADDR = btc_agent.address
+    BTC_LST_STAKE_ADDR = btc_lst_stake.address
+    CORE_AGENT_ADDR = core_agent.address
+    HASH_POWER_AGENT_ADDR = hash_power_agent.address
+    BTCLST_TOKEN_ADDR = lst_token.address
 
 
 def __update_gov_address(burn_instance):
-    burn_instance.updateContractAddr(
-        VALIDATOR_CONTRACT_ADDR,
-        SLASH_CONTRACT_ADDR,
-        SYSTEM_REWARD_ADDR,
-        LIGHT_CLIENT_ADDR,
-        RELAYER_HUB_ADDR,
-        CANDIDATE_HUB_ADDR,
-        accounts[0],
-        PLEDGE_AGENT_ADDR,
-        BURN_ADDR,
-        FOUNDATION_ADDR,
-    )
+    contracts = [
+        VALIDATOR_CONTRACT_ADDR, SLASH_CONTRACT_ADDR, SYSTEM_REWARD_ADDR, LIGHT_CLIENT_ADDR, RELAYER_HUB_ADDR,
+        CANDIDATE_HUB_ADDR, accounts[0].address,
+        PLEDGE_AGENT_ADDR, BURN_ADDR, FOUNDATION_ADDR, STAKE_HUB_ADDR, BTC_STAKE_ADDR, BTC_AGENT_ADDR,
+        BTC_LST_STAKE_ADDR, CORE_AGENT_ADDR, HASH_POWER_AGENT_ADDR, BTCLST_TOKEN_ADDR
+    ]
+    args = encode(['address'] * len(contracts), [c for c in contracts])
+    getattr(burn_instance, "updateContractAddr")(args)
 
 
 def __add_balance(address, value):
@@ -74,7 +90,7 @@ def test_update_param_failed_with_unknown_key(burn):
 def test_update_param_burn_cap_with_unmatched_length(burn):
     __update_gov_address(burn)
     error_msg = encode_args_with_signature('MismatchParamLength(string)', ['burnCap'])
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         burn.updateParam("burnCap", "0x0000000000123")
 
 
@@ -89,20 +105,20 @@ def test_update_param_burn_cap_with_0(burn):
 
 def test_update_param_burn_cap_with_value_which_is_less_than_burn_contract_balance(burn):
     __update_gov_address(burn)
-    __add_balance(burn.address, Web3.toWei(1, 'ether'))
+    __add_balance(burn.address, Web3.to_wei(1, 'ether'))
 
     new_burn_cap = "0x0000000000000000000000000000000000000000000000000de0b6b3a763fff"
     error_msg = encode_args_with_signature(
         "OutOfBounds(string,uint256,uint256,uint256)",
-        ["burnCap", Web3.toInt(hexstr=new_burn_cap), burn.balance(), Web3.toInt(hexstr=constants.MAX_INT)]
+        ["burnCap", Web3.to_int(hexstr=new_burn_cap), burn.balance(), Web3.to_int(hexstr=constants.MAX_INT)]
     )
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         burn.updateParam("burnCap", new_burn_cap)
 
 
 def test_update_param_burn_cap_success(burn):
     __update_gov_address(burn)
-    __add_balance(burn.address, Web3.toWei(1, 'ether'))
+    __add_balance(burn.address, Web3.to_wei(1, 'ether'))
     account0_tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
 
@@ -126,7 +142,7 @@ def test_burn_success_with_value_0_and_balance_is_0(burn):
 def test_burn_success_with_value_0_and_balance_is_equal_to_burn_cap(burn):
     __update_gov_address(burn)
     burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000")
-    __add_balance(burn.address, Web3.toWei(1, 'ether'))
+    __add_balance(burn.address, Web3.to_wei(1, 'ether'))
 
     account0_tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
@@ -141,7 +157,7 @@ def test_burn_success_with_value_0_and_balance_is_equal_to_burn_cap(burn):
 def test_burn_success_with_value_0_and_balance_is_greater_than_burn_cap(burn):
     __update_gov_address(burn)
     burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000")
-    __add_balance(burn.address, Web3.toWei(2, 'ether'))
+    __add_balance(burn.address, Web3.to_wei(2, 'ether'))
 
     account0_tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
@@ -153,7 +169,7 @@ def test_burn_success_with_value_0_and_balance_is_greater_than_burn_cap(burn):
 
 
 def test_burn_success_with_1_ether_and_balance_is_0(burn):
-    burn_value = Web3.toWei(1, 'ether')
+    burn_value = Web3.to_wei(1, 'ether')
     tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
 
@@ -167,7 +183,7 @@ def test_burn_success_with_1_ether_and_balance_is_0(burn):
 def test_burn_success_with_value_1_and_balance_is_equal_to_burn_cap(burn):
     __update_gov_address(burn)
     burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000")
-    burn_value = Web3.toWei(1, 'ether')
+    burn_value = Web3.to_wei(1, 'ether')
 
     account0_tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
@@ -182,9 +198,9 @@ def test_burn_success_with_value_1_and_balance_is_equal_to_burn_cap(burn):
 def test_burn_failed_with_1_ether_due_to_balance_is_greater_than_burn_cap(burn):
     __update_gov_address(burn)
     burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000")
-    __add_balance(burn.address, Web3.toWei(2, 'ether'))
+    __add_balance(burn.address, Web3.to_wei(2, 'ether'))
 
-    burn_value = Web3.toWei(1, 'ether')
+    burn_value = Web3.to_wei(1, 'ether')
 
     account0_tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
@@ -200,21 +216,21 @@ def test_burn_success_with_half_of_2_ether_and_balance_is_greater_than_burn_cap(
     __update_gov_address(burn)
     burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000")
 
-    burn_value = Web3.toWei(2, 'ether')
+    burn_value = Web3.to_wei(2, 'ether')
 
     account0_tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
 
     tx = burn.burn({"value": burn_value})
-    expect_event(tx, "burned", {"to": accounts[0], "amount": Web3.toWei(1, 'ether')})
+    expect_event(tx, "burned", {"to": accounts[0], "amount": Web3.to_wei(1, 'ether')})
 
-    assert account0_tracker.delta() == (0 - Web3.toWei(1, 'ether'))
-    assert burn_tracker.delta() == Web3.toWei(1, 'ether')
+    assert account0_tracker.delta() == (0 - Web3.to_wei(1, 'ether'))
+    assert burn_tracker.delta() == Web3.to_wei(1, 'ether')
 
 
 def test_receive_ether(burn):
     with brownie.reverts():
-        accounts[0].transfer(burn.address, Web3.toWei(1, 'ether'))
+        accounts[0].transfer(burn.address, Web3.to_wei(1, 'ether'))
 
 
 def test_receive_ether_through_destruct_command(burn):
@@ -224,13 +240,13 @@ def test_receive_ether_through_destruct_command(burn):
 
 def test_modify_burn_cap(burn):
     new_cap = 200
-    hex_value = padding_left(Web3.toHex(new_cap), 64)
+    hex_value = padding_left(Web3.to_hex(new_cap), 64)
 
     execute_proposal(
         burn.address,
         0,
         "updateParam(string,bytes)",
-        encode_abi(['string', 'bytes'], ['burnCap', Web3.toBytes(hexstr=hex_value)]),
+        encode(['string', 'bytes'], ['burnCap', Web3.to_bytes(hexstr=hex_value)]),
         "update burn cap"
     )
     assert burn.burnCap() == new_cap
@@ -238,13 +254,13 @@ def test_modify_burn_cap(burn):
 
 def test_burn_less_than_cap(burn):
     new_cap = 100
-    hex_value = padding_left(Web3.toHex(new_cap), 64)
+    hex_value = padding_left(Web3.to_hex(new_cap), 64)
 
     execute_proposal(
         burn.address,
         0,
         "updateParam(string,bytes)",
-        encode_abi(['string', 'bytes'], ['burnCap', Web3.toBytes(hexstr=hex_value)]),
+        encode(['string', 'bytes'], ['burnCap', Web3.to_bytes(hexstr=hex_value)]),
         "update burn cap"
     )
 
@@ -259,13 +275,13 @@ def test_burn_less_than_cap(burn):
 
 def test_burn_greater_than_cap(burn):
     new_cap = 100
-    hex_value = padding_left(Web3.toHex(new_cap), 64)
+    hex_value = padding_left(Web3.to_hex(new_cap), 64)
 
     execute_proposal(
         burn.address,
         0,
         "updateParam(string,bytes)",
-        encode_abi(['string', 'bytes'], ['burnCap', Web3.toBytes(hexstr=hex_value)]),
+        encode(['string', 'bytes'], ['burnCap', Web3.to_bytes(hexstr=hex_value)]),
         "update burn cap"
     )
 

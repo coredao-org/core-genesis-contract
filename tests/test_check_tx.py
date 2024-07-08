@@ -9,6 +9,7 @@ from .btc_block_data import btc_block_data
 import hashlib, json, binascii
 import random
 
+
 def teardown_module():
     gas_price(False)
 
@@ -17,7 +18,7 @@ def teardown_module():
 def set_up(system_reward, btc_light_client):
     register_relayer()
     # deposit to system reward contract
-    accounts[0].transfer(system_reward.address, Web3.toWei(10, 'ether'))
+    accounts[0].transfer(system_reward.address, Web3.to_wei(10, 'ether'))
     # set store block header gas price
     global store_block_header_tx_gas_price
     store_block_header_tx_gas_price = btc_light_client.storeBlockGasPrice()
@@ -30,32 +31,6 @@ def set_up(system_reward, btc_light_client):
 def isolation():
     pass
 
-
-@pytest.fixture(scope="function")
-def init_gov_address(validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub,
-                     gov_hub, pledge_agent, burn, foundation):
-    VALIDATOR_CONTRACT_ADDR = validator_set.address
-    SLASH_CONTRACT_ADDR = slash_indicator.address
-    SYSTEM_REWARD_ADDR = system_reward.address
-    LIGHT_CLIENT_ADDR = btc_light_client.address
-    RELAYER_HUB_ADDR = relay_hub.address
-    CANDIDATE_HUB_ADDR = candidate_hub.address
-    GOV_HUB_ADDR = gov_hub.address
-    PLEDGE_AGENT_ADDR = pledge_agent.address
-    BURN_ADDR = burn.address
-    FOUNDATION_ADDR = foundation.address
-    btc_light_client.updateContractAddr(
-        VALIDATOR_CONTRACT_ADDR,
-        SLASH_CONTRACT_ADDR,
-        SYSTEM_REWARD_ADDR,
-        LIGHT_CLIENT_ADDR,
-        RELAYER_HUB_ADDR,
-        CANDIDATE_HUB_ADDR,
-        accounts[0],
-        PLEDGE_AGENT_ADDR,
-        BURN_ADDR,
-        FOUNDATION_ADDR,
-    )
 
 data = '''{
     "hash": "00000000000000000003158101f63cf74f1111a9ab4b58a42aa05fdc6aa47171",
@@ -1463,9 +1438,11 @@ txids = []
 for h in block['tx']:
     txids.append(bytes.fromhex(h)[::-1])
 
+
 def Hash(msg):
     """SHA256^2)(msg) -> bytes"""
     return hashlib.sha256(hashlib.sha256(msg).digest()).digest()
+
 
 def build_merkle_tree_from_txids(txids):
     merkle_tree = []
@@ -1476,15 +1453,16 @@ def build_merkle_tree_from_txids(txids):
     j = 0
     while size > 1:
         for i in range(0, size, 2):
-            i2 = min(i+1, size-1)
-            merkle_tree.append(Hash(merkle_tree[j+i] + merkle_tree[j+i2]))
+            i2 = min(i + 1, size - 1)
+            merkle_tree.append(Hash(merkle_tree[j + i] + merkle_tree[j + i2]))
 
         j += size
         size = (size + 1) // 2
 
     return merkle_tree
 
-def get_intermediate_nodes(txids, tx_index : int):
+
+def get_intermediate_nodes(txids, tx_index: int):
     merkle_tree = build_merkle_tree_from_txids(txids)
     intermediate_nodes = []
     size = len(txids)
@@ -1501,59 +1479,63 @@ def get_intermediate_nodes(txids, tx_index : int):
         size = (size + 1) // 2
     return intermediate_nodes
 
+
 def test_check_tx_proof_not_confirm(btc_light_client):
     chain_tip = btc_light_client.getChainTip()
     idx = btc_light_client.getHeight(chain_tip) - btc_light_client.INIT_CHAIN_HEIGHT()
 
-    for _ in range(0,6):
+    for _ in range(0, 6):
         btc_light_client.storeBlockHeader(btc_block_data[idx])
         idx += 1
 
     nodes = get_intermediate_nodes(txids, 0)
-    nodes = ['0x'+binascii.hexlify(node).decode('utf8') for node in nodes]
-    assert not btc_light_client.checkTxProof(txids[0], 717700, 5, nodes, 0)
+    nodes = ['0x' + binascii.hexlify(node).decode('utf8') for node in nodes]
+    result = btc_light_client.checkTxProof(txids[0], 717700, 5, nodes, 0)
+    assert result is False
+
 
 def test_check_tx_proof_success(btc_light_client):
     chain_tip = btc_light_client.getChainTip()
     idx = btc_light_client.getHeight(chain_tip) - btc_light_client.INIT_CHAIN_HEIGHT()
 
-    for _ in range(0,6):
+    for _ in range(0, 6):
         btc_light_client.storeBlockHeader(btc_block_data[idx])
         idx += 1
 
     for i in range(len(txids)):
         nodes = get_intermediate_nodes(txids, i)
-        nodes = ['0x'+binascii.hexlify(node).decode('utf8') for node in nodes]
+        nodes = ['0x' + binascii.hexlify(node).decode('utf8') for node in nodes]
         assert btc_light_client.checkTxProof(txids[i], 717700, 2, nodes, i)
+
 
 def test_check_tx_proof_fail(btc_light_client):
     chain_tip = btc_light_client.getChainTip()
     idx = btc_light_client.getHeight(chain_tip) - btc_light_client.INIT_CHAIN_HEIGHT()
 
-    for _ in range(0,6):
+    for _ in range(0, 6):
         btc_light_client.storeBlockHeader(btc_block_data[idx])
         idx += 1
-    
+
     for i in range(len(txids)):
         j = i
         while j == i:
-            j = random.randint(0, len(txids)-1)
+            j = random.randint(0, len(txids) - 1)
         nodes = get_intermediate_nodes(txids, j)
-        nodes = ['0x'+binascii.hexlify(node).decode('utf8') for node in nodes]
+        nodes = ['0x' + binascii.hexlify(node).decode('utf8') for node in nodes]
         assert not btc_light_client.checkTxProof(txids[i], 717700, 2, nodes, i)
 
     for i in range(len(txids)):
         j = i
         while j == i:
-            j = random.randint(0, len(txids)-1)
+            j = random.randint(0, len(txids) - 1)
         nodes = get_intermediate_nodes(txids, i)
-        nodes = ['0x'+binascii.hexlify(node).decode('utf8') for node in nodes]
+        nodes = ['0x' + binascii.hexlify(node).decode('utf8') for node in nodes]
         assert not btc_light_client.checkTxProof(txids[j], 717700, 2, nodes, i)
 
     for i in range(len(txids)):
         j = i
         while j == i:
-            j = random.randint(0, len(txids)-1)
+            j = random.randint(0, len(txids) - 1)
         nodes = get_intermediate_nodes(txids, i)
-        nodes = ['0x'+binascii.hexlify(node).decode('utf8') for node in nodes]
+        nodes = ['0x' + binascii.hexlify(node).decode('utf8') for node in nodes]
         assert not btc_light_client.checkTxProof(txids[i], 717700, 2, nodes, j)

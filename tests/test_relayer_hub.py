@@ -1,5 +1,6 @@
 import pytest
 import brownie
+from eth_abi import encode
 from web3 import Web3
 from brownie import *
 from .utils import expect_event, get_tracker, padding_left
@@ -7,19 +8,29 @@ from .utils import expect_event, get_tracker, padding_left
 
 @pytest.fixture(scope="module", autouse=True)
 def set_up(validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub,
-           gov_hub, pledge_agent, burn, foundation):
-    relay_hub.updateContractAddr(
+           gov_hub, pledge_agent, burn, foundation, stake_hub, btc_stake, btc_agent, btc_lst_stake, core_agent,
+           hash_power_agent, lst_token):
+    contracts = [
         validator_set.address,
         slash_indicator.address,
         system_reward.address,
         btc_light_client.address,
         relay_hub.address,
         candidate_hub.address,
-        accounts[0],
+        accounts[0].address,
         pledge_agent.address,
         burn.address,
-        foundation.address
-    )
+        foundation.address,
+        stake_hub.address,
+        btc_stake.address,
+        btc_agent.address,
+        btc_lst_stake.address,
+        core_agent.address,
+        hash_power_agent.address,
+        lst_token.address
+    ]
+    args = encode(['address'] * len(contracts), [c for c in contracts])
+    getattr(relay_hub, "updateContractAddr")(args)
 
 
 def test_update_param_failed_with_unknown_key(relay_hub):
@@ -39,18 +50,18 @@ def test_update_param_dues_with_unmatched_length(relay_hub):
 
 def test_update_param_require_deposit_failed_with_value_out_of_range(relay_hub):
     with brownie.reverts("the requiredDeposit out of range"):
-        relay_hub.updateParam("requiredDeposit", padding_left(Web3.toHex(relay_hub.dues()), 64))
+        relay_hub.updateParam("requiredDeposit", padding_left(Web3.to_hex(relay_hub.dues()), 64))
 
 
 def test_update_param_dues_failed_with_value_out_of_range(relay_hub):
     with brownie.reverts("the dues out of range"):
-        relay_hub.updateParam("dues", padding_left(Web3.toHex(0), 64))
+        relay_hub.updateParam("dues", padding_left(Web3.to_hex(0), 64))
     with brownie.reverts("the dues out of range"):
-        relay_hub.updateParam("dues", padding_left(Web3.toHex(relay_hub.requiredDeposit() + 10), 64))
+        relay_hub.updateParam("dues", padding_left(Web3.to_hex(relay_hub.requiredDeposit() + 10), 64))
 
 
 def test_update_param_required_deposit_success(relay_hub):
-    value = padding_left(Web3.toHex(relay_hub.dues() + 10), 64)
+    value = padding_left(Web3.to_hex(relay_hub.dues() + 10), 64)
     tx = relay_hub.updateParam("requiredDeposit", value)
     expect_event(tx, "paramChange", {
         "key": "requiredDeposit",
@@ -59,7 +70,7 @@ def test_update_param_required_deposit_success(relay_hub):
 
 
 def test_update_param_dues_success(relay_hub):
-    value = padding_left(Web3.toHex(relay_hub.requiredDeposit() - 10), 64)
+    value = padding_left(Web3.to_hex(relay_hub.requiredDeposit() - 10), 64)
     tx = relay_hub.updateParam("dues", value)
     expect_event(tx, "paramChange", {
         "key": "dues",

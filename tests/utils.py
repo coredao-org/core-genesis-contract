@@ -7,10 +7,11 @@ from brownie.network.transaction import TransactionReceipt
 from brownie.network.account import LocalAccount
 from brownie import chain, web3, history
 from eth_account import Account
-from eth_abi import encode
 from hashlib import sha256
 
 from tests.btc_block_data import *
+from tests.constant import *
+import binascii
 
 
 def random_address():
@@ -43,7 +44,7 @@ def expect_event_not_emitted(tx_receipt: TransactionReceipt, event_name):
 
 def public_key2PKHash(public_key):
     if public_key.startswith('0x'):
-        public_key_bytes = Web3.toBytes(hexstr=public_key)
+        public_key_bytes = Web3.to_bytes(hexstr=public_key)
     else:
         public_key_bytes = codecs.decode(public_key, 'hex')
     # Run SHA256 for the public key
@@ -89,9 +90,18 @@ def padding_left(hex_str, length):
 
 
 def encode_args_with_signature(function_signature: str, args: list) -> str:
-    selector = Web3.keccak(text=function_signature)[:4].hex()
-    args_in_function_signature = function_signature[function_signature.index('(') + 1:-1].replace(' ', '').split(',')
-    return selector + encode(args_in_function_signature, args).hex()
+    selector = function_signature.split('(')[0]
+    types = function_signature.split('(')[-1].split(',')
+    sr = ', '
+    new_args = []
+    for index, a in enumerate(args):
+        if types[index].replace(')', '') == 'address':
+            new_args.append(str(a).lower())
+        else:
+            new_args.append(str(a))
+    error1 = sr.join(new_args)
+    error = f"{selector}: {error1}"
+    return error
 
 
 def expect_query(query_data, expect: dict):
@@ -148,8 +158,10 @@ def get_btc_tx(value, chain_id, validator, delegator, script_type='hash', lock_d
     op_return = get_transaction_op_return_data(chain_id, validator, delegator, lock_data, core_fee, version)
     if script_type == 'key':
         script_pub_key = output_script_pub_key["script_public_key"]
-    else:
+    elif script_type == 'hash':
         script_pub_key = output_script_pub_key["script_public_key_hash"]
+    else:
+        script_pub_key = None
     script_pub_key_length = hex(len(script_pub_key) // 2).replace('0x', '')
     op_return_length = hex(len(op_return) // 2).replace('0x', '')
     btc_tx = delegate_btc_block_data[
@@ -172,3 +184,49 @@ def remove_witness_data_from_raw_tx(btc_tx_hex, script_pubkey) -> str:
 
 def get_block_info(height='latest'):
     return web3.eth.get_block(height)
+
+
+def get_bitcoin_lib():
+    return BitcoinLib()
+
+
+class BitcoinLib:
+    def get_script_hash(self, data):
+        hash = bytes.fromhex(data.replace('0x', ''))
+        script_hash, add_type = self.extract_pk_script_addr(hash)
+        hex_string = '0x' + self.bytes_to_hex_string(script_hash).rjust(64, '0')
+        return hex_string, add_type
+
+    def index_bytes32(self, data: bytes, start: int, length: int) -> bytes:
+        return data[start:start + length]
+
+    def extract_pk_script_addr(self, pk_script: bytes):
+        length = len(pk_script)
+        if length == 25:
+            # pay-to-pubkey-hash
+            if pk_script[0] == Opcode.OP_DUP and pk_script[1] == Opcode.OP_HASH160 and pk_script[
+                2] == Opcode.OP_DATA_20 and pk_script[23] == Opcode.OP_EQUALVERIFY and pk_script[
+                24] == Opcode.OP_CHECKSIG:
+                return self.index_bytes32(pk_script, 3, 20), AddressType.TYPE_P2PKH
+        elif length == 23:
+            # pay-to-script-hash
+            if pk_script[0] == Opcode.OP_HASH160 and pk_script[1] == Opcode.OP_DATA_20 and pk_script[
+                22] == Opcode.OP_EQUAL:
+                return self.index_bytes32(pk_script, 2, 20), AddressType.TYPE_P2SH
+
+        elif length == 22:
+            # pay-to-witness-pubkey-hash
+            if pk_script[0] == Opcode.OP_0 and pk_script[1] == Opcode.OP_DATA_20:
+                return self.index_bytes32(pk_script, 2, 20), AddressType.TYPE_P2WPKH
+        elif length == 34:
+            # pay-to-witness-script-hash
+            if pk_script[0] == Opcode.OP_0 and pk_script[1] == Opcode.OP_DATA_32:
+                return self.index_bytes32(pk_script, 2, 32), AddressType.TYPE_P2WSH
+            # pay-to-taproot
+            if pk_script[0] == Opcode.OP_1 and pk_script[1] == Opcode.OP_DATA_32:
+                return self.index_bytes32(pk_script, 2, 20), AddressType.TYPE_P2TAPROOT
+
+        return b'\x00' * 20, AddressType.TYPE_UNKNOWN
+
+    def bytes_to_hex_string(self, byte_data: bytes) -> str:
+        return binascii.hexlify(byte_data).decode('utf-8')
