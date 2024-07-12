@@ -89,7 +89,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
   // User stake information
   struct UserStakeInfo {
-    uint256 newAmount;   // Amount of BTC staked which is staked in changeRound
+    uint256 totalAmount;   // Total amount of BTC staked including the one staked in changeRound
     uint256 changeRound; // the round of any op, including mint/burn/transfer/claim.
     uint256 stakedAmount;// Amount of BTC staked which can claim reward.
   }
@@ -264,7 +264,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     require(txType != WTYPE_UNKNOWN, "invalid pkscript");
 
     UserStakeInfo storage user = userStakeInfo[msg.sender];
-    uint256 balance = user.newAmount + user.stakedAmount;
+    uint256 balance = user.totalAmount;
     // check there is enough balance.
     require(amount + utxoFee <= balance, "Not enough btc token");
     if (amount == 0) {
@@ -411,10 +411,9 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       uint256 lastRoundReward = getRoundRewardPerBTC(lastRoundTag);
       reward = user.stakedAmount * (lastRoundReward - getRoundRewardPerBTC(changeRound - 1)) / SatoshiPlusHelper.BTC_DECIMAL;
 
-      if (user.newAmount != 0 && changeRound < lastRoundTag) {
-        reward += user.newAmount * (lastRoundReward - getRoundRewardPerBTC(changeRound)) / SatoshiPlusHelper.BTC_DECIMAL;
-        user.stakedAmount += user.newAmount;
-        user.newAmount = 0;
+      if (user.totalAmount != user.stakedAmount && changeRound < lastRoundTag) {
+        reward += (user.totalAmount - user.stakedAmount) * (lastRoundReward - getRoundRewardPerBTC(changeRound)) / SatoshiPlusHelper.BTC_DECIMAL;
+        user.stakedAmount = user.totalAmount;
       }
       if (reward != 0) {
         Address.sendValue(payable(userAddress), reward);
@@ -429,26 +428,18 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   function _afterBurn(address from, uint256 value) internal {
     require(from != address(0), "invalid sender");
     UserStakeInfo storage user = userStakeInfo[from];
-    uint256 balance = user.newAmount + user.stakedAmount;
+    uint256 balance = user.totalAmount;
     require(value <= balance, "Insufficient balance");
     _updateUserRewards(from);
-    if (user.newAmount != 0) {
-      if (user.newAmount >= value) {
-        user.newAmount -= value;
-        value = 0;
-      } else {
-        user.newAmount = 0;
-        value -= user.newAmount;
-      }
-    }
-    if (value != 0) {
-      user.stakedAmount -= value;
+    user.totalAmount -= value;
+    if (user.totalAmount < user.stakedAmount) {
+      user.stakedAmount = user.totalAmount;
     }
   }
 
   function _afterMint(address to, uint256 value) internal {
     require(to != address(0), "invalid receiver");
     _updateUserRewards(to);
-    userStakeInfo[to].newAmount += value;
+    userStakeInfo[to].totalAmount += value;
   }
 }
