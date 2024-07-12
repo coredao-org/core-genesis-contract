@@ -67,6 +67,7 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
 
   // HARDFORK V-1.0.3
   // debtDepositMap keeps delegator's amount of CORE which should be deducted when claiming rewards in every round
+  // HARDFORK V-1.0.10 Deprecated
   mapping(uint256 => mapping(address => uint256)) public debtDepositMap;
 
   // HARDFORK V-1.0.10
@@ -121,8 +122,8 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     uint256 rewardIndex;
     // HARDFORK V-1.0.3
     // transferOutDeposit keeps the `effective transfer` out of changeRound
-    // transferInDeposit keeps the `effective transfer` in of changeRound
     uint256 transferOutDeposit;
+    // HARDFORK V-1.0.10 Deprecated
     uint256 transferInDeposit;
   }
 
@@ -287,7 +288,7 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(agent)) {
       revert InactiveAgent(agent);
     }
-    uint256 newDeposit = delegateCoin(agent, msg.sender, msg.value, 0);
+    uint256 newDeposit = delegateCoin(agent, msg.sender, msg.value);
     emit delegatedCoin(agent, msg.sender, msg.value, newDeposit);
     addCandidate(msg.sender, agent);
   }
@@ -302,7 +303,7 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
   /// @param candidate The operator address of validator
   /// @param amount The amount of CORE to undelegate
   function undelegateCoin(address candidate, uint256 amount) public {
-    (uint256 deposit, ) = undelegateCoin(candidate, msg.sender, amount, false);
+    uint256 deposit = undelegateCoin(candidate, msg.sender, amount, false);
     Address.sendValue(payable(msg.sender), deposit);
     emit undelegatedCoin(candidate, msg.sender, deposit);
     // TODO removeCandidate(msg.sender, address candidate)
@@ -326,8 +327,8 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     if (sourceAgent == targetAgent) {
       revert SameCandidate(sourceAgent, targetAgent);
     }
-    (uint256 deposit, uint256 deductedDeposit) = undelegateCoin(sourceAgent, msg.sender, amount, true);
-    uint256 newDeposit = delegateCoin(targetAgent, msg.sender, deposit, deductedDeposit);
+    uint256 deposit = undelegateCoin(sourceAgent, msg.sender, amount, true);
+    uint256 newDeposit = delegateCoin(targetAgent, msg.sender, deposit);
 
     emit transferredCoin(sourceAgent, targetAgent, msg.sender, deposit, newDeposit);
   }
@@ -494,7 +495,7 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     emit claimedReward(delegator, msg.sender, reward, true);
   }
 
-  function delegateCoin(address agent, address delegator, uint256 deposit, uint256 transferInDeposit) internal returns (uint256) {
+  function delegateCoin(address agent, address delegator, uint256 deposit) internal returns (uint256) {
     require(deposit >= requiredCoinDeposit, "deposit is too small");
     Agent storage a = agentsMap[agent];
     CoinDelegator storage d = a.cDelegatorMap[delegator];
@@ -516,91 +517,51 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
       d.newDeposit += deposit;
     }
 
-    // HARDFORK V-1.0.3 receive `effective transfer`
-    if (transferInDeposit != 0) {
-      d.transferInDeposit += transferInDeposit;
-    }
-
     if (rewardAmount != 0) {
       distributeReward(payable(delegator), rewardAmount);
     }
     return d.newDeposit;
   }
   
-  function undelegateCoin(address agent, address delegator, uint256 amount, bool isTransfer) internal returns (uint256, uint256) {
+  function undelegateCoin(address agent, address delegator, uint256 amount, bool isTransfer) internal returns (uint256) {
     Agent storage a = agentsMap[agent];
     CoinDelegator storage d = a.cDelegatorMap[delegator];
-    uint256 newDeposit = d.newDeposit;
-    if (amount == 0) {
-      amount = newDeposit;
-    }
-    require(newDeposit != 0, "delegator does not exist");
-    if (newDeposit != amount) {
-      require(amount >= requiredCoinDeposit, "undelegate amount is too small"); 
-      require(newDeposit >= requiredCoinDeposit + amount, "remaining amount is too small");
-    }
     uint256 rewardAmount = collectCoinReward(a, d, 0x7FFFFFFF);
+    require(d.deposit != 0, "Not enough deposit token");
+    uint256 deposit = d.deposit;
+    if (amount == 0) {
+      amount = deposit;
+    }
+    if (deposit != amount) {
+      require(amount >= requiredCoinDeposit, "undelegate amount is too small"); 
+      require(d.newDeposit >= requiredCoinDeposit + amount, "remaining amount is too small");
+    }
     a.totalDeposit -= amount;
 
-    // HARDFORK V-1.0.3
-    // when handling undelegate, which can be triggered by either REAL undelegate or a transfer
-    // the delegated CORE tokens are consumed in the following order
-    //  1. the amount of CORE which are not eligible for claiming rewards
-    //  2. the amount of self-delegated CORE eligible for claiming rewards (d.deposit)
-    //  3. the amount of transferred in CORE eligible for claiming rewards (d.transferInDeposit)
-    // deductedInDeposit is the amount of transferred in CORE needs to be deducted from rewards calculation/distribution
-    // if it is a REAL undelegate, the value will be added to the DEBT map
-    // which takes effect when users claim rewards (or other actions that trigger claiming)
-    uint256 deposit = d.changeRound < roundTag ? newDeposit : d.deposit;
-    newDeposit -= amount;
-    uint256 deductedInDeposit;
-    uint256 deductedOutDeposit;
-    if (newDeposit < d.transferInDeposit) {
-      deductedInDeposit = d.transferInDeposit - newDeposit;
-      d.transferInDeposit = newDeposit;
-      if (!isTransfer) {
-        debtDepositMap[roundTag][msg.sender] += deductedInDeposit;
-      }
-      deductedOutDeposit = deposit;
-    } else if (newDeposit < d.transferInDeposit + deposit) {
-      deductedOutDeposit = d.transferInDeposit + deposit - newDeposit;
-    }
-
-    // HARDFORK V-1.0.3   
-    // deductedOutDeposit is the amount of self-delegated CORE needs to be deducted from rewards calculation/distribution
-    // if it is a REAL undelegate, the amount is deducted from the reward set directly
-    // otherwise, the amount will be added to d.transferOutDeposit which can be used to claim rewards as d.deposit
-    if (deductedOutDeposit != 0) {
-      deposit -= deductedOutDeposit;
+    if (isTransfer) {
+      d.transferOutDeposit += amount;
+    } else {
       if (a.rewardSet.length != 0) {
         Reward storage r = a.rewardSet[a.rewardSet.length - 1];
         if (r.round == roundTag) {
-          if (isTransfer) {
-            d.transferOutDeposit += deductedOutDeposit;
-          } else {
-            r.coin -= deductedOutDeposit;
-          }
-        } else {
-          deductedOutDeposit = 0;
+          r.coin -= amount;
         }
-      } else {
-        deductedOutDeposit = 0;
       }
     }
 
-    if (newDeposit == 0 && d.transferOutDeposit == 0) {
+    if (!isTransfer && d.newDeposit == amount && d.transferOutDeposit == 0) {
       delete a.cDelegatorMap[delegator];
+      removeCandidate(delegator, agent);
     } else {
-      d.deposit = deposit;
-      d.newDeposit = newDeposit;
-      d.changeRound = roundTag;
+      d.deposit -= amount;
+      d.newDeposit -= amount;
     }
 
     if (rewardAmount != 0) {
       distributeReward(payable(delegator), rewardAmount);
     }
 
-    return (amount, deductedInDeposit + deductedOutDeposit);
+    return amount;
   }
 
   function collectCoinReward(Reward storage r, uint256 deposit) internal returns (uint256 rewardAmount) {
@@ -638,30 +599,18 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
         break;
       }
       uint256 deposit = d.newDeposit;
-      // HARDFORK V-1.0.3  
+      // HARDFORK V-1.0.10
       // d.deposit and d.transferOutDeposit are both eligible for claiming rewards
-      // however, d.transferOutDeposit will be used to pay the DEBT for the delegator before that
-      // the rewards from the DEBT will be collected and sent to the system reward contract
       if (rRound == changeRound) {
-        uint256 transferOutDeposit = d.transferOutDeposit;
-        uint256 debt = debtDepositMap[rRound][msg.sender];
-        if (transferOutDeposit > debt) {
-          transferOutDeposit -= debt;
+        if (debtDepositMap[rRound][msg.sender] != 0) {
           debtDepositMap[rRound][msg.sender] = 0;
-        } else {
-          debtDepositMap[rRound][msg.sender] -= transferOutDeposit;
-          transferOutDeposit = 0;
         }
-        if (transferOutDeposit != d.transferOutDeposit) {
-          uint256 undelegateReward = collectCoinReward(r, d.transferOutDeposit - transferOutDeposit);
-          if (r.coin == 0) {
-            delete a.rewardSet[rewardIndex];
-          }
-          ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: undelegateReward }();
-        }
+        uint256 transferOutDeposit = d.transferOutDeposit;
         deposit = d.deposit + transferOutDeposit;
         d.deposit = d.newDeposit;
-        d.transferOutDeposit = 0;
+        if (transferOutDeposit != 0) {
+          d.transferOutDeposit = 0;
+        }
       }
       if (deposit != 0) {
         rewardAmount += collectCoinReward(r, deposit);

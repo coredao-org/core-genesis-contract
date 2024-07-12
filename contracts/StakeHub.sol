@@ -96,7 +96,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       rewardValue = 0;
       for (uint256 j = 0; j < validatorSize; ++j) {
         validator = validators[j];
-        // This code scope is used for deploy as genesis 
+        // This code scope is used for deploy as genesis
         if (candidateScoreMap[validator] == 0) {
           burnReward += rewardList[j] / collateralSize;
           rewards[j] = 0;
@@ -105,9 +105,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         uint256 r = rewardList[j] * candidateAmountMap[validator][i] * cs.factor / candidateScoreMap[validator];
         rewards[j] = r * cs.discount / DENOMINATOR;
         rewardValue += rewards[j];
-        if (cs.discount != DENOMINATOR) {
-          burnReward += (r - rewards[j]);
-        }
+        burnReward += (r - rewards[j]);
         emit roundReward(collaterals[i].name, validator, rewards[j]);
       }
       IAgent(collaterals[i].agent).distributeReward{ value: rewardValue }(validators, rewards, roundTag);

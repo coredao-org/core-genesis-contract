@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
-import "../lib/BitcoinHelper.sol";
 
 interface IBitcoinStake {
   /// Bitcoin delegate, it is called by relayer via BitcoinAgent.verifyMintTx
