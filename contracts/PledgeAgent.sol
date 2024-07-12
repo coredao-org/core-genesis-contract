@@ -49,9 +49,12 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
   // value: amount of CORE tokens claimable
   mapping(address => uint256) public rewardMap;
 
-  // This field is not used in the latest implementation
+  // This field position is never used in previous.
   // It stays here in order to keep data compatibility for TestNet upgrade
-  mapping(bytes20 => address) public btc2ethMap;
+  // HARDFORK V-1.0.10
+  // key: delegator address
+  // value: delegator info.
+  mapping(address => Delegator) public delegatorsMap;
 
   // key: round index
   // value: useful state information of round
@@ -62,7 +65,7 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
   // It is initialized to 1.
   uint256 public roundTag;
 
-  // HARDFORK V-1.0.3 
+  // HARDFORK V-1.0.3
   // debtDepositMap keeps delegator's amount of CORE which should be deducted when claiming rewards in every round
   mapping(uint256 => mapping(address => uint256)) public debtDepositMap;
 
@@ -150,6 +153,11 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     uint256 btcFactor;
   }
 
+  struct Delegator {
+    address[] candidates;
+    uint256 amount;
+  }
+
   /*********************** events **************************/
   event paramChange(string key, bytes value);
   event delegatedCoin(address indexed agent, address indexed delegator, uint256 amount, uint256 totalAmount);
@@ -162,7 +170,6 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     uint256 totalAmount
   );
   event btcPledgeExpired(bytes32 indexed txid, address indexed delegator);
-  event roundReward(address indexed agent, uint256 coinReward, uint256 powerReward, uint256 btcReward);
   event claimedReward(address indexed delegator, address indexed operator, uint256 amount, bool success);
 
   /// The validator candidate is inactive, it is expected to be active
@@ -282,21 +289,23 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     }
     uint256 newDeposit = delegateCoin(agent, msg.sender, msg.value, 0);
     emit delegatedCoin(agent, msg.sender, msg.value, newDeposit);
+    addCandidate(msg.sender, agent);
   }
 
   /// Undelegate coin from a validator
-  /// @param agent The operator address of validator
-  function undelegateCoin(address agent) external {
-    undelegateCoin(agent, 0);
+  /// @param candidate The operator address of validator
+  function undelegateCoin(address candidate) external {
+    undelegateCoin(candidate, 0);
   }
 
   /// Undelegate coin from a validator
-  /// @param agent The operator address of validator
+  /// @param candidate The operator address of validator
   /// @param amount The amount of CORE to undelegate
-  function undelegateCoin(address agent, uint256 amount) public {
-    (uint256 deposit, ) = undelegateCoin(agent, msg.sender, amount, false);
+  function undelegateCoin(address candidate, uint256 amount) public {
+    (uint256 deposit, ) = undelegateCoin(candidate, msg.sender, amount, false);
     Address.sendValue(payable(msg.sender), deposit);
-    emit undelegatedCoin(agent, msg.sender, deposit);
+    emit undelegatedCoin(candidate, msg.sender, deposit);
+    // TODO removeCandidate(msg.sender, address candidate)
   }
 
   /// Transfer coin stake to a new validator
@@ -362,6 +371,39 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
       distributeReward(payable(msg.sender), rewardSum);
     }
     return (rewardSum, roundLimit >= 0);
+  }
+
+  function claimReward() external returns (uint256) {
+    uint256 reward;
+    uint256 rewardSum = rewardMap[msg.sender];
+    if (rewardSum != 0) {
+      rewardMap[msg.sender] = 0;
+    }
+
+    Delegator storage delegator = delegatorsMap[msg.sender];
+    uint256 candidateSize = delegator.candidates.length;
+    for (uint256 i = candidateSize; i != 0;) {
+      --i;
+      Agent storage a = agentsMap[delegator.candidates[i]];
+      if (a.rewardSet.length == 0) {
+        continue;
+      }
+      CoinDelegator storage d = a.cDelegatorMap[msg.sender];
+      if (d.newDeposit == 0 && d.transferOutDeposit == 0) {
+        continue;
+      }
+      reward = collectCoinReward(a, d, 0xFFFFFFFF);
+      rewardSum += reward;
+      if (d.newDeposit == 0 && d.transferOutDeposit == 0) {
+        delete a.cDelegatorMap[msg.sender];
+        removeCandidate(msg.sender, delegator.candidates[i]);
+      }
+    }
+
+    if (rewardSum != 0) {
+      distributeReward(payable(msg.sender), rewardSum);
+    }
+    return rewardSum;
   }
 
   // HARDFORK V-1.0.7 
@@ -674,6 +716,31 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     return (reward, claimLimit);
   }
 
+  function addCandidate(address delegator, address candidate) internal {
+    Delegator storage d = delegatorsMap[delegator];
+    uint256 l = d.candidates.length;
+    for (uint256 i = 0; i < l; ++i) {
+      if (d.candidates[i] == candidate) {
+        return;
+      }
+    }
+    d.candidates.push(candidate);
+  }
+
+  function removeCandidate(address delegator, address candidate) internal {
+    Delegator storage d = delegatorsMap[delegator];
+    uint256 l = d.candidates.length;
+    for (uint256 i = 0; i < l; ++i) {
+      if (d.candidates[i] == candidate) {
+        if (i + 1 < l) {
+          d.candidates[i] = d.candidates[l-1];
+        }
+        d.candidates.pop();
+        return;
+      }
+    }
+  }
+
   /*********************** Governance ********************************/
   /// Update parameters through governance vote
   /// @param key The name of the parameter
@@ -730,8 +797,8 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     return expireInfo.agent2valueMap[agent];
   }
 
-  function getStakeInfo(address candidator) external view returns (uint256 core, uint256 hashpower, uint256 btc) {
-    Agent storage agent = agentsMap[candidator];
+  function getStakeInfo(address candidate) external view returns (uint256 core, uint256 hashpower, uint256 btc) {
+    Agent storage agent = agentsMap[candidate];
     core = agent.coin;
     hashpower = agent.power / POWER_BLOCK_FACTOR;
     btc = agent.btc;
