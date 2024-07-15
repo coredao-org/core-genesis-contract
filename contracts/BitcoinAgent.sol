@@ -27,11 +27,11 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
 
   // Key: candidate
   // value: btc amount;
-  mapping (address => StakeAmount) candidateMap;
+  mapping (address => StakeAmount) public candidateMap;
 
   // key: bitcoin tx id
   // value: bitcoin receipt.
-  mapping(bytes32 => BtcReceipt) btcReceiptMap;
+  mapping(bytes32 => BtcReceipt) public btcReceiptMap;
 
   // minimum acceptable value for a BTC staking transaction
   uint64 public minBtcValue;
@@ -40,9 +40,9 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   uint32 public btcConfirmBlock;
 
   // key: delegator, value: fee
-  mapping(address => uint256) liabilities;
+  mapping(address => uint256) public liabilities;
   // key: relayer, value: fee
-  mapping(address => uint256) creditors;
+  mapping(address => uint256) public creditors;
 
   struct BtcReceipt {
     uint32 version;

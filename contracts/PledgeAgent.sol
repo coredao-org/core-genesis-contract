@@ -12,15 +12,12 @@ import "./lib/Memory.sol";
 import "./lib/SatoshiPlusHelper.sol";
 import "./System.sol";
 
-/// This contract manages user delegate, also known as stake
-/// Including both coin delegate and hash delegate
-
+/// This contract manages user delegate CORE.
 /// HARDFORK V-1.0.3
 /// `effective transfer` is introduced in this hardfork to keep the rewards for users 
 /// when transferring CORE tokens from one validator to another
 /// `effective transfer` only contains the amount of CORE tokens transferred 
 /// which are eligible for claiming rewards in the acting round
-
 contract PledgeAgent is IAgent, System, IParamSubscriber {
   using BitcoinHelper for *;
   using TypedMemView for *;
