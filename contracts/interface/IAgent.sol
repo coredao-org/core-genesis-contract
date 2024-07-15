@@ -13,7 +13,7 @@ interface IAgent {
   /// @return totalAmount The sum of all amounts of valid/invalid candidates.
   function getStakeAmounts(address[] calldata candidates, uint256 round) external returns (uint256[] memory amounts, uint256 totalAmount);
 
-  /// Start new round, this is called by the CandidateHub contract
+  /// Start new round, this is called by the StakeHub contract
   /// @param validators List of elected validators in this round
   /// @param round The new round tag
   function setNewRound(address[] calldata validators, uint256 round) external;

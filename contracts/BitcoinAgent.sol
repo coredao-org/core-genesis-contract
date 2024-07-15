@@ -59,7 +59,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /*********************** events **************************/
   event paramChange(string key, bytes value);
   event claimedReward(address indexed delegator, uint256 amount);
-  event verifiedMintTx(bytes32 indexed txid, uint32 version, uint32 blockHeight, uint32 outputIndex);
+  event verifiedMintTx(bytes32 indexed txid, uint32 version, uint32 blockHeight, uint32 outputIndex, uint256 fee);
   event verifiedBurnTx(bytes32 indexed txid, uint32 version, uint32 blockHeight, uint32 outputIndex);
 
   function init() external onlyNotInit {
@@ -127,7 +127,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   }
 
 
-  /// Start new round, this is called by the CandidateHub contract
+  /// Start new round, this is called by the StakeHub contract
   /// @param validators List of elected validators in this round
   /// @param round The new round tag
   function setNewRound(address[] calldata validators, uint256 round) external override onlyStakeHub {
@@ -186,7 +186,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     br.height = blockHeight;
     br.outputIndex = outputIndex;
     br.version = version;
-    emit verifiedMintTx(txid, version, blockHeight, outputIndex);
+    emit verifiedMintTx(txid, version, blockHeight, outputIndex, fee);
   }
 
   function verifyBurnTx(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index) external {
