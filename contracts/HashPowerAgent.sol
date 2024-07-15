@@ -4,7 +4,6 @@ pragma solidity 0.8.4;
 import "./interface/IAgent.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/ILightClient.sol";
-import "./lib/Address.sol";
 import "./System.sol";
 
 /// This contract manages Bitcoin miners delegate hash power.
@@ -34,8 +33,8 @@ contract HashPowerAgent is IAgent, System, IParamSubscriber {
   /// Receive round rewards from StakeHub, which is triggered at the beginning of turn round
   /// @param validatorList List of validator operator addresses
   /// @param rewardList List of reward amount
-  /// @param roundTag The round tag
-  function distributeReward(address[] calldata validatorList, uint256[] calldata rewardList, uint256 roundTag) external payable override onlyStakeHub {
+  /// @param round The round tag
+  function distributeReward(address[] calldata validatorList, uint256[] calldata rewardList, uint256 round) external override onlyStakeHub {
     uint256 validatorSize = validatorList.length;
     require(validatorSize == rewardList.length, "the length of validatorList and rewardList should be equal");
 
@@ -47,7 +46,7 @@ contract HashPowerAgent is IAgent, System, IParamSubscriber {
       if (rewardList[i] == 0) {
         continue;
       }
-      address[] memory miners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(roundTag-7, validatorList[i]);
+      address[] memory miners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(round-7, validatorList[i]);
       // distribute rewards to every miner
       minerSize = miners.length;
       if (minerSize != 0) {
@@ -77,20 +76,14 @@ contract HashPowerAgent is IAgent, System, IParamSubscriber {
     // nothing.
   }
 
-  /*********************** External methods ***************************/
-  /// Claim reward for miner
-  /// The param represents list of validators to claim rewards on.
-  /// this contract implement is ignore.
-  /// @return (Amount claimed, Are all rewards claimed)
-  function claimReward(address[] calldata) external returns (uint256, bool) {
+  /// Claim reward for delegator
+  /// @return reward Amount claimed
+  function claimReward() external override onlyStakeHub returns (uint256) {
     uint256 rewardSum = rewardMap[msg.sender];
     if (rewardSum != 0) {
       rewardMap[msg.sender] = 0;
-      Address.sendValue(payable(msg.sender), rewardSum);
-      emit claimedReward(msg.sender, rewardSum);
     }
-
-    return (rewardSum, true);
+    return rewardSum;
   }
 
   /*********************** Governance ********************************/

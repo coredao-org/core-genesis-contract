@@ -7,6 +7,7 @@ import "./interface/IAgent.sol";
 import "./interface/ISystemReward.sol";
 import "./interface/IValidatorSet.sol";
 import "./System.sol";
+import "./lib/Address.sol";
 import "./lib/Memory.sol";
 import "./lib/BytesLib.sol";
 
@@ -62,6 +63,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /*********************** events **************************/
   event roundReward(string indexed name, address indexed validator, uint256 amounted);
   event paramChange(string key, bytes value);
+  event claimedReward(address indexed delegator, uint256 amount);
 
   function init() external onlyNotInit {
     // add three collaterals into list
@@ -108,7 +110,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         burnReward += (r - rewards[j]);
         emit roundReward(collaterals[i].name, validator, rewards[j]);
       }
-      IAgent(collaterals[i].agent).distributeReward{ value: rewardValue }(validators, rewards, roundTag);
+      IAgent(collaterals[i].agent).distributeReward(validators, rewards, roundTag);
     }
     // burn overflow reward of hardcap
     ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: burnReward }();
@@ -179,13 +181,19 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     }
   }
 
-  /// Claim reward for miner
-  /// The param represents list of validators to claim rewards on.
-  /// this contract implement is ignore.
-  /// @return rewardAmount Amount claimed
-  function claimReward() external returns (uint256 rewardAmount) {
-    // TODO will implement at next version.
-    // delegator  core, btc, agents
+  /// Claim reward for delegator
+  /// @return reward Amount claimed
+  function claimReward() external returns (uint256 reward) {
+    uint256 subReward;
+    uint256 collateralSize = collaterals.length;
+    for (uint256 i = 0; i < collateralSize; ++i) {
+      subReward = IAgent(collaterals[i].agent).claimReward();
+      reward += subReward;
+    }
+    if (reward != 0) {
+      Address.sendValue(payable(msg.sender), reward);
+      emit claimedReward(msg.sender, reward);
+    }
   }
 
   /*********************** Governance ********************************/

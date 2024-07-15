@@ -199,11 +199,7 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
   /// Receive round rewards from StakeHub, which is triggered at the beginning of turn round
   /// @param validators List of validator operator addresses
   /// @param rewardList List of reward amount
-  function distributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256)
-    external
-    payable
-    override
-    onlyStakeHub
+  function distributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256) external override onlyStakeHub
   {
     uint256 validateSize = validators.length;
     require(validateSize == rewardList.length, "the length of validators and rewardList should be equal");
@@ -358,7 +354,7 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     return (rewardSum, roundLimit >= 0);
   }
 
-  function claimReward() external returns (uint256) {
+  function claimReward() external override onlyStakeHub returns (uint256) {
     uint256 reward;
     uint256 rewardSum = rewardMap[msg.sender];
     if (rewardSum != 0) {

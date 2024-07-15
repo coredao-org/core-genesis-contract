@@ -5,7 +5,6 @@ import "./interface/IAgent.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/IBitcoinStake.sol";
 import "./interface/ICandidateHub.sol";
-import "./lib/Address.sol";
 import "./lib/BytesLib.sol";
 import "./lib/Memory.sol";
 import "./lib/BitcoinHelper.sol";
@@ -42,6 +41,11 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   // Key: candidator
   // value: Candidate information;
   mapping(address => Candidate) candidateMap;
+
+  // This field is used to store reward of delegators
+  // key: delegator address
+  // value: amount of CORE tokens claimable
+  mapping(address => uint256) public rewardMap;
 
   // This field keeps the amount of expired BTC staking value for each round
   // Key: round
@@ -86,12 +90,11 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   event migrated(bytes32 indexed txid);
   event transferredBtc(
     bytes32 indexed txid,
-    address sourceAgent,
-    address targetAgent,
+    address sourceCandidate,
+    address targetCandidate,
     address delegator,
     uint256 amount
   );
-  event claimedReward(address indexed delegator, address indexed operator, uint256 amount);
 
   /// The validator candidate is inactive, it is expected to be active
   /// @param candidate Address of the validator candidate
@@ -157,7 +160,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   /// Receive round rewards from BitcoinAgent. It is triggered at the beginning of turn round
   /// @param validators List of validator operator addresses
   /// @param rewardList List of reward amount
-  function distributeReward(address[] calldata validators, uint256[] calldata rewardList) external override payable onlyBtcAgent {
+  function distributeReward(address[] calldata validators, uint256[] calldata rewardList) external override onlyBtcAgent {
     uint256 length = validators.length;
 
     uint256 historyReward;
@@ -231,9 +234,12 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   }
 
   /// Claim reward for delegator
-  /// @return Amount claimed
-  function claimReward() external override returns (uint256) {
-    uint256 rewardAmount;
+  /// @return reward Amount claimed
+  function claimReward() external override onlyBtcAgent returns (uint256 reward) {
+    reward = rewardMap[msg.sender];
+    if (reward != 0) {
+      rewardMap[msg.sender] = 0;
+    }
     bytes32[] storage txids = delegatorMap[msg.sender].txids;
     for (uint256 i = txids.length; i != 0; i--) {
       bytes32 txid = txids[i - 1];
@@ -243,12 +249,9 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
       if (dr.round < roundTag - 1 && dr.round < unlockRound) {
         uint256 minRound = roundTag - 1 < unlockRound ? roundTag - 1 : unlockRound;
         // Calculate reward
-        uint256 reward = (getRoundRewardPerBTC(dr.candidate, minRound) - getRoundRewardPerBTC(dr.candidate, dr.round)) * dr.amount / SatoshiPlusHelper.BTC_DECIMAL;
-        rewardAmount += reward;
+        uint256 txReward = (getRoundRewardPerBTC(dr.candidate, minRound) - getRoundRewardPerBTC(dr.candidate, dr.round)) * dr.amount / SatoshiPlusHelper.BTC_DECIMAL;
+        reward += txReward;
         dr.round = roundTag - 1;
-        if (reward != 0) {
-           emit claimedReward(msg.sender, dr.candidate, reward);
-        }
       }
 
       // Remove txid and deposit receipt
@@ -260,12 +263,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
         delete receiptMap[txid];
       }
     }
-
-    // Send reward to delegator
-    if (rewardAmount != 0) {
-      Address.sendValue(payable(msg.sender), rewardAmount);
-    }
-    return rewardAmount;
+    return reward;
   }
 
   function transferBtc(bytes32 txid, address targetCandidate) external {
@@ -282,7 +280,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     // Calculate reward
     uint256 reward = (accuredRewardPerBTCMap[depositReceipt.candidate][roundTag - 1] - accuredRewardPerBTCMap[depositReceipt.candidate][depositReceipt.round]) * depositReceipt.amount / SatoshiPlusHelper.BTC_DECIMAL;
     if (reward != 0) {
-      Address.sendValue(payable(msg.sender), reward);
+      rewardMap[msg.sender] += reward;
     }
 
     // Set candidate to targetCandidate

@@ -22,5 +22,9 @@ interface IAgent {
   /// @param validators List of validator operator addresses
   /// @param rewardList List of reward amount
   /// @param round The round tag
-  function distributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 round) external payable;
+  function distributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 round) external;
+
+  /// Claim reward for delegator
+  /// @return reward Amount claimed
+  function claimReward() external returns (uint256);
 }

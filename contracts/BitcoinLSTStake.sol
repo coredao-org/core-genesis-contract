@@ -6,7 +6,6 @@ import "./interface/IParamSubscriber.sol";
 import "./interface/IValidatorSet.sol";
 import "./interface/ICandidateHub.sol";
 import "./interface/IBitcoinLSTToken.sol";
-import "./lib/Address.sol";
 import "./lib/BytesLib.sol";
 import "./lib/Memory.sol";
 import "./lib/BitcoinHelper.sol";
@@ -60,6 +59,11 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   // value: reward per BTC accumulated
   mapping(uint256 => uint256) accuredRewardPerBTCMap;
 
+  // This field is used to store lst reward of delegators
+  // key: delegator address
+  // value: amount of CORE tokens claimable
+  mapping(address => uint256) public rewardMap;
+
   // the current round, it is updated in setNewRound.
   uint256 public roundTag;
 
@@ -98,7 +102,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   event delegated(bytes32 indexed txid, address indexed delegator, uint256 amount);
   event redeemed(address indexed delegator, uint256 amount, uint256 utxoFee, bytes pkscript);
   event undelegated(bytes32 indexed txid, address indexed delegator, uint256 amount, bytes pkscript);
-  event claimedReward(address indexed delegator, uint256 reward);
   event addedWallet(bytes32 indexed _hash, uint64 _type);
   event removedWallet(bytes32 indexed _hash, uint64 _type);
 
@@ -201,7 +204,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// Receive round rewards from BitcoinAgent. It is triggered at the beginning of turn round
   /// @param validators List of validator operator addresses
   /// @param rewardList List of reward amount
-  function distributeReward(address[] calldata validators, uint256[] calldata rewardList) external override payable onlyBtcAgent {
+  function distributeReward(address[] calldata validators, uint256[] calldata rewardList) external override onlyBtcAgent {
     uint256 reward;
     uint256 validatorSize = validators.length;
     for (uint256 i = 0; i < validatorSize; ++i) {
@@ -251,9 +254,9 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   }
 
   /// Claim reward for delegator
-  /// @return rewardAmount Amount claimed
-  function claimReward() external override returns (uint256 rewardAmount) {
-    rewardAmount = _updateUserRewards(msg.sender);
+  /// @return reward Amount claimed
+  function claimReward() external override onlyBtcAgent returns (uint256 reward) {
+    return _updateUserRewards(msg.sender, true);
   }
 
   /*********************** External implementations ***************************/
@@ -406,7 +409,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     return 0;
   }
 
-  function _updateUserRewards(address userAddress) internal returns (uint256 reward) {
+  function _updateUserRewards(address userAddress, bool claim) internal returns (uint256 reward) {
 
     UserStakeInfo storage user = userStakeInfo[userAddress];
     uint256 changeRound = user.changeRound;
@@ -419,13 +422,17 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
         reward += (user.totalAmount - user.stakedAmount) * (lastRoundReward - getRoundRewardPerBTC(changeRound)) / SatoshiPlusHelper.BTC_DECIMAL;
         user.stakedAmount = user.totalAmount;
       }
-      if (reward != 0) {
-        Address.sendValue(payable(userAddress), reward);
-        emit claimedReward(userAddress, reward);
-      }
     }
     if (changeRound != roundTag) {
       user.changeRound = roundTag;
+    }
+    if (claim) {
+      if (rewardMap[msg.sender] != 0) {
+        reward += rewardMap[msg.sender];
+        rewardMap[msg.sender] = 0;
+      }
+    } else {
+      rewardMap[msg.sender] += reward;
     }
   }
 
@@ -434,7 +441,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     UserStakeInfo storage user = userStakeInfo[from];
     uint256 balance = user.totalAmount;
     require(value <= balance, "Insufficient balance");
-    _updateUserRewards(from);
+    _updateUserRewards(from, false);
     user.totalAmount -= value;
     if (user.totalAmount < user.stakedAmount) {
       user.stakedAmount = user.totalAmount;
@@ -443,7 +450,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
   function _afterMint(address to, uint256 value) internal {
     require(to != address(0), "invalid receiver");
-    _updateUserRewards(to);
+    _updateUserRewards(to, false);
     userStakeInfo[to].totalAmount += value;
   }
 }

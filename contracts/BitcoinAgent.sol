@@ -79,7 +79,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /// Receive round rewards from StakeHub, which is triggered at the beginning of turn round
   /// @param validatorList List of validator operator addresses
   /// @param rewardList List of reward amount
-  function distributeReward(address[] calldata validatorList, uint256[] calldata rewardList, uint256 /*roundTag*/) external payable override onlyStakeHub {
+  function distributeReward(address[] calldata validatorList, uint256[] calldata rewardList, uint256 /*roundTag*/) external override onlyStakeHub {
     uint256 validatorSize = validatorList.length;
     require(validatorSize == rewardList.length, "the length of validatorList and rewardList should be equal");
 
@@ -96,7 +96,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
       rewards[i] = avgReward * sa.lstStakeAmount / SatoshiPlusHelper.BTC_DECIMAL;
       rewardValue += rewards[i];
     }
-    IBitcoinStake(btcLSTStake).distributeReward{ value: rewardValue }(validatorList, rewards);
+    IBitcoinStake(btcLSTStake).distributeReward(validatorList, rewards);
     rewardValue = 0;
     for (uint256 i = 0; i < validatorSize; ++i) {
       if (rewardList[i] == 0) {
@@ -105,7 +105,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
       rewards[i] = rewardList[i] - rewards[i];
       rewardValue += rewards[i];
     }
-    IBitcoinStake(btcStake).distributeReward{ value: rewardValue }(validatorList, rewards);
+    IBitcoinStake(btcStake).distributeReward(validatorList, rewards);
   }
 
   /// Get stake amount
@@ -133,6 +133,14 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   function setNewRound(address[] calldata validators, uint256 round) external override onlyStakeHub {
     IBitcoinStake(btcStake).setNewRound(validators, round);
     IBitcoinStake(btcLSTStake).setNewRound(validators, round);
+  }
+
+  /// Claim reward for delegator
+  /// @return reward Amount claimed
+  function claimReward() external override onlyStakeHub returns (uint256 reward) {
+    reward = IBitcoinStake(btcStake).claimReward();
+    reward += IBitcoinStake(btcLSTStake).claimReward();
+    return reward;
   }
 
   /*********************** External methods ***************************/
@@ -197,15 +205,6 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
 
       // TODO voutView exchange set to btcReceiptMap.
     }
-  }
-
-  /// Claim reward for miner
-  /// The param represents list of validators to claim rewards on.
-  /// this contract implement is ignore.
-  /// @return rewardAmount Amount claimed
-  function claimReward() external returns (uint256 rewardAmount) {
-    rewardAmount = IBitcoinStake(btcStake).claimReward();
-    rewardAmount += IBitcoinStake(btcLSTStake).claimReward();
   }
 
   /*********************** Internal method ********************************/
