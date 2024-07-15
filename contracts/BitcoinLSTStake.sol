@@ -326,14 +326,18 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     (bytes32 _hash, uint64 _type) = extractPkScriptAddr(pkscript);
     require(_type != WTYPE_UNKNOWN, "Invalid BTC wallet");
 
+    bool returned = false;
     for (uint256 i = 0; i != wallets.length; ++i) {
       if (wallets[i].hash == _hash && wallets[i].typeMask == _type) {
         wallets[i].status = WST_ACTIVE;
-        return;
+        returned = true;
+        break;
       }
     }
 
-    wallets.push(WalletInfo(_hash, _type, WST_ACTIVE));
+    if (!returned) {
+      wallets.push(WalletInfo(_hash, _type, WST_ACTIVE));
+    }
     emit addedWallet(_hash, _type);
   }
 
@@ -341,13 +345,19 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     (bytes32 _hash, uint64 _type) = extractPkScriptAddr(pkscript);
     require(_type != WTYPE_UNKNOWN, "Invalid BTC wallet");
 
+    bool returned = false;
     for (uint256 i = 0; i != wallets.length; ++i) {
       if (wallets[i].hash == _hash && wallets[i].typeMask == _type) {
         wallets[i].status = WST_INACTIVE;
-        return;
+        returned = true;
+        break;
       }
     }
-    require(false, "Wallet not found");
+
+    if (!returned) {
+      require(false, "Wallet not found");
+    }
+    
     emit removedWallet(_hash, _type);
   }
 
