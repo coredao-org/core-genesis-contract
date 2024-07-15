@@ -265,22 +265,6 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     }
   }
 
-  function moveExpireBtc(uint256 newRound) external onlyStakeHub {
-    for (uint256 r = roundTag + 1; r <= newRound; ++r) {
-      BtcExpireInfo storage expireInfo = round2expireInfoMap[r];
-      uint256 j = expireInfo.agentAddrList.length;
-      while (j > 0) {
-        j--;
-        address agent = expireInfo.agentAddrList[j];
-        agentsMap[agent].totalBtc -= expireInfo.agent2valueMap[agent];
-        expireInfo.agentAddrList.pop();
-        delete expireInfo.agent2valueMap[agent];
-        delete expireInfo.agentExistMap[agent];
-      }
-      delete round2expireInfoMap[r];
-    }
-  }
-
   /*********************** External methods ***************************/
   /// Delegate coin to a validator
   /// @param agent The operator address of validator
