@@ -256,7 +256,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// Claim reward for delegator
   /// @return reward Amount claimed
   function claimReward() external override onlyBtcAgent returns (uint256 reward) {
-    return _updateUserRewards(msg.sender, true);
+    return _updateUserRewards(tx.origin, true);
   }
 
   /*********************** External implementations ***************************/
@@ -437,12 +437,12 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       user.changeRound = roundTag;
     }
     if (claim) {
-      if (rewardMap[msg.sender] != 0) {
-        reward += rewardMap[msg.sender];
-        rewardMap[msg.sender] = 0;
+      if (rewardMap[userAddress] != 0) {
+        reward += rewardMap[userAddress];
+        rewardMap[userAddress] = 0;
       }
     } else {
-      rewardMap[msg.sender] += reward;
+      rewardMap[userAddress] += reward;
     }
   }
 

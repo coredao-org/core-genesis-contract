@@ -283,7 +283,6 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     uint256 deposit = undelegateCoin(candidate, msg.sender, amount, false);
     Address.sendValue(payable(msg.sender), deposit);
     emit undelegatedCoin(candidate, msg.sender, deposit);
-    // TODO removeCandidate(msg.sender, address candidate)
   }
 
   /// Transfer coin stake to a new validator
@@ -352,34 +351,35 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
   }
 
   function claimReward() external override onlyStakeHub returns (uint256) {
+    address delegator = tx.origin;
     uint256 reward;
-    uint256 rewardSum = rewardMap[msg.sender];
+    uint256 rewardSum = rewardMap[delegator];
     if (rewardSum != 0) {
-      rewardMap[msg.sender] = 0;
+      rewardMap[delegator] = 0;
     }
 
-    Delegator storage delegator = delegatorsMap[msg.sender];
-    uint256 candidateSize = delegator.candidates.length;
+    address[] storage candidates = delegatorsMap[delegator].candidates;
+    uint256 candidateSize = candidates.length;
     for (uint256 i = candidateSize; i != 0;) {
       --i;
-      Agent storage a = agentsMap[delegator.candidates[i]];
+      Agent storage a = agentsMap[candidates[i]];
       if (a.rewardSet.length == 0) {
         continue;
       }
-      CoinDelegator storage d = a.cDelegatorMap[msg.sender];
+      CoinDelegator storage d = a.cDelegatorMap[delegator];
       if (d.newDeposit == 0 && d.transferOutDeposit == 0) {
         continue;
       }
       reward = collectCoinReward(a, d, 0xFFFFFFFF);
       rewardSum += reward;
       if (d.newDeposit == 0 && d.transferOutDeposit == 0) {
-        delete a.cDelegatorMap[msg.sender];
-        removeCandidate(msg.sender, delegator.candidates[i]);
+        delete a.cDelegatorMap[delegator];
+        removeCandidate(delegator, candidates[i]);
       }
     }
 
     if (rewardSum != 0) {
-      distributeReward(payable(msg.sender), rewardSum);
+      distributeReward(payable(delegator), rewardSum);
     }
     return rewardSum;
   }
@@ -469,7 +469,7 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
   /*********************** Internal methods ***************************/
   function distributeReward(address payable delegator, uint256 reward) internal {
     Address.sendValue(delegator, reward);
-    emit claimedReward(delegator, msg.sender, reward, true);
+    emit claimedReward(delegator, tx.origin, reward, true);
   }
 
   function delegateCoin(address agent, address delegator, uint256 deposit) internal returns (uint256) {

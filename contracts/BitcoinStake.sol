@@ -236,11 +236,12 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   /// Claim reward for delegator
   /// @return reward Amount claimed
   function claimReward() external override onlyBtcAgent returns (uint256 reward) {
-    reward = rewardMap[msg.sender];
+    address delegator = tx.origin;
+    reward = rewardMap[delegator];
     if (reward != 0) {
-      rewardMap[msg.sender] = 0;
+      rewardMap[delegator] = 0;
     }
-    bytes32[] storage txids = delegatorMap[msg.sender].txids;
+    bytes32[] storage txids = delegatorMap[delegator].txids;
     for (uint256 i = txids.length; i != 0; i--) {
       bytes32 txid = txids[i - 1];
       DepositReceipt storage dr = receiptMap[txid];

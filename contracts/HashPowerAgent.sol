@@ -79,9 +79,10 @@ contract HashPowerAgent is IAgent, System, IParamSubscriber {
   /// Claim reward for delegator
   /// @return reward Amount claimed
   function claimReward() external override onlyStakeHub returns (uint256) {
-    uint256 rewardSum = rewardMap[msg.sender];
+    address delegator = tx.origin;
+    uint256 rewardSum = rewardMap[delegator];
     if (rewardSum != 0) {
-      rewardMap[msg.sender] = 0;
+      rewardMap[delegator] = 0;
     }
     return rewardSum;
   }
