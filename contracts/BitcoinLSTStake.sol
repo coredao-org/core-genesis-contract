@@ -99,6 +99,8 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   event redeemed(address indexed delegator, uint256 amount, uint256 utxoFee, bytes pkscript);
   event undelegated(bytes32 indexed txid, address indexed delegator, uint256 amount, bytes pkscript);
   event claimedReward(address indexed delegator, uint256 reward);
+  event addedWallet(bytes32 indexed _hash, uint64 _type);
+  event removedWallet(bytes32 indexed _hash, uint64 _type);
 
   modifier onlyBtcLSTToken() {
     require(msg.sender == lstToken, 'only btc lst token can call this function');
@@ -329,6 +331,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     }
 
     wallets.push(WalletInfo(_hash, _type, WST_ACTIVE));
+    emit addedWallet(_hash, _type);
   }
 
   function removeWallet(bytes memory pkscript) internal {
@@ -342,6 +345,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       }
     }
     require(false, "Wallet not found");
+    emit removedWallet(_hash, _type);
   }
 
   function setLstAddress(bytes memory addr) internal {
