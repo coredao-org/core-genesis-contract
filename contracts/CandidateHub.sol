@@ -57,7 +57,6 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   mapping(address => uint256) public jailMap;
 
   uint256 public roundTag;
-  
 
   struct Candidate {
     address operateAddr;

@@ -559,6 +559,7 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
       } else {
         d.deposit = 0;
       }
+      d.changeRound = roundTag;
     }
     transferReward(delegator, historyRewardAmount, rewardAmount, false);
     return amount;
@@ -785,5 +786,9 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     core = agent.coin;
     hashpower = agent.power / POWER_BLOCK_FACTOR;
     btc = agent.btc;
+  }
+
+  function getCandidateListByDelegator(address delegator) external view returns (address[] memory) {
+    return delegatorsMap[delegator].candidates;
   }
 }
