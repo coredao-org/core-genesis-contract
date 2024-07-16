@@ -400,7 +400,7 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
         removeCandidate(delegator, candidates[i]);
       }
     }
-    transferReward(msg.sender, historyRewardSum, rewardSum, true);
+    transferReward(delegator, historyRewardSum, rewardSum, true);
 
     // set 0, send new reward by StakeHub
     rewardSum = newRewardMap[delegator];
