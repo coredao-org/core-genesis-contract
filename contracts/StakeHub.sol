@@ -26,7 +26,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   uint256 public constant DENOMINATOR = 1e4;
 
   // Collateral list.
-  Collateral[] collaterals;
+  Collateral[] public collaterals;
 
   // key: candidate op address
   // value: collaterals' stake amount list.

@@ -372,13 +372,12 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
   function claimReward() external override onlyStakeHub returns (uint256) {
     address delegator = tx.origin;
     uint256 reward;
-    uint256 rewardSum = rewardMap[delegator];
-    if (rewardSum != 0) {
+    uint256 rewardSum;
+    uint256 historyReward;
+    uint256 historyRewardSum = rewardMap[delegator];
+    if (historyRewardSum != 0) {
       rewardMap[delegator] = 0;
     }
-
-    uint256 historyReward;
-    uint256 historyRewardSum;
     address[] storage candidates = delegatorsMap[delegator].candidates;
     uint256 candidateSize = candidates.length;
     for (uint256 i = candidateSize; i != 0;) {
@@ -389,6 +388,7 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
       }
       CoinDelegator storage d = a.cDelegatorMap[delegator];
       if (d.newDeposit == 0 && d.transferOutDeposit == 0) {
+        removeCandidate(delegator, candidates[i], 0, true);
         continue;
       }
       (historyReward, reward) = collectCoinReward(a, d, 0xFFFFFFFF);

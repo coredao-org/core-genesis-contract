@@ -95,6 +95,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     address delegator,
     uint256 amount
   );
+  event btcExpired(bytes32 indexed txid, address indexed delegator);
 
   /// The validator candidate is inactive, it is expected to be active
   /// @param candidate Address of the validator candidate
@@ -261,6 +262,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
           txids[i - 1] = txids[txids.length - 1];
         }
         txids.pop();
+        emit btcExpired(txid, delegator);
         delete receiptMap[txid];
       }
     }
