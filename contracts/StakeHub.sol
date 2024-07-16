@@ -145,7 +145,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       for (uint256 j = 0; j < candidateSize; ++j) {
         scores[j] += amounts[j] * t;
         candiate = candidates[j];
-        if (candidateAmountMap[candiate].length <= i) {
+        // length should never be less than i
+        if (candidateAmountMap[candiate].length == i) {
           candidateAmountMap[candiate].push(amounts[j]);
         } else {
           candidateAmountMap[candiate][i] = amounts[j];

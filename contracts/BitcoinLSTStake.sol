@@ -101,7 +101,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   event paramChange(string key, bytes value);
   event delegated(bytes32 indexed txid, address indexed delegator, uint256 amount);
   event redeemed(address indexed delegator, uint256 amount, uint256 utxoFee, bytes pkscript);
-  event undelegated(bytes32 indexed txid, address indexed delegator, uint256 amount, bytes pkscript);
+  event undelegated(bytes32 indexed txid, address indexed delegator, uint256 outputIndex, uint256 amount, bytes pkscript);
   event addedWallet(bytes32 indexed _hash, uint64 _type);
   event removedWallet(bytes32 indexed _hash, uint64 _type);
 
@@ -186,8 +186,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
         Redeem storage rd = redeemRequests[rIndex];
         if (rd.amount == _amount && rd.pkscript0 == pk0 && rd.pkscript1 == pk1) {
           // emit event
-          emit undelegated(txid, rd.delegator, _amount, _pkScript.clone());
-          totalAmount -= _amount;
+          emit undelegated(txid, rd.delegator, index, _amount, _pkScript.clone());
           if (rIndex + 1 < redeemSize) {
             redeemRequests[rIndex].pkscript0 = redeemRequests[redeemSize].pkscript0;
             redeemRequests[rIndex].pkscript1 = redeemRequests[redeemSize].pkscript1;
@@ -293,6 +292,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     emit redeemed(msg.sender, amount, utxoFee, pkscript);
 
     _afterBurn(msg.sender, burnAmount);
+    totalAmount -= burnAmount;
   }
 
   /// callback when btclst token transferred.
