@@ -288,7 +288,6 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     }
     uint256 newDeposit = delegateCoin(agent, msg.sender, msg.value);
     emit delegatedCoin(agent, msg.sender, msg.value, newDeposit);
-    addCandidate(msg.sender, agent);
   }
 
   /// Undelegate coin from a validator
@@ -396,8 +395,8 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
       rewardSum += reward;
       historyRewardSum += historyReward;
       if (d.newDeposit == 0 && d.transferOutDeposit == 0) {
+        removeCandidate(delegator, candidates[i], 0, true);
         delete a.cDelegatorMap[delegator];
-        removeCandidate(delegator, candidates[i]);
       }
     }
     transferReward(delegator, historyRewardSum, rewardSum, true);
@@ -513,6 +512,7 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
       d.newDeposit += deposit;
     }
     transferReward(delegator, historyRewardAmount, rewardAmount, false);
+    addCandidate(delegator, agent, deposit, d.newDeposit);
     return d.newDeposit;
   }
   
@@ -549,11 +549,16 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     }
 
     if (!isTransfer && d.newDeposit == amount && d.transferOutDeposit == 0) {
+      removeCandidate(delegator, agent, amount, true);
       delete a.cDelegatorMap[delegator];
-      removeCandidate(delegator, agent);
     } else {
-      d.deposit -= amount;
+      removeCandidate(delegator, agent, amount, false);
       d.newDeposit -= amount;
+      if (d.deposit >= amount) {
+        d.deposit -= amount;
+      } else {
+        d.deposit = 0;
+      }
     }
     transferReward(delegator, historyRewardAmount, rewardAmount, false);
     return amount;
@@ -689,26 +694,31 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     return (historyRewardSum, rewardSum);
   }
 
-  function addCandidate(address delegator, address candidate) internal {
+  function addCandidate(address delegator, address candidate, uint256 deposit, uint256 totalDeposit) internal {
     Delegator storage d = delegatorsMap[delegator];
     uint256 l = d.candidates.length;
     for (uint256 i = 0; i < l; ++i) {
       if (d.candidates[i] == candidate) {
+        d.amount += deposit;
         return;
       }
     }
     d.candidates.push(candidate);
+    d.amount += totalDeposit;
   }
 
-  function removeCandidate(address delegator, address candidate) internal {
+  function removeCandidate(address delegator, address candidate, uint256 amount, bool pop) internal {
     Delegator storage d = delegatorsMap[delegator];
     uint256 l = d.candidates.length;
     for (uint256 i = 0; i < l; ++i) {
       if (d.candidates[i] == candidate) {
-        if (i + 1 < l) {
-          d.candidates[i] = d.candidates[l-1];
+        if (pop) {
+          if (i + 1 < l) {
+            d.candidates[i] = d.candidates[l-1];
+          }
+          d.candidates.pop();
         }
-        d.candidates.pop();
+        d.amount -= amount;
         return;
       }
     }
