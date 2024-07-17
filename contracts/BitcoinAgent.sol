@@ -207,6 +207,10 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     }
   }
 
+  function updateStakeAmount(address candidate, uint256 stakeAmount) external onlyBtcStake {
+    candidateMap[candidate].stakeAmount = stakeAmount;
+  }
+
   /*********************** Internal method ********************************/
   function parsePayloadVersionAndCheckProtocol(bytes29 payload) internal pure returns (uint32) {
     require(payload.len() >= 7, "payload length is too small");

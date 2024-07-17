@@ -300,7 +300,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     bytes32 txid;
     for (uint256 i = 0; i < txLength; i++) {
       txid = txids[i];
-      (bool success, bytes memory data) = PLEDGE_AGENT_ADDR.call{gas: 50000}(abi.encodeWithSignature("cleanDelegateInfo(bytes32)", txid));
+      (bool success, bytes memory data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("cleanDelegateInfo(bytes32)", txid));
       require (success, "call PLEDGE_AGENT_ADDR.cleanDelegateInfo failed.");
       (address candidate, address delegator, uint256 amount, uint256 round, uint256 lockTime) = abi.decode(data, (address,address,uint256,uint256,uint256));
       if (receiptMap[txid].amount != 0) {
@@ -323,6 +323,8 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
       Candidate storage c = candidateMap[candidate];
       if (round < roundTag) {
         c.fixAmount += amount;
+        (bool success,) = BTC_AGENT_ADDR.call(abi.encodeWithSignature("updateStakeAmount(address,uint256)", candidate, c.fixAmount));
+        require (success, "call BTC_AGENT_ADDR.updateStakeAmount failed.");
       }
       c.realFixAmount += amount;
 
