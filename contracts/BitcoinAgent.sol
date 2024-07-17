@@ -22,9 +22,6 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   uint32 public constant BTC_STAKING_VERSION = 1;
   uint32 public constant BTCLST_STAKING_VERSION = 2;
 
-  address public btcStake; // oldBtcAddress is PledgeAgent
-  address public btcLSTStake;
-
   // Key: candidate
   // value: btc amount;
   mapping (address => StakeAmount) public candidateMap;
@@ -72,8 +69,8 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /// Do some preparement before new round.
   /// @param round The new round tag
   function prepare(uint256 round) external override {
-    IBitcoinStake(btcStake).prepare(round);
-    IBitcoinStake(btcLSTStake).prepare(round);
+    IBitcoinStake(BTC_STAKE_ADDR).prepare(round);
+    IBitcoinStake(BTCLST_STAKE_ADDR).prepare(round);
   }
 
   /// Receive round rewards from StakeHub, which is triggered at the beginning of turn round
@@ -96,7 +93,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
       rewards[i] = avgReward * sa.lstStakeAmount / SatoshiPlusHelper.BTC_DECIMAL;
       rewardValue += rewards[i];
     }
-    IBitcoinStake(btcLSTStake).distributeReward(validatorList, rewards);
+    IBitcoinStake(BTCLST_STAKE_ADDR).distributeReward(validatorList, rewards);
     rewardValue = 0;
     for (uint256 i = 0; i < validatorSize; ++i) {
       if (rewardList[i] == 0) {
@@ -105,7 +102,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
       rewards[i] = rewardList[i] - rewards[i];
       rewardValue += rewards[i];
     }
-    IBitcoinStake(btcStake).distributeReward(validatorList, rewards);
+    IBitcoinStake(BTC_STAKE_ADDR).distributeReward(validatorList, rewards);
   }
 
   /// Get stake amount
@@ -115,8 +112,8 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /// @return totalAmount The sum of all amounts of valid/invalid candidates.
   function getStakeAmounts(address[] calldata candidates, uint256 /*roundTag*/) external override returns (uint256[] memory amounts, uint256 totalAmount) {
     uint256 candidateSize = candidates.length;
-    uint256[] memory lstAmounts = IBitcoinStake(btcLSTStake).getStakeAmounts(candidates);
-    amounts = IBitcoinStake(btcStake).getStakeAmounts(candidates);
+    uint256[] memory lstAmounts = IBitcoinStake(BTCLST_STAKE_ADDR).getStakeAmounts(candidates);
+    amounts = IBitcoinStake(BTC_STAKE_ADDR).getStakeAmounts(candidates);
 
     for (uint256 i = 0; i < candidateSize; ++i) {
       amounts[i] += lstAmounts[i];
@@ -131,15 +128,15 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /// @param validators List of elected validators in this round
   /// @param round The new round tag
   function setNewRound(address[] calldata validators, uint256 round) external override onlyStakeHub {
-    IBitcoinStake(btcStake).setNewRound(validators, round);
-    IBitcoinStake(btcLSTStake).setNewRound(validators, round);
+    IBitcoinStake(BTC_STAKE_ADDR).setNewRound(validators, round);
+    IBitcoinStake(BTCLST_STAKE_ADDR).setNewRound(validators, round);
   }
 
   /// Claim reward for delegator
   /// @return reward Amount claimed
   function claimReward() external override onlyStakeHub returns (uint256 reward) {
-    reward = IBitcoinStake(btcStake).claimReward();
-    reward += IBitcoinStake(btcLSTStake).claimReward();
+    reward = IBitcoinStake(BTC_STAKE_ADDR).claimReward();
+    reward += IBitcoinStake(BTCLST_STAKE_ADDR).claimReward();
     return reward;
   }
 
@@ -171,9 +168,9 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     address delegator;
     uint256 fee;
     if (version == BTC_STAKING_VERSION) {
-      (delegator, fee) = IBitcoinStake(btcStake).delegate(txid, payload, script, value);
+      (delegator, fee) = IBitcoinStake(BTC_STAKE_ADDR).delegate(txid, payload, script, value);
     } else {
-      (delegator, fee) = IBitcoinStake(btcLSTStake).delegate(txid, payload, script, value);
+      (delegator, fee) = IBitcoinStake(BTCLST_STAKE_ADDR).delegate(txid, payload, script, value);
     }
 
     require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender) || msg.sender == delegator, "only delegator or relayer can submit the BTC transaction");
@@ -198,10 +195,10 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     (bytes32[] memory outpointHashs, bool version1, bool version2) = parseVin(_vinView, blockHeight);
 
     if (version1) {
-      IBitcoinStake(btcStake).undelegate(txid, outpointHashs, voutView);
+      IBitcoinStake(BTC_STAKE_ADDR).undelegate(txid, outpointHashs, voutView);
     }
     if (version2) {
-      IBitcoinStake(btcLSTStake).undelegate(txid, outpointHashs, voutView);
+      IBitcoinStake(BTCLST_STAKE_ADDR).undelegate(txid, outpointHashs, voutView);
 
       // TODO voutView exchange set to btcReceiptMap.
     }
