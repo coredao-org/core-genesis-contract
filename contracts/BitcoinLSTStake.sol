@@ -306,15 +306,17 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
-    if (value.length != 32) {
-      revert MismatchParamLength(key);
-    }
     if (Memory.compareStrings(key, "add")) {
       addWallet(value);
     } else if (Memory.compareStrings(key, "remove")) {
       removeWallet(value);
     } else if (Memory.compareStrings(key, "setLstAddress")) {
-      setLstAddress(value);
+      if (value.length != 20) {
+        revert MismatchParamLength(key);
+      }
+      address newLstTokenAddr = value.toAddress(0);
+      require(newLstTokenAddr != address(0), "token address is empty");
+      lstToken = newLstTokenAddr;
     } else {
       require(false, "unknown param");
     }
@@ -359,10 +361,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     }
     
     emit removedWallet(_hash, _type);
-  }
-
-  function setLstAddress(bytes memory addr) internal {
-    lstToken = addr.toAddress(0);
   }
 
   function extractPkScriptAddr(bytes memory pkScript) internal pure returns (bytes32 whash, uint64 txType) {

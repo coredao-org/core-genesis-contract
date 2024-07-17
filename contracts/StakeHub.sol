@@ -67,7 +67,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   function init() external onlyNotInit {
     // add three collaterals into list
-    collaterals.push(Collateral("CORE", CORE_AGENT_ADDR, 1, 6000));
+    collaterals.push(Collateral("CORE", PLEDGE_AGENT_ADDR, 1, 6000));
     collaterals.push(Collateral("HASHPOWER", HASH_AGENT_ADDR, HASH_UNIT_CONVERSION * INIT_HASH_FACTOR, 2000));
     collaterals.push(Collateral("BTC", BTC_AGENT_ADDR, BTC_UNIT_CONVERSION * INIT_BTC_FACTOR, 4000));
 
