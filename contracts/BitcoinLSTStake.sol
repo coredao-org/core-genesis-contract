@@ -127,14 +127,12 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   ///  3. Contract mint btc lst token.
   ///
   /// @param txid the bitcoin tx hash
-  /// @param payload bytes from OP_RETURN, it is used to parse/verify detail context
-  ///                under satoshi+ protocol
+  /// @param delegator a Coredao address who delegate the Bitcoin
   /// @param script it is used to verify the target txout
   /// @param amount amount of the target txout
-  /// @return delegator a Coredao address who delegate the Bitcoin
-  /// @return fee pay for relayer's fee.
-  function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 amount) external override nonReentrant onlyBtcAgent returns (address delegator, uint256 fee) {
-    (delegator, fee) = parsePayload(payload);
+  function delegate(bytes32 txid, address delegator, address /*candidate*/,
+      bytes memory script, uint256 amount) external override
+      nonReentrant onlyBtcAgent {
     // check in wallet Status
     (bytes32 _hash, uint64 _type) = extractPkScriptAddr(script);
     require(_type != WTYPE_UNKNOWN, "Unknown LST wallet");
@@ -396,12 +394,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       }
     }
     return (0, WTYPE_UNKNOWN);
-  }
-
-  function parsePayload(bytes29 payload) internal pure returns (address delegator, uint256 fee) {
-    require(payload.len() >= 28, "payload length is too small");
-    delegator = payload.indexAddress(7);
-    fee = payload.indexUint(27, 1);
   }
 
   function getRoundRewardPerBTC(uint256 round) internal view returns (uint256 reward) {

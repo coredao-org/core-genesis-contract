@@ -159,21 +159,28 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     require(ILightClient(LIGHT_CLIENT_ADDR).
       checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index), "btc tx not confirmed");
 
-    (,,bytes29 voutView,) = btcTx.extractTx();
-    (uint64 value, bytes29 payload, uint32 outputIndex) = voutView.parseToScriptValueAndData(script);
-    require(value >= minBtcValue, "staked value does not meet requirement");
-
-    uint32 version = parsePayloadVersionAndCheckProtocol(payload);
-    require(version == BTC_STAKING_VERSION || version == BTCLST_STAKING_VERSION, "unsupport sat+ version");
-    address delegator;
+    uint32 version;
     uint256 fee;
-    if (version == BTC_STAKING_VERSION) {
-      (delegator, fee) = IBitcoinStake(BTC_STAKE_ADDR).delegate(txid, payload, script, value);
-    } else {
-      (delegator, fee) = IBitcoinStake(BTCLST_STAKE_ADDR).delegate(txid, payload, script, value);
+    address delegator;
+    uint32 outputIndex;
+    {
+      (,,bytes29 voutView,) = btcTx.extractTx();
+      uint64 value;
+      bytes29 payload;
+      (value, payload, outputIndex) = voutView.parseToScriptValueAndData(script);
+      require(value >= minBtcValue, "staked value does not meet requirement");
+      address candidate;
+      (version, delegator, candidate, fee) = parsePayloadAndCheckProtocol(payload);
+
+      require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender) || msg.sender == delegator, "only delegator or relayer can submit the BTC transaction");
+
+      if (version == BTC_STAKING_VERSION) {
+        IBitcoinStake(BTC_STAKE_ADDR).delegate(txid, delegator, candidate, script, value);
+      } else {
+        IBitcoinStake(BTCLST_STAKE_ADDR).delegate(txid, delegator, candidate, script, value);
+      }
     }
 
-    require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender) || msg.sender == delegator, "only delegator or relayer can submit the BTC transaction");
 
     if (fee != 0) {
       fee *= SatoshiPlusHelper.CORE_DECIMAL;
@@ -209,11 +216,21 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   }
 
   /*********************** Internal method ********************************/
-  function parsePayloadVersionAndCheckProtocol(bytes29 payload) internal pure returns (uint32) {
+  function parsePayloadAndCheckProtocol(bytes29 payload) internal pure returns (uint32 version, address delegator, address candidate, uint256 fee) {
     require(payload.len() >= 7, "payload length is too small");
     require(payload.indexUint(0, 4) == SatoshiPlusHelper.BTC_STAKE_MAGIC, "wrong magic");
     require(payload.indexUint(5, 2) == SatoshiPlusHelper.CHAINID, "wrong chain id");
-    return uint32(payload.indexUint(4, 1));
+    version = uint32(payload.indexUint(4, 1));
+    require(version == BTC_STAKING_VERSION || version == BTCLST_STAKING_VERSION, "unsupport sat+ version");
+    if (version == BTC_STAKING_VERSION) {
+      require(payload.len() >= 48, "payload length is too small");
+      candidate = payload.indexAddress(27);
+      fee = payload.indexUint(47, 1);
+    } else {
+      require(payload.len() >= 28, "payload length is too small");
+      fee = payload.indexUint(27, 1);
+    }
+    delegator = payload.indexAddress(7);
   }
 
   /// @notice             Parses the BTC vin and set btcReceipt as used.

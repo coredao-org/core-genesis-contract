@@ -5,6 +5,7 @@ import "./interface/IAgent.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/IBitcoinStake.sol";
 import "./interface/ICandidateHub.sol";
+import "./interface/ILightClient.sol";
 import "./lib/BytesLib.sol";
 import "./lib/Memory.sol";
 import "./lib/BitcoinHelper.sol";
@@ -119,13 +120,11 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   ///         <abstract locktime> OP_CLTV OP_DROP M <pubKey1> <pubKey1> ... <pubKeyN> N OP_CHECKMULTISIG
   ///
   /// @param txid the bitcoin tx hash
-  /// @param payload bytes from OP_RETURN, it is used to parse/verify detail context
-  ///                under satoshi+ protocol
+  /// @param delegator a Coredao address who delegate the Bitcoin
+  /// @param candidate the candidate node address.
   /// @param script it is used to verify the target txout
   /// @param amount amount of the target txout
-  /// @return delegator a Coredao address who delegate the Bitcoin
-  /// @return fee pay for relayer's fee.
-  function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 amount) override external onlyBtcAgent returns (address delegator, uint256 fee) {
+  function delegate(bytes32 txid, address delegator, address candidate, bytes memory script, uint256 amount) override external onlyBtcAgent {
     DepositReceipt storage receipt = receiptMap[txid];
     require(receipt.amount == 0, "btc tx confirmed");
     require(script[0] == bytes1(uint8(0x04)) && script[5] == bytes1(uint8(0xb1)), "not a valid redeem script");
@@ -133,7 +132,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     uint32 lockTime = parseLockTime(script);
     require(lockTime > block.timestamp, "lockTime should be a tick in future.");
     address candidate;
-    (delegator, candidate, fee) = parseAndCheckPayload(payload);
 
     delegatorMap[delegator].txids.push(txid);
     candidateMap[candidate].realFixAmount += amount;
@@ -395,13 +393,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
         t := mload(loc)
     }
     return uint32(t.reverseUint256() & 0xFFFFFFFF);
-  }
-
-  function parseAndCheckPayload(bytes29 payload) internal pure returns (address delegator, address agent, uint256 fee) {
-    require(payload.len() >= 48, "payload length is too small");
-    delegator= payload.indexAddress(7);
-    agent = payload.indexAddress(27);
-    fee = payload.indexUint(47, 1);
   }
 
   function addExpire(DepositReceipt storage receipt) internal {

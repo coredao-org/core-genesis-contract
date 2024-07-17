@@ -493,10 +493,9 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     require(deposit >= requiredCoinDeposit, "deposit is too small");
     Agent storage a = agentsMap[agent];
     CoinDelegator storage d = a.cDelegatorMap[delegator];
-    uint256 rewardAmount;
-    uint256 historyRewardAmount;
     if (d.changeRound != 0) {
-      (historyRewardAmount, rewardAmount) = collectCoinReward(a, d, 0x7FFFFFFF);
+      (uint256 historyReward, uint256 reward) = collectCoinReward(a, d, 0x7FFFFFFF);
+      transferReward(delegator, historyReward, reward, false);
     }
     a.totalDeposit += deposit;
 
@@ -511,7 +510,6 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
       }
       d.newDeposit += deposit;
     }
-    transferReward(delegator, historyRewardAmount, rewardAmount, false);
     addCandidate(delegator, agent, deposit, d.newDeposit);
     return d.newDeposit;
   }
@@ -519,15 +517,13 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
   function undelegateCoin(address agent, address delegator, uint256 amount, bool isTransfer) internal returns (uint256) {
     Agent storage a = agentsMap[agent];
     CoinDelegator storage d = a.cDelegatorMap[delegator];
-    (uint256 historyRewardAmount, uint256 rewardAmount) = collectCoinReward(a, d, 0x7FFFFFFF);
-    uint256 deposit;
-    if (d.changeRound == roundTag) {
-      require(d.deposit != 0, "Not enough deposit token");
-      deposit = d.deposit;
-    } else {
-      require(d.newDeposit != 0, "Not enough deposit token");
-      deposit = d.newDeposit;
+    (uint256 historyReward, uint256 reward) = collectCoinReward(a, d, 0x7FFFFFFF);
+    transferReward(delegator, historyReward, reward, false);
+    if (d.changeRound < roundTag) {
+      d.deposit = d.newDeposit;
     }
+    uint256 deposit = d.deposit;
+    require(deposit != 0, "Not enough deposit token");
     if (amount == 0) {
       amount = deposit;
     }
@@ -554,14 +550,9 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     } else {
       removeCandidate(delegator, agent, amount, false);
       d.newDeposit -= amount;
-      if (d.deposit >= amount) {
-        d.deposit -= amount;
-      } else {
-        d.deposit = 0;
-      }
+      d.deposit -= amount;
       d.changeRound = roundTag;
     }
-    transferReward(delegator, historyRewardAmount, rewardAmount, false);
     return amount;
   }
 

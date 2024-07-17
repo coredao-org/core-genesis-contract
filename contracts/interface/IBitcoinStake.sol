@@ -5,13 +5,11 @@ interface IBitcoinStake {
   /// Bitcoin delegate, it is called by relayer via BitcoinAgent.verifyMintTx
   ///
   /// @param txid the bitcoin tx hash
-  /// @param payload bytes from OP_RETURN, it is used to parse/verify detail context
-  ///                under satoshi+ protocol
+  /// @param delegator a Coredao address who delegate the Bitcoin
+  /// @param candidate the candidate node address.
   /// @param script it is used to verify the target txout
   /// @param amount amount of the target txout
-  /// @return delegator a Coredao address who delegate the Bitcoin
-  /// @return fee pay for relayer's fee.
-  function delegate(bytes32 txid, bytes29 payload, bytes memory script, uint256 amount) external returns (address delegator, uint256 fee);
+  function delegate(bytes32 txid, address delegator, address candidate, bytes memory script, uint256 amount) external;
 
   /// Bitcoin undelegate, it is called by relayer via BitcoinAgent.verifyBurnTx
   ///
