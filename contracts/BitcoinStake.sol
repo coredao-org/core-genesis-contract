@@ -130,6 +130,8 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     require(script[0] == bytes1(uint8(0x04)) && script[5] == bytes1(uint8(0xb1)), "not a valid redeem script");
 
     uint32 lockTime = parseLockTime(script);
+    uint256 endRound = lockTime / SatoshiPlusHelper.ROUND_INTERVAL;
+    require(endRound > roundTag + 1, "insufficient locking rounds");
     require(lockTime > block.timestamp, "lockTime should be a tick in future.");
     delegatorMap[delegator].txids.push(txid);
     candidateMap[candidate].realFixAmount += amount;
@@ -294,7 +296,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     dr.round = roundTag;
 
     addExpire(dr);
-    Candidate storage tc = candidateMap[candidate];
+    Candidate storage tc = candidateMap[targetCandidate];
     tc.realFixAmount += amount;
 
     emit transferredBtc(txid, candidate, targetCandidate, msg.sender, dr.amount);
