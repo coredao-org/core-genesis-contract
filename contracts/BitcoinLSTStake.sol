@@ -93,7 +93,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
   // User stake information
   struct UserStakeInfo {
-    uint256 totalAmount;   // Total amount of BTC staked including the one staked in changeRound
+    uint256 totalAmount; // Total amount of BTC staked including the one staked in changeRound
     uint256 changeRound; // the round of any op, including mint/burn/transfer/claim.
     uint256 stakedAmount;// Amount of BTC staked which can claim reward.
   }
@@ -418,8 +418,10 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       uint256 lastRoundReward = getRoundRewardPerBTC(lastRoundTag);
       reward = user.stakedAmount * (lastRoundReward - getRoundRewardPerBTC(changeRound - 1)) / SatoshiPlusHelper.BTC_DECIMAL;
 
-      if (user.totalAmount != user.stakedAmount && changeRound < lastRoundTag) {
-        reward += (user.totalAmount - user.stakedAmount) * (lastRoundReward - getRoundRewardPerBTC(changeRound)) / SatoshiPlusHelper.BTC_DECIMAL;
+      if (user.totalAmount != user.stakedAmount && changeRound <= lastRoundTag) {
+        if (changeRound < lastRoundTag) {
+          reward += (user.totalAmount - user.stakedAmount) * (lastRoundReward - getRoundRewardPerBTC(changeRound)) / SatoshiPlusHelper.BTC_DECIMAL;
+        }
         user.stakedAmount = user.totalAmount;
       }
     }
