@@ -270,27 +270,38 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   }
 
   function transferBtc(bytes32 txid, address targetCandidate) external {
-    DepositReceipt storage depositReceipt = receiptMap[txid];
-    require(depositReceipt.amount != 0, "btc tx not found");
-    require(depositReceipt.delegator == msg.sender, "not the delegator of this btc receipt");
-    require(depositReceipt.candidate != targetCandidate, "can not transfer to the same validator");
-    require(depositReceipt.lockTime / SatoshiPlusHelper.ROUND_INTERVAL > roundTag + 1, "insufficient locking rounds");
+    DepositReceipt storage dr = receiptMap[txid];
+    uint256 amount = dr.amount;
+    require(amount != 0, "btc tx not found");
+    require(dr.delegator == msg.sender, "not the delegator of this btc receipt");
+    address candidate = dr.candidate;
+    require(dr.candidate != targetCandidate, "can not transfer to the same validator");
+    uint256 endRound = dr.lockTime / SatoshiPlusHelper.ROUND_INTERVAL;
+    require(endRound > roundTag + 1, "insufficient locking rounds");
 
     if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetCandidate)) {
       revert InactiveCandidate(targetCandidate);
     }
 
+    Candidate storage c = candidateMap[candidate];
+    c.realFixAmount -= amount;
+    round2expireInfoMap[endRound].amountMap[candidate] -= amount;
+
     // Calculate reward
-    uint256 reward = (accuredRewardPerBTCMap[depositReceipt.candidate][roundTag - 1] - accuredRewardPerBTCMap[depositReceipt.candidate][depositReceipt.round]) * depositReceipt.amount / SatoshiPlusHelper.BTC_DECIMAL;
+    uint256 reward = (accuredRewardPerBTCMap[dr.candidate][roundTag - 1] - accuredRewardPerBTCMap[dr.candidate][dr.round]) * dr.amount / SatoshiPlusHelper.BTC_DECIMAL;
     if (reward != 0) {
       rewardMap[msg.sender] += reward;
     }
 
     // Set candidate to targetCandidate
-    depositReceipt.candidate = targetCandidate;
-    depositReceipt.round = roundTag;
+    dr.candidate = targetCandidate;
+    dr.round = roundTag;
 
-    emit transferredBtc(txid, depositReceipt.candidate, targetCandidate, msg.sender, depositReceipt.amount);
+    addExpire(dr);
+    Candidate storage tc = candidateMap[candidate];
+    tc.realFixAmount += amount;
+
+    emit transferredBtc(txid, candidate, targetCandidate, msg.sender, dr.amount);
   }
 
   // Upgrade function.
@@ -301,7 +312,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
     for (uint256 i = 0; i < txLength; i++) {
       txid = txids[i];
       (bool success, bytes memory data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("cleanDelegateInfo(bytes32)", txid));
-      require (success, "call PLEDGE_AGENT_ADDR.cleanDelegateInfo failed.");
+      require(success, "call PLEDGE_AGENT_ADDR.cleanDelegateInfo failed.");
       (address candidate, address delegator, uint256 amount, uint256 round, uint256 lockTime) = abi.decode(data, (address,address,uint256,uint256,uint256));
       if (receiptMap[txid].amount != 0) {
         continue;
@@ -323,7 +334,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
       Candidate storage c = candidateMap[candidate];
       if (round < roundTag) {
         c.fixAmount += amount;
-        (bool success,) = BTC_AGENT_ADDR.call(abi.encodeWithSignature("updateStakeAmount(address,uint256)", candidate, c.fixAmount));
+        (success,) = BTC_AGENT_ADDR.call(abi.encodeWithSignature("updateStakeAmount(address,uint256)", candidate, c.fixAmount));
         require (success, "call BTC_AGENT_ADDR.updateStakeAmount failed.");
       }
       c.realFixAmount += amount;
@@ -351,13 +362,11 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
   /// @param round The new round tag
   function prepare(uint256 round) external override {
     // the expired BTC staking values will be removed
-    uint256 j;
+    address candidate;
     for (uint256 r = roundTag + 1; r <= round; ++r) {
       FixedExpireInfo storage expireInfo = round2expireInfoMap[r];
-      j = expireInfo.candidateList.length;
-      while (j != 0) {
-        j--;
-        address candidate = expireInfo.candidateList[j];
+      for (uint256 j = expireInfo.candidateList.length; j != 0; --j) {
+        candidate = expireInfo.candidateList[j - 1];
         candidateMap[candidate].realFixAmount -= expireInfo.amountMap[candidate];
         expireInfo.candidateList.pop();
         delete expireInfo.amountMap[candidate];
