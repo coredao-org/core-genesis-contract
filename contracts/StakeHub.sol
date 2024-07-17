@@ -243,6 +243,12 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     emit paramChange(key, value);
   }
 
+  /*********************** External methods ********************************/
+  function getCandidateAmounts(address candidate) external view returns (uint256[] memory) {
+    return candidateAmountMap[candidate];
+  }
+
+  /*********************** Internal methods ********************************/
   function _initHybridScore() internal {
     // get validator set
     address[] memory validators = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getValidatorOps();
