@@ -131,8 +131,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber {
 
     uint32 lockTime = parseLockTime(script);
     require(lockTime > block.timestamp, "lockTime should be a tick in future.");
-    address candidate;
-
     delegatorMap[delegator].txids.push(txid);
     candidateMap[candidate].realFixAmount += amount;
 
