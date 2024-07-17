@@ -248,6 +248,10 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     return candidateAmountMap[candidate];
   }
 
+  function getCollaterals() external view returns (Collateral[] memory) {
+    return collaterals;
+  }
+
   /*********************** Internal methods ********************************/
   function _initHybridScore() internal {
     // get validator set
