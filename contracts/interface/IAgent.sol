@@ -25,6 +25,7 @@ interface IAgent {
   function distributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 round) external;
 
   /// Claim reward for delegator
+  /// @param delegator the delegator address
   /// @return reward Amount claimed
-  function claimReward() external returns (uint256);
+  function claimReward(address delegator) external returns (uint256);
 }

@@ -296,9 +296,9 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   }
 
   /// Claim reward for delegator
+  /// @param delegator the delegator address
   /// @return reward Amount claimed
-  function claimReward() external override onlyBtcAgent returns (uint256 reward) {
-    address delegator = tx.origin;
+  function claimReward(address delegator) external override onlyBtcAgent returns (uint256 reward) {
     reward = rewardMap[delegator];
     if (reward != 0) {
       rewardMap[delegator] = 0;

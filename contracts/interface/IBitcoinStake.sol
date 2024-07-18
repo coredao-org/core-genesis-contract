@@ -40,6 +40,7 @@ interface IBitcoinStake {
   function distributeReward(address[] calldata validators, uint256[] calldata rewardList) external;
 
   /// Claim reward for delegator
+  /// @param delegator the delegator address
   /// @return reward Amount claimed
-  function claimReward() external returns (uint256 reward);
+  function claimReward(address delegator) external returns (uint256 reward);
 }

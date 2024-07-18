@@ -25,11 +25,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   uint256 public constant INIT_BTC_FACTOR = 1e4;
   uint256 public constant DENOMINATOR = 1e4;
 
-  // Collateral list.
-  Collateral[] public collaterals;
+  // Asset list.
+  Asset[] public assets;
 
   // key: candidate op address
-  // value: collaterals' stake amount list.
+  // value: assets' stake amount list.
   //        The order is core, hash, btc.
   mapping(address => uint256[]) public candidateAmountMap;
 
@@ -37,23 +37,23 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   // value: hybrid score for each candidate.
   mapping(address => uint256) public candidateScoreMap;
 
-  // key: Collateral's agent address
+  // key: Asset's agent address
   // value: useful state information of round
-  mapping(address => CollateralState) public stateMap;
+  mapping(address => AssetState) public stateMap;
 
   // key: delegator, value: Liability
   mapping(address => Liability) liabilities;
 
   mapping(address => bool) public liabilityOperators;
 
-  struct Collateral {
+  struct Asset {
     string  name;
     address agent;
     uint256 factor;
     uint256 hardcap;
   }
 
-  struct CollateralState {
+  struct AssetState {
     uint256 amount;
     uint256 factor;
     uint256 discount;
@@ -79,10 +79,10 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   event claimedReward(address indexed delegator, uint256 amount);
 
   function init() external onlyNotInit {
-    // add three collaterals into list
-    collaterals.push(Collateral("CORE", PLEDGE_AGENT_ADDR, 1, 6000));
-    collaterals.push(Collateral("HASHPOWER", HASH_AGENT_ADDR, HASH_UNIT_CONVERSION * INIT_HASH_FACTOR, 2000));
-    collaterals.push(Collateral("BTC", BTC_AGENT_ADDR, BTC_UNIT_CONVERSION * INIT_BTC_FACTOR, 4000));
+    // add three assets into list
+    assets.push(Asset("CORE", PLEDGE_AGENT_ADDR, 1, 6000));
+    assets.push(Asset("HASHPOWER", HASH_AGENT_ADDR, HASH_UNIT_CONVERSION * INIT_HASH_FACTOR, 2000));
+    assets.push(Asset("BTC", BTC_AGENT_ADDR, BTC_UNIT_CONVERSION * INIT_BTC_FACTOR, 4000));
 
     _initHybridScore();
 
@@ -103,20 +103,20 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   {
     uint256 validatorSize = validators.length;
     require(validatorSize == rewardList.length, "the length of validators and rewardList should be equal");
-    uint256 collateralSize = collaterals.length;
+    uint256 assetSize = assets.length;
     uint256[] memory rewards = new uint256[](validatorSize);
     uint256 burnReward;
 
     address validator;
     uint256 rewardValue;
-    for (uint256 i = 0; i < collateralSize; ++i) {
-      CollateralState memory cs = stateMap[collaterals[i].agent];
+    for (uint256 i = 0; i < assetSize; ++i) {
+      AssetState memory cs = stateMap[assets[i].agent];
       rewardValue = 0;
       for (uint256 j = 0; j < validatorSize; ++j) {
         validator = validators[j];
         // This code scope is used for deploy as genesis
         if (candidateScoreMap[validator] == 0) {
-          burnReward += rewardList[j] / collateralSize;
+          burnReward += rewardList[j] / assetSize;
           rewards[j] = 0;
           continue;
         }
@@ -124,9 +124,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         rewards[j] = r * cs.discount / DENOMINATOR;
         rewardValue += rewards[j];
         burnReward += (r - rewards[j]);
-        emit roundReward(collaterals[i].name, validator, rewards[j]);
+        emit roundReward(assets[i].name, validator, rewards[j]);
       }
-      IAgent(collaterals[i].agent).distributeReward(validators, rewards, roundTag);
+      IAgent(assets[i].agent).distributeReward(validators, rewards, roundTag);
     }
     // burn overflow reward of hardcap
     ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: burnReward }();
@@ -141,23 +141,23 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     uint256 roundTag
   ) external override onlyCandidate returns (uint256[] memory scores) {
     uint256 candidateSize = candidates.length;
-    uint256 collateralSize = collaterals.length;
+    uint256 assetSize = assets.length;
 
     uint256 hardcapSum;
-    for (uint256 i = 0; i < collateralSize; ++i) {
-      hardcapSum += collaterals[i].hardcap;
-      IAgent(collaterals[i].agent).prepare(roundTag);
+    for (uint256 i = 0; i < assetSize; ++i) {
+      hardcapSum += assets[i].hardcap;
+      IAgent(assets[i].agent).prepare(roundTag);
     }
 
-    uint256[] memory collateralScores = new uint256[](collateralSize);
+    uint256[] memory assetScores = new uint256[](assetSize);
     scores = new uint256[](candidateSize);
     uint256 t;
     address candiate;
-    for (uint256 i = 0; i < collateralSize; ++i) {
+    for (uint256 i = 0; i < assetSize; ++i) {
       (uint256[] memory amounts, uint256 totalAmount) =
-        IAgent(collaterals[i].agent).getStakeAmounts(candidates, roundTag);
-      t = collaterals[i].factor;
-      collateralScores[i] = totalAmount * t;
+        IAgent(assets[i].agent).getStakeAmounts(candidates, roundTag);
+      t = assets[i].factor;
+      assetScores[i] = totalAmount * t;
       for (uint256 j = 0; j < candidateSize; ++j) {
         scores[j] += amounts[j] * t;
         candiate = candidates[j];
@@ -168,22 +168,22 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
           candidateAmountMap[candiate][i] = amounts[j];
         }
       }
-      stateMap[collaterals[i].agent] = CollateralState(totalAmount, t, DENOMINATOR);
+      stateMap[assets[i].agent] = AssetState(totalAmount, t, DENOMINATOR);
     }
 
     for (uint256 j = 0; j < candidateSize; ++j) {
       candidateScoreMap[candidates[j]] = scores[j];
     }
 
-    t = collateralScores[0] + collateralScores[1] + collateralScores[2];
-    for (uint256 i = 0; i < collateralSize; ++i) {
-      // stake_proportion = collateralScores[i] / t
-      // hardcap_proportion = hardcap / hardcapSum
+    t = assetScores[0] + assetScores[1] + assetScores[2];
+    for (uint256 i = 0; i < assetSize; ++i) {
+      // stake_proportion := assetScores[i] / t
+      // hardcap_proportion := hardcap / hardcapSum
       // if stake_proportion > hardcap_proportion;
       //    then discount = hardcap_proportion / stake_proportion
-      // if condition transform ==>  collateralScores[i] * hardcapSum > hardcap * t
-      if (collateralScores[i] * hardcapSum > collaterals[i].hardcap * t) {
-        stateMap[collaterals[i].agent].discount = collaterals[i].hardcap * t * DENOMINATOR / (hardcapSum * collateralScores[i]);
+      // above if condition transform ==> assetScores[i] * hardcapSum > hardcap * t
+      if (assetScores[i] * hardcapSum > assets[i].hardcap * t) {
+        stateMap[assets[i].agent].discount = assets[i].hardcap * t * DENOMINATOR / (hardcapSum * assetScores[i]);
       }
     }
   }
@@ -192,9 +192,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// @param validators List of elected validators in this round
   /// @param roundTag The new round tag
   function setNewRound(address[] calldata validators, uint256 roundTag) external override onlyCandidate {
-    uint256 collateralSize = collaterals.length;
-    for (uint256 i = 0; i < collateralSize; ++i) {
-      IAgent(collaterals[i].agent).setNewRound(validators, roundTag);
+    uint256 assetSize = assets.length;
+    for (uint256 i = 0; i < assetSize; ++i) {
+      IAgent(assets[i].agent).setNewRound(validators, roundTag);
     }
   }
 
@@ -207,14 +207,15 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// @return reward Amount claimed
   function claimReward() external returns (uint256 reward) {
     uint256 subReward;
-    uint256 collateralSize = collaterals.length;
-    for (uint256 i = 0; i < collateralSize; ++i) {
-      subReward = IAgent(collaterals[i].agent).claimReward();
+    uint256 assetSize = assets.length;
+    address delegator = msg.sender;
+    for (uint256 i = 0; i < assetSize; ++i) {
+      subReward = IAgent(assets[i].agent).claimReward(delegator);
       reward += subReward;
     }
     if (reward != 0) {
-      Address.sendValue(payable(msg.sender), reward);
-      emit claimedReward(msg.sender, reward);
+      Address.sendValue(payable(delegator), reward);
+      emit claimedReward(delegator, reward);
     }
   }
 
@@ -232,31 +233,31 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       if (newHashFactor == 0 || newHashFactor > 1e8) {
         revert OutOfBounds(key, newHashFactor, 1, 1e8);
       }
-      collaterals[1].factor = newHashFactor;
+      assets[1].factor = newHashFactor;
     } else if (Memory.compareStrings(key, "btcFactor")) {
       uint256 newBtcFactor = value.toUint256(0);
       if (newBtcFactor == 0 || newBtcFactor > 1e8) {
         revert OutOfBounds(key, newBtcFactor, 1, 1e8);
       }
-      collaterals[2].factor = newBtcFactor;
+      assets[2].factor = newBtcFactor;
     } else if (Memory.compareStrings(key, "coreHardcap")) {
       uint256 newCoreHardcap = value.toUint256(0);
       if (newCoreHardcap == 0 || newCoreHardcap > 1e8) {
         revert OutOfBounds(key, newCoreHardcap, 1, 1e8);
       }
-      collaterals[0].hardcap = newCoreHardcap;
+      assets[0].hardcap = newCoreHardcap;
     } else if(Memory.compareStrings(key, "hashHardcap")) {
       uint256 newHashHardcap = value.toUint256(0);
       if (newHashHardcap == 0 || newHashHardcap > 1e8) {
         revert OutOfBounds(key, newHashHardcap, 1, 1e8);
       }
-      collaterals[1].hardcap = newHashHardcap;
+      assets[1].hardcap = newHashHardcap;
     } else if(Memory.compareStrings(key, "btcHardcap")) {
       uint256 newBtcHardcap = value.toUint256(0);
       if (newBtcHardcap == 0 || newBtcHardcap > 1e8) {
         revert OutOfBounds(key, newBtcHardcap, 1, 1e8);
       }
-      collaterals[2].hardcap = newBtcHardcap;
+      assets[2].hardcap = newBtcHardcap;
     } else {
       require(false, "unknown param");
     }
@@ -269,8 +270,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     return candidateAmountMap[candidate];
   }
 
-  function getCollaterals() external view returns (Collateral[] memory) {
-    return collaterals;
+  function getAssets() external view returns (Asset[] memory) {
+    return assets;
   }
 
   /*********************** Internal methods ********************************/
@@ -298,11 +299,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       candidateAmountMap[validator].push(hashpower);
       candidateAmountMap[validator].push(btc);
 
-      candidateScoreMap[validator] = core * collaterals[0].factor + hashpower * collaterals[1].factor + btc * collaterals[2].factor;
+      candidateScoreMap[validator] = core * assets[0].factor + hashpower * assets[1].factor + btc * assets[2].factor;
     }
 
-    stateMap[collaterals[0].agent] = CollateralState(totalCore, collaterals[0].factor, DENOMINATOR);
-    stateMap[collaterals[1].agent] = CollateralState(totalHashPower, collaterals[1].factor, DENOMINATOR);
-    stateMap[collaterals[2].agent] = CollateralState(totalBtc, collaterals[2].factor, DENOMINATOR);
+    stateMap[assets[0].agent] = AssetState(totalCore, assets[0].factor, DENOMINATOR);
+    stateMap[assets[1].agent] = AssetState(totalHashPower, assets[1].factor, DENOMINATOR);
+    stateMap[assets[2].agent] = AssetState(totalBtc, assets[2].factor, DENOMINATOR);
   }
 }

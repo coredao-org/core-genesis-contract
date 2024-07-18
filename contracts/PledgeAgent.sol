@@ -369,8 +369,10 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     return (historyRewardMap[delegator] + rewardSum, roundLimit >= 0);
   }
 
-  function claimReward() external override onlyStakeHub returns (uint256) {
-    address delegator = tx.origin;
+  /// Claim reward for delegator
+  /// @param delegator the delegator address
+  /// @return reward Amount claimed
+  function claimReward(address delegator) external override onlyStakeHub returns (uint256) {
     uint256 reward;
     uint256 rewardSum;
     uint256 historyReward;

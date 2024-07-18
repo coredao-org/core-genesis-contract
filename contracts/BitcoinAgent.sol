@@ -3,19 +3,14 @@ pragma solidity 0.8.4;
 
 import "./interface/IAgent.sol";
 import "./interface/IParamSubscriber.sol";
-import "./interface/ILightClient.sol";
 import "./interface/IBitcoinStake.sol";
-import "./interface/IRelayerHub.sol";
 import "./lib/Memory.sol";
-import "./lib/BitcoinHelper.sol";
 import "./lib/SatoshiPlusHelper.sol";
 import "./System.sol";
 
 /// This contract manages user delegate BTC.
 /// Including both BTC independent delegate and LST delegate.
 contract BitcoinAgent is IAgent, System, IParamSubscriber {
-  using BitcoinHelper for *;
-  using TypedMemView for *;
 
   // Key: candidate
   // value: btc amount;
@@ -101,19 +96,17 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   }
 
   /// Claim reward for delegator
+  /// @param delegator the delegator address
   /// @return reward Amount claimed
-  function claimReward() external override onlyStakeHub returns (uint256 reward) {
-    reward = IBitcoinStake(BTC_STAKE_ADDR).claimReward();
-    reward += IBitcoinStake(BTCLST_STAKE_ADDR).claimReward();
+  function claimReward(address delegator) external override onlyStakeHub returns (uint256 reward) {
+    reward = IBitcoinStake(BTC_STAKE_ADDR).claimReward(delegator);
+    reward += IBitcoinStake(BTCLST_STAKE_ADDR).claimReward(delegator);
     return reward;
   }
 
   function updateStakeAmount(address candidate, uint256 stakeAmount) external onlyBtcStake {
     candidateMap[candidate].stakeAmount = stakeAmount;
   }
-
-  /*********************** Internal method ********************************/
-
 
   /*********************** Governance ********************************/
   /// Update parameters through governance vote

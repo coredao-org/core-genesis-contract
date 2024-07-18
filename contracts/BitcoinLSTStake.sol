@@ -87,10 +87,10 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   // value: index of wallets plus one.
   mapping(bytes32 => uint256) walletMap;
 
+  Redeem[] public redeemRequests;
+
   // The btc fee which is cost when redeem btc.
   uint64 public utxoFee;
-
-  Redeem[] public redeemRequests;
 
   struct BtcTx {
     uint64 amount;
@@ -289,9 +289,10 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   }
 
   /// Claim reward for delegator
+  /// @param delegator the delegator address
   /// @return reward Amount claimed
-  function claimReward() external override onlyBtcAgent returns (uint256 reward) {
-    return _updateUserRewards(tx.origin, true);
+  function claimReward(address delegator) external override onlyBtcAgent returns (uint256 reward) {
+    return _updateUserRewards(delegator, true);
   }
 
   /*********************** External implementations ***************************/
@@ -374,7 +375,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       require(_type != WTYPE_UNKNOWN, "Invalid BTC wallet");
       wallets.push(WalletInfo(_hash, _type, WST_ACTIVE));
       index1 = wallets.length;
-      walletMap[walletKey] = wallets.length;
+      walletMap[walletKey] = index1;
     }
     emit addedWallet(wallets[index1-1].hash, wallets[index1-1].addrType);
   }

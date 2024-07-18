@@ -227,7 +227,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     bytes memory sig = BytesLib.slice(extra, 32, 65);
     bytes[] memory rlpbytes_list = new bytes[](16);
     rlpbytes_list[0] = RLPEncode.encodeUint(uint(SatoshiPlusHelper.CHAINID));
-    for(uint256 i = 0;i < 15;++i){
+    for(uint256 i = 0; i < 15; ++i){
       if(i == 12){
         rlpbytes_list[13] = BytesLib.slice(extra, 0, 32).encodeBytes();
       } else {
