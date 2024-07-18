@@ -523,10 +523,10 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
       d.deposit = d.newDeposit;
     }
     uint256 deposit = d.deposit;
-    require(deposit != 0, "Not enough deposit token");
     if (amount == 0) {
       amount = deposit;
     }
+    require(deposit != 0 && deposit >= amount, "Not enough deposit token");
     if (deposit != amount) {
       require(amount >= requiredCoinDeposit, "undelegate amount is too small"); 
       require(d.newDeposit >= requiredCoinDeposit + amount, "remaining amount is too small");

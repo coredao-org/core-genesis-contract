@@ -41,6 +41,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   // value: useful state information of round
   mapping(address => CollateralState) public stateMap;
 
+  // key: delegator, value: Liability
+  mapping(address => Liability) liabilities;
+
+  mapping(address => bool) public liabilityOperators;
+
   struct Collateral {
     string  name;
     address agent;
@@ -52,6 +57,14 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     uint256 amount;
     uint256 factor;
     uint256 discount;
+  }
+
+  struct Liability {
+    NotePayable[] notes;
+  }
+  struct NotePayable {
+    address creditor;
+    uint256 amount;
   }
 
   // key: delegator
@@ -72,6 +85,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     collaterals.push(Collateral("BTC", BTC_AGENT_ADDR, BTC_UNIT_CONVERSION * INIT_BTC_FACTOR, 4000));
 
     _initHybridScore();
+
+    liabilityOperators[BTC_STAKE_ADDR] = true;
+    liabilityOperators[BTCLST_STAKE_ADDR] = true;
     alreadyInit = true;
   }
 
@@ -180,6 +196,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     for (uint256 i = 0; i < collateralSize; ++i) {
       IAgent(collaterals[i].agent).setNewRound(validators, roundTag);
     }
+  }
+
+  function addNotePayable(address delegator, address creditor, uint256 amount) external override {
+    require(liabilityOperators[msg.sender], 'only liability operators');
+    liabilities[delegator].notes.push(NotePayable(creditor, amount));
   }
 
   /// Claim reward for delegator

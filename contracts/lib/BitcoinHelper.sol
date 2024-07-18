@@ -914,4 +914,27 @@ library BitcoinHelper {
         _lockTime = _txView.indexLEUint(_offset, 4).toUint32();
         require(_offset + 4 == _txView.len(), "BitcoinHelper: invalid tx");
     }
+
+    /// @notice             Parses the BTC vin and set btcReceipt as used.
+    ///
+    /// @param _vinView     The vin of a Bitcoin transaction
+    /// @return outpointHashs The outpoint hash records.
+    /// @return opIndexs The outpoint index records.
+    function parseVin(
+      bytes29 _vinView
+    ) internal pure typeAssert(_vinView, BTCTypes.Vin) returns (bytes32[] memory outpointHashs, uint32[] memory opIndexs) {
+        _vinView.assertType(uint40(BitcoinHelper.BTCTypes.Vin));
+        bytes32 _txId;
+        uint32 _outputIndex;
+
+        // Finds total number of outputs
+        uint _numberOfInputs = uint256(indexCompactInt(_vinView, 0));
+        outpointHashs = new bytes32[](_numberOfInputs);
+        opIndexs = new uint32[](_numberOfInputs);
+        for (uint index = 0; index < _numberOfInputs; ++index) {
+          (_txId, _outputIndex) = extractOutpoint(_vinView, index);
+          outpointHashs[index] = _txId;
+          opIndexs[index] = _outputIndex;
+        }
+    }
 }

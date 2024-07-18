@@ -8,6 +8,10 @@ library SatoshiPlusHelper {
   uint256 public constant CORE_DECIMAL = 1e18;
   uint256 public constant ROUND_INTERVAL = 86400;
   uint256 public constant CHAINID = 1116;
+  uint32 public constant INIT_BTC_CONFIRM_BLOCK = 3;
+
+  uint32 public constant BTC_STAKE_VERSION = 1;
+  uint32 public constant BTCLST_STAKE_VERSION = 2;
 
   // Bech32 encoded segwit addresses start with a human-readable part
   // (hrp) followed by '1'. For Bitcoin mainnet the hrp is "bc"(0x6263), and for

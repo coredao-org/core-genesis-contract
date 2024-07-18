@@ -2,21 +2,23 @@
 pragma solidity 0.8.4;
 
 interface IBitcoinStake {
-  /// Bitcoin delegate, it is called by relayer via BitcoinAgent.verifyMintTx
+  /// Delegate BTC to Core network, it is called by relayer
   ///
-  /// @param txid the bitcoin tx hash
-  /// @param delegator a Coredao address who delegate the Bitcoin
-  /// @param candidate the candidate node address.
-  /// @param script it is used to verify the target txout
-  /// @param amount amount of the target txout
-  function delegate(bytes32 txid, address delegator, address candidate, bytes memory script, uint256 amount) external;
+  /// @param btcTx the BTC transaction data
+  /// @param blockHeight block height of the transaction
+  /// @param nodes part of the Merkle tree from the tx to the root in LE form (called Merkle proof)
+  /// @param index index of the tx in Merkle tree
+  /// @param script in v1, it is a redeem script of the locked up output
+  ///               in v2, it is the decoded pk script's address in hash format.
+  function delegate(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index, bytes memory script) external;
 
-  /// Bitcoin undelegate, it is called by relayer via BitcoinAgent.verifyBurnTx
+  /// Bitcoin undelegate, it is called by relayer
   ///
-  /// @param txid the bitcoin tx hash
-  /// @param outpointHashs outpoints from tx inputs.
-  /// @param voutView tx outs as bytes29.
-  function undelegate(bytes32 txid, bytes32[] memory outpointHashs, bytes29 voutView) external;
+  /// @param btcTx the BTC transaction data
+  /// @param blockHeight block height of the transaction
+  /// @param nodes part of the Merkle tree from the tx to the root in LE form (called Merkle proof)
+  /// @param index index of the tx in Merkle tree
+  function undelegate(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index) external;
 
   /// Do some preparement before new round.
   /// @param round The new round tag
