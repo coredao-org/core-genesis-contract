@@ -47,6 +47,9 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
   uint64 public constant INIT_UTXO_FEE = 1e4;
 
+  uint256 public constant TLP_BASE = 1e4;
+
+
   // This field records each btc staking tx, and it will never be clean.
   // key: bitcoin tx id
   // value: bitcoin stake record.
@@ -93,6 +96,10 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   // The btc fee which is cost when redeem btc.
   uint64 public utxoFee;
 
+  uint256 public tlpRate;
+
+  bool public isActive;
+
   struct BtcTx {
     uint64 amount;
     uint32 outputIndex;
@@ -135,6 +142,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     initRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
     roundTag = initRound;
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
+    tlpRate = TLP_BASE;
     alreadyInit = true;
   }
 
@@ -156,9 +164,8 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     bytes32 txid = btcTx.calculateTxId();
     BtcTx storage bt = btcTxMap[txid];
     require(bt.amount == 0, "btc tx is already delegated.");
-    require(
-        ILightClient(LIGHT_CLIENT_ADDR).checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index),
-        "btc tx isn't confirmed");
+    (bool txChecked, ) = ILightClient(LIGHT_CLIENT_ADDR).checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index);
+    require(txChecked, "btc tx isn't confirmed");
     checkWallet(script);
 
     address delegator;
@@ -195,8 +202,8 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param index index of the tx in Merkle tree
   function undelegate(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index) external override nonReentrant {
     bytes32 txid = btcTx.calculateTxId();
-    require(ILightClient(LIGHT_CLIENT_ADDR).
-      checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index), "btc tx not confirmed");
+    (bool txChecked, ) = ILightClient(LIGHT_CLIENT_ADDR).checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index);
+    require(txChecked, "btc tx not confirmed");
     (,, bytes29 voutView,) = btcTx.extractTx();
 
     // Finds total number of outputs
@@ -285,8 +292,16 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// Claim reward for delegator
   /// @param delegator the delegator address
   /// @return reward Amount claimed
-  function claimReward(address delegator) external override onlyBtcAgent returns (uint256 reward) {
-    return _updateUserRewards(delegator, true);
+  /// @return rewardUnclaimed Amount unclaimed
+  function claimReward(address delegator) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed) {
+    reward = _updateUserRewards(delegator, true);
+    if (isActive) {
+      uint256 rewardClaimed = reward * tlpRate / TLP_BASE;
+      rewardUnclaimed = reward - rewardClaimed;
+      reward = rewardClaimed;
+    }
+    
+    return (reward, rewardUnclaimed);
   }
 
   /*********************** External implementations ***************************/
@@ -341,6 +356,18 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       address newLstTokenAddr = value.toAddress(0);
       require(newLstTokenAddr != address(0), "token address is empty");
       lstToken = newLstTokenAddr;
+    } else if (Memory.compareStrings(key, "tlpRate")) {
+      uint256 newtlpRate = value.toUint256(0);
+      if (newtlpRate > TLP_BASE) {
+        revert OutOfBounds(key, newtlpRate, 0, TLP_BASE);
+      }
+      tlpRate = newtlpRate;
+    } else if (Memory.compareStrings(key, "isActive")) {
+      uint256 newIsActive = value.toUint256(0);
+      if (newIsActive > 1) {
+        revert OutOfBounds(key, newIsActive, 0, 1);
+      }
+      isActive = newIsActive == 1;
     } else {
       require(false, "unknown param");
     }

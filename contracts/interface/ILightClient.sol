@@ -8,5 +8,5 @@ interface ILightClient {
   
   function getRoundMiners(uint256 roundTimeTag, address candidate) external view returns (address[] memory miners);
 
-  function checkTxProof(bytes32 txid, uint32 blockHeight, uint32 confirmBlock, bytes32[] calldata nodes, uint256 index) external view returns (bool);
+  function checkTxProof(bytes32 txid, uint32 blockHeight, uint32 confirmBlock, bytes32[] calldata nodes, uint256 index) external view returns (bool, uint64);
 }

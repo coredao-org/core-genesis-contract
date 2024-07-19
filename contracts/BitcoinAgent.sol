@@ -95,10 +95,11 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /// Claim reward for delegator
   /// @param delegator the delegator address
   /// @return reward Amount claimed
-  function claimReward(address delegator) external override onlyStakeHub returns (uint256 reward) {
-    reward = IBitcoinStake(BTC_STAKE_ADDR).claimReward(delegator);
-    reward += IBitcoinStake(BTCLST_STAKE_ADDR).claimReward(delegator);
-    return reward;
+  /// @return rewardUnclaimed Amount unclaimed
+  function claimReward(address delegator) external override onlyStakeHub returns (uint256 reward, uint256 rewardUnclaimed) {
+    (uint256 btcReward, uint256 btcRewardUnclaimed) = IBitcoinStake(BTC_STAKE_ADDR).claimReward(delegator);
+    (uint256 btclstReward, uint256 btclstRewardUnclaimed) = IBitcoinStake(BTCLST_STAKE_ADDR).claimReward(delegator);
+    return (btcReward + btclstReward, btcRewardUnclaimed + btclstRewardUnclaimed);
   }
 
   /*********************** Governance ********************************/

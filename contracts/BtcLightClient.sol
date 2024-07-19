@@ -291,16 +291,18 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /// @param nodes Part of the Merkle tree from the tx to the root in LE form (called Merkle proof)
   /// @param index of the tx in Merkle tree
   /// @return True if the provided tx is confirmed on Bitcoin
-  function checkTxProof(bytes32 txid, uint32 blockHeight, uint32 confirmBlock, bytes32[] calldata nodes, uint256 index) public view override returns (bool) {
+  function checkTxProof(bytes32 txid, uint32 blockHeight, uint32 confirmBlock, bytes32[] calldata nodes, uint256 index) public view override returns (bool, uint64) {
     bytes32 blockHash = height2HashMap[blockHeight];
     
     if (blockHeight + confirmBlock > getChainTipHeight() || txid == bytes32(0) || blockHash == bytes32(0)) {
-      return false;
+      return (false, 0);
     }
+
+    uint64 timestamp = getTimestamp(blockHash);
 
     bytes32 root = bytes32(loadInt256(68, blockChain[blockHash]));
     if (nodes.length == 0) {
-      return txid == root;
+      return (txid == root, timestamp);
     }
 
     bytes32 current = txid;
@@ -312,7 +314,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       }
       index >>= 1;
     }
-    return current == root;
+    return (current == root, timestamp);
   }
 
   function merkleStep(bytes32 l, bytes32 r) private view returns (bytes32 digest) {

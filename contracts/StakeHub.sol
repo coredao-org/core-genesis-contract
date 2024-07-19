@@ -24,6 +24,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   uint256 public constant BTC_UNIT_CONVERSION = 1e10;
   uint256 public constant INIT_BTC_FACTOR = 1e4;
   uint256 public constant DENOMINATOR = 1e4;
+  uint256 public constant LP_BASE = 1e4;
 
   uint256 public constant MASK_STAKE_CORE_MASK = 1;
   uint256 public constant MASK_STAKE_HASH_MASK = 2;
@@ -58,6 +59,13 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   // value: amount of note payable for claim.
   mapping(address => uint256) public payableNotes;
 
+  LP[] public lpRates;
+
+  bool public isActive;
+
+  uint256 public btcPoolRate;
+  uint256 public unclaimedReward;
+
   struct Asset {
     string  name;
     address agent;
@@ -79,6 +87,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     uint256 amount;
   }
 
+  struct LP {
+      uint256 l;
+      uint256 p;
+  }
+
   // key: delegator
   // value: score = sum(delegated core * delegated time)
   // When user claim reward of btc, it will cost score.
@@ -86,7 +99,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   mapping(address => uint256) rewardScoreMap;
 
   /*********************** events **************************/
-  event roundReward(string indexed name, address indexed validator, uint256 amounted);
+  event roundReward(string indexed name, address indexed validator, uint256 amount, uint256 bonus);
   event paramChange(string key, bytes value);
   event claimedReward(address indexed delegator, uint256 amount);
 
@@ -105,6 +118,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     operators[BTC_STAKE_ADDR] = true;
     operators[BTCLST_STAKE_ADDR] = true;
 
+    btcPoolRate = LP_BASE;
     alreadyInit = true;
   }
 
@@ -122,29 +136,35 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     require(validatorSize == rewardList.length, "the length of validators and rewardList should be equal");
     uint256 assetSize = assets.length;
     uint256[] memory rewards = new uint256[](validatorSize);
-    uint256 burnReward;
 
     address validator;
-    uint256 rewardValue;
+    uint256[] memory bonuses = new uint256[](assetSize);
+    bonuses[2] = unclaimedReward * btcPoolRate / LP_BASE / validatorSize;
+    bonuses[0] = unclaimedReward * (LP_BASE - btcPoolRate) / LP_BASE / validatorSize;
+    uint256 burnReward = unclaimedReward - (bonuses[0]+bonuses[2]) * validatorSize;
+    unclaimedReward = 0;
     for (uint256 i = 0; i < assetSize; ++i) {
       AssetState memory cs = stateMap[assets[i].agent];
-      rewardValue = 0;
       for (uint256 j = 0; j < validatorSize; ++j) {
         validator = validators[j];
         // This code scope is used for deploy as genesis
         if (candidateScoreMap[validator] == 0) {
-          burnReward += rewardList[j] / assetSize;
+          if (i == 0) {
+            burnReward += rewardList[j];
+          }
+          burnReward += bonuses[i];
           rewards[j] = 0;
           continue;
         }
         uint256 r = rewardList[j] * candidateAmountMap[validator][i] * cs.factor / candidateScoreMap[validator];
         rewards[j] = r * cs.discount / DENOMINATOR;
-        rewardValue += rewards[j];
         burnReward += (r - rewards[j]);
-        emit roundReward(assets[i].name, validator, rewards[j]);
+        emit roundReward(assets[i].name, validator, rewards[j], bonuses[i]);
+        rewards[j] += bonuses[i];
       }
       IAgent(assets[i].agent).distributeReward(validators, rewards, roundTag);
     }
+
     // burn overflow reward of hardcap
     ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: burnReward }();
   }
@@ -226,16 +246,32 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   }
 
   /// Claim reward for delegator
-  /// @return rewards Amounts of each assets can be claimed
-  function claimReward() external returns (uint256[] memory rewards, uint256 liabilityAmount) {
-    uint256 assetSize = assets.length;
+  /// @return reward Amount claimed
+  function claimReward() external returns (uint256 reward, uint256 liabilityAmount) {
     address delegator = msg.sender;
-    rewards = new uint256[](assetSize);
-    uint256 reward;
-    for (uint256 i = 0; i < assetSize; ++i) {
-      rewards[i] = IAgent(assets[i].agent).claimReward(delegator);
-      reward += rewards[i];
+    (uint256 coreReward, uint256 coreRewardUnclaimed) = IAgent(assets[0].agent).claimReward(delegator);
+    (uint256 hashPowerReward, uint256 hashPowerRewardUnclaimed) = IAgent(assets[1].agent).claimReward(delegator);
+    (uint256 btcReward, uint256 btcRewardUnclaimed) = IAgent(assets[2].agent).claimReward(delegator);
+
+    uint256 lpRatesLength = lpRates.length;
+    if (isActive && lpRatesLength != 0) {
+      // LP Rates is configured
+      uint256 bb = coreReward * LP_BASE / btcReward;
+      uint256 p =  LP_BASE;
+      for (uint256 i = lpRatesLength; i != 0; i--) {
+        if (bb >= lpRates[i].l) {
+          p = lpRates[i].p;
+          break;
+        }
+      }
+
+      uint256 btcRewardClaimed = btcReward * p / LP_BASE;
+      btcRewardUnclaimed += (btcReward - btcRewardClaimed);
+      btcReward = btcRewardClaimed;
     }
+
+    reward = coreReward + hashPowerReward + btcReward;
+
     if (reward != 0) {
       Liability storage lb = liabilities[delegator];
       uint256 lbamount;
@@ -259,6 +295,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         emit claimedReward(delegator, reward);
       }
     }
+
+    unclaimedReward += (btcRewardUnclaimed + coreRewardUnclaimed + hashPowerRewardUnclaimed);
   }
 
   /*********************** Governance ********************************/
@@ -300,6 +338,40 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         revert OutOfBounds(key, newBtcHardcap, 1, 1e8);
       }
       assets[2].hardcap = newBtcHardcap;
+    } else if(Memory.compareStrings(key, "lpRates")) {
+      uint256 i;
+      uint256 lastLength = lpRates.length;
+      uint256 currentLength = value.indexUint(0, 1);
+
+      require(((currentLength << 2) + 1) == value.length, "invalid param length");
+
+      for (i = currentLength; i < lastLength; i++) {
+        lpRates.pop();
+      }
+
+      for (i = 0; i < currentLength; i++) {
+        uint256 startIndex = (i << 2) + 1;
+        uint256 l = value.indexUint(startIndex, 2);
+        require(l <= LP_BASE, "invalid param l");
+        uint256 p =  value.indexUint(startIndex + 2, 2);
+        require(p <= LP_BASE, "invalid param p");
+        LP memory lp = LP({
+          l: l,
+          p: p
+        });
+
+        if (i >= lastLength) {
+          lpRates.push(lp);
+        } else {
+          lpRates[i] = lp;
+        }
+      }
+    } else if (Memory.compareStrings(key, "isActive")) {
+       uint256 newIsActive = value.toUint256(0);
+      if (newIsActive > 1) {
+        revert OutOfBounds(key, newIsActive, 0, 1);
+      }
+      isActive = newIsActive == 1;
     } else {
       require(false, "unknown param");
     }
