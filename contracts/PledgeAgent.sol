@@ -410,34 +410,6 @@ contract PledgeAgent is IAgent, System, IParamSubscriber {
     return rewardSum;
   }
 
-  // HARDFORK V-1.0.7 
-  /// claim BTC staking rewards
-  /// @param txidList the list of BTC staking transaction id to claim rewards 
-  /// @return rewardSum amount of reward claimed
-  function claimBtcReward(bytes32[] calldata txidList) external returns (uint256) {
-    uint256 len = txidList.length;
-    uint256 historyReward;
-    uint256 historyRewardSum;
-    uint256 reward;
-    uint256 rewardSum;
-    for(uint256 i = 0; i < len; i++) {
-      bytes32 txid = txidList[i];
-      BtcReceipt storage br = btcReceiptMap[txid];
-      require(br.value != 0, "btc tx not found");
-      address delegator = br.delegator;
-      require(delegator == msg.sender, "not the delegator of this btc receipt");
-      (historyReward, reward) = collectBtcReward(txid);
-      rewardSum += reward;
-      historyRewardSum += historyReward;
-      if (br.value == 0) {
-        emit btcPledgeExpired(txid, delegator);
-      }
-    }
-    transferReward(msg.sender, historyReward, reward, true);
-
-    return rewardSum + historyReward;
-  }
-
   function cleanDelegateInfo(bytes32 txid) external onlyBtcStake returns (address candidate, address delegator, uint256 amount, uint256 round, uint256 lockTime) {
     BtcReceipt storage br = btcReceiptMap[txid];
     require(br.value != 0, "btc tx not found");

@@ -137,6 +137,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   }
 
   /// Calculate hybrid score for all candidates
+  /// This function will also calculate the discount of reward for each asset
+  /// if stake percent overflow its hardcap.
+  ///
   /// @param candidates List of candidate operator addresses
   /// @param roundTag The new round tag
   /// @return scores List of hybrid scores of all validator candidates in this round
@@ -152,7 +155,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       hardcapSum += assets[i].hardcap;
       IAgent(assets[i].agent).prepare(roundTag);
     }
-
+    // score := asset's amount * factor.
+    // asset score & hardcaps are used to calculate discount
+    // for each asset's reward.
     uint256[] memory assetScores = new uint256[](assetSize);
     scores = new uint256[](candidateSize);
     uint256 t;

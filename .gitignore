@@ -11,14 +11,19 @@ contracts/artifacts/*.json
 coverage/
 coverage.json
 coverage.js
+abi/Address.abi
 abi/BytesLib.abi
 abi/BytesToTypes.abi
+abi/BitcoinHelper.abi
 abi/I*.abi
 abi/Memory.abi
 abi/Ownable.abi
+abi/ReentrancyGuard.abi
 abi/RLP*.abi
+abi/SafeCast.abi
 abi/SafeMath.abi
 abi/System.abi
+abi/TypedMemView.abi
 
 # test
 .pytest_cache
