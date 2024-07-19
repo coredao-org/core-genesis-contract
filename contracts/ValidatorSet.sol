@@ -301,9 +301,6 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       }
     }
     ICandidateHub(CANDIDATE_HUB_ADDR).jailValidator(operateAddress, felonyRound, felonyDeposit);
-
-    (bool success, bytes memory data) = PLEDGE_AGENT_ADDR.call{gas: 50000}(abi.encodeWithSignature("onFelony(address)", operateAddress));
-    require (success, "PLEDGE_AGENT_ADDR.onFelony failed.");
   }
 
   /*********************** Param update ********************************/

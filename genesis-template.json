@@ -71,17 +71,21 @@
     },
     "0x0000000000000000000000000000000000001011": {
       "balance": "0x0",
-      "code": "0x{{hashpoweragent}}"
+      "code": "0x{{coreagent}}"
     },
     "0x0000000000000000000000000000000000001012": {
       "balance": "0x0",
-      "code": "0x{{bitcoinagent}}"
+      "code": "0x{{hashpoweragent}}"
     },
     "0x0000000000000000000000000000000000001013": {
       "balance": "0x0",
-      "code": "0x{{bitcoinstake}}"
+      "code": "0x{{bitcoinagent}}"
     },
     "0x0000000000000000000000000000000000001014": {
+      "balance": "0x0",
+      "code": "0x{{bitcoinstake}}"
+    },
+    "0x0000000000000000000000000000000000001015": {
       "balance": "0x0",
       "code": "0x{{bitcoinLSTstake}}"
     },
