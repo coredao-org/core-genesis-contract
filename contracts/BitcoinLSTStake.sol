@@ -33,17 +33,17 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   bytes1 constant OP_0 = 0;
   bytes1 constant OP_1 = 0x51;
 
-  uint64 public constant WTYPE_UNKNOWN = 0;
+  uint32 public constant WTYPE_UNKNOWN = 0;
   // 25 OP_DUP OP_HASH160 OP_DATA_20 <hash160> OP_EQUALVERIFY OP_CHECKSIG
-  uint64 public constant WTYPE_P2PKH = 1;
+  uint32 public constant WTYPE_P2PKH = 1;
   // 23 OP_HASH160 OP_DATA_20 <hash160> OP_EQUAL
-  uint64 public constant WTYPE_P2SH = 2;
+  uint32 public constant WTYPE_P2SH = 2;
   // 22 witnessVer OP_0 OP_DATA_20 <hash160>
-  uint64 public constant WTYPE_P2WPKH = 4;
+  uint32 public constant WTYPE_P2WPKH = 4;
   // 34 witnessVer OP_0 OP_DATA_32 <32-byte-hash>
-  uint64 public constant WTYPE_P2WSH = 8;
+  uint32 public constant WTYPE_P2WSH = 8;
   // 34 witnessVer OP_1 OP_DATA_32 <32-byte-hash>
-  uint64 public constant WTYPE_P2TAPROOT = 16;
+  uint32 public constant WTYPE_P2TAPROOT = 16;
 
   uint64 public constant INIT_UTXO_FEE = 1e4;
 
@@ -98,15 +98,15 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   }
 
   struct Redeem {
+    bytes32 hash; //it may be 20-byte-hash or 32-bytes-hash.
+    uint32  addrType;
     address delegator;
     uint64  amount;
-    bytes32 pkscript0;
-    bytes32 pkscript1;
   }
 
   struct WalletInfo {
     bytes32 hash; //it may be 20-byte-hash or 32-bytes-hash.
-    uint64 addrType;
+    uint32 addrType;
     uint32 status;
   }
 
@@ -203,28 +203,20 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     uint64 _amount;
     bytes29 _pkScript;
     uint256 redeemSize;
-    bytes32 pk0;
-    bytes32 pk1;
-    uint8 pklen;
+    bytes32 hash;
+    uint32 addrType;
 
     for (uint32 i = 0; i < _numberOfOutputs; ++i) {
       (_amount, _pkScript) = voutView.parseOutputValueAndScript(i);
-      pklen = uint8(_pkScript.length);
-      if (pklen <= 32) {
-        pk0 = _pkScript.index(0, pklen);
-        pk1 = 0;
-      } else {
-        pk0 = _pkScript.index(0, 32);
-        pk1 = _pkScript.index(32, pklen - 32);
-      }
+      (hash, addrType) = extractPkScriptAddr(_pkScript.clone());
       redeemSize = redeemRequests.length;
-      for (uint256 j = 0; j < redeemSize; ++j) {
-        Redeem storage rd = redeemRequests[j];
-        if (rd.amount == _amount && rd.pkscript0 == pk0 && rd.pkscript1 == pk1) {
+      for (uint256 j = redeemSize; j != 0; --j) {
+        Redeem storage rd = redeemRequests[j - 1];
+        if (rd.amount == _amount && rd.hash == hash && rd.addrType == addrType) {
           // emit event
           emit undelegated(txid, i, rd.delegator, _amount, _pkScript.clone());
-          if (j + 1 < redeemSize) {
-            rd = redeemRequests[redeemSize-1];
+          if (j != redeemRequests.length) {
+            rd = redeemRequests[redeemRequests.length - 1];
           }
           redeemRequests.pop();
           break;
@@ -301,8 +293,8 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param amount redeem amount
   /// @param pkscript pkscript used in txout
   function redeem(uint64 amount, bytes calldata pkscript) external nonReentrant {
-    (, uint64 txType) = extractPkScriptAddr(pkscript);
-    require(txType != WTYPE_UNKNOWN, "invalid pkscript");
+    (bytes32 hash, uint32 addrType) = extractPkScriptAddr(pkscript);
+    require(addrType != WTYPE_UNKNOWN, "invalid pkscript");
 
     UserStakeInfo storage user = userStakeInfo[msg.sender];
     uint64 balance = user.totalAmount;
@@ -312,17 +304,8 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       require (balance >= 2 * utxoFee, "The redeem amount is too small.");
       amount = balance - utxoFee;
     }
-    uint8 pklen = uint8(pkscript.length);
-    bytes32 pk0;
-    bytes32 pk1;
-    if (pklen <= 32) {
-      pk0 = pkscript.indexBytes32(0, pklen);
-    } else {
-      pk0 = pkscript.indexBytes32(0, 32);
-      pk1 = pkscript.indexBytes32(32, pklen - 32);
-    }
     // push btcaddress into redeem.
-    redeemRequests.push(Redeem(msg.sender, amount, pk0, pk1));
+    redeemRequests.push(Redeem(hash, addrType, msg.sender, amount));
 
     uint64 burnAmount = amount + utxoFee;
     IBitcoinLSTToken(lstToken).burn(msg.sender, uint256(burnAmount));
@@ -371,7 +354,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
         wallets[index1 - 1].status = WST_ACTIVE;
       }
     } else {
-      (bytes32 _hash, uint64 _type) = extractPkScriptAddr(pkscript);
+      (bytes32 _hash, uint32 _type) = extractPkScriptAddr(pkscript);
       require(_type != WTYPE_UNKNOWN, "Invalid BTC wallet");
       wallets.push(WalletInfo(_hash, _type, WST_ACTIVE));
       index1 = wallets.length;
@@ -398,7 +381,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     require(wallets[index1 - 1].status == WST_ACTIVE, "wallet inactive");
   }
 
-  function extractPkScriptAddr(bytes memory pkScript) internal pure returns (bytes32 whash, uint64 txType) {
+  function extractPkScriptAddr(bytes memory pkScript) internal pure returns (bytes32 whash, uint32 addrType) {
     uint256 len = pkScript.length;
     if (len == 25) {
       // pay-to-pubkey-hash
