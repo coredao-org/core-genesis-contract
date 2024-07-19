@@ -46,6 +46,10 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   mapping(address => bool) public liabilityOperators;
 
+  // key: creditor address
+  // value: amount of note payable for claim.
+  mapping(address => uint256) public payableNotes;
+
   struct Asset {
     string  name;
     address agent;
@@ -205,7 +209,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   /// Claim reward for delegator
   /// @return reward Amount claimed
-  function claimReward() external returns (uint256 reward) {
+  function claimReward() external returns (uint256 reward, uint256 liabilityAmount) {
     uint256 subReward;
     uint256 assetSize = assets.length;
     address delegator = msg.sender;
@@ -214,8 +218,27 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       reward += subReward;
     }
     if (reward != 0) {
-      Address.sendValue(payable(delegator), reward);
-      emit claimedReward(delegator, reward);
+      Liability storage lb = liabilities[delegator];
+      uint256 lbamount;
+      for (uint256 i = lb.notes.length; i != 0; --i) {
+        lbamount = lb.notes[i-1].amount;
+        if (lbamount <= reward) {
+          reward -= lbamount;
+          payableNotes[lb.notes[i-1].creditor] += lbamount;
+          liabilityAmount += lbamount;
+          lb.notes.pop();
+        } else {
+          liabilityAmount += reward;
+          lb.notes[i-1].amount -= reward;
+          payableNotes[lb.notes[i-1].creditor] += reward;
+          reward = 0;
+          break;
+        }
+      }
+      if (reward != 0) {
+        Address.sendValue(payable(delegator), reward);
+        emit claimedReward(delegator, reward);
+      }
     }
   }
 
