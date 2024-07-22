@@ -322,22 +322,22 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     require (success, "call CANDIDATE_HUB.getCandidates fail");
     address[] memory candidates = abi.decode(data, (address[]));
     // get fixed core,hash,core, and real core, real btc.
-    (success, data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("getStakeInfo(address[] memory)", candidates));
-    require (success, "call PLEDGE_AGENT_ADDR.getStakeInfo fail");
+    (success, data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("getStakeInfo(address[])", candidates));
+    require (success, "call PLEDGE_AGENT_ADDR.getStakeInfo 1 fail");
     (uint256[] memory cores, uint256[] memory hashs, uint256[] memory btcs, uint256[] memory realCores, uint256[] memory realBtcs) = abi.decode(data, (uint256[], uint256[], uint256[], uint256[], uint256[]));
 
-    (success,) = assets[0].agent.call(abi.encodeWithSignature("initHardforkRound(address[] memory,uint256[] memory,uint256[] memory)", candidates, cores, realCores));
+    (success,) = assets[0].agent.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[],uint256[])", candidates, cores, realCores));
     require (success, "call CORE_AGENT_ADDR.initHardforkRound fail");
-    (success,) = assets[2].agent.call(abi.encodeWithSignature("initHardforkRound(address[] memory,uint256[] memory,uint256[] memory)", candidates, btcs, realBtcs));
+    (success,) = assets[2].agent.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[],uint256[])", candidates, btcs, realBtcs));
     require (success, "call BTC_AGENT_ADDR.initHardforkRound fail");
 
     // get validator set
     address[] memory validators = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getValidatorOps();
-    (success, data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("getStakeInfo(address[] memory)", validators));
-    require (success, "call PLEDGE_AGENT_ADDR.getStakeInfo fail");
+    (success, data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("getStakeInfo(address[])", validators));
+    require (success, "call PLEDGE_AGENT_ADDR.getStakeInfo 2 fail");
     (cores, hashs, btcs,,) = abi.decode(data, (uint256[], uint256[], uint256[], uint256[], uint256[]));
 
-    (success,) = BTC_STAKE_ADDR.call(abi.encodeWithSignature("initHardforkRound(address[] memory,uint256[] memory)", validators, btcs));
+    (success,) = BTC_STAKE_ADDR.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[])", validators, btcs));
     require (success, "call BTC_STAKE_ADDR.initHardforkRound fail");
 
     uint256 validatorSize = validators.length;
