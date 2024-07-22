@@ -241,7 +241,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     uint256 candidateSize = candidates.length;
     address candidate;
     for (uint256 i = candidateSize; i != 0;) {
-      candidate = candidates[i];
+      candidate = candidates[i - 1];
       CoinDelegator storage cd = candidateMap[candidate].cDelegatorMap[delegator];
       reward = collectCoinReward(candidate, cd);
       rewardSum += reward;
