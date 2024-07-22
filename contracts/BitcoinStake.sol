@@ -122,6 +122,15 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
   }
 
+  function initHardforkRound(address[] memory candidates, uint256[] memory amounts, uint256[] memory realAmounts) external onlyStakeHub {
+    uint256 s = candidates.length;
+    for (uint256 i = 0; i < s; ++i) {
+      Candidate storage c = candidateMap[candidates[i]];
+      c.fixAmount = amounts[i];
+      c.realFixAmount = realAmounts[i];
+    }
+  }
+
   /// Bitcoin delegate, it is called by relayer
   ///
   /// User workflow to delegate BTC to Core blockchain

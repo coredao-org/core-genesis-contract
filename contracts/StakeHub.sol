@@ -25,6 +25,10 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   uint256 public constant INIT_BTC_FACTOR = 1e4;
   uint256 public constant DENOMINATOR = 1e4;
 
+  uint256 public constant MASK_STAKE_CORE_MASK = 1;
+  uint256 public constant MASK_STAKE_HASH_MASK = 2;
+  uint256 public constant MASK_STAKE_BTC_MASK = 4;
+
   // Asset list.
   Asset[] public assets;
 
@@ -37,6 +41,10 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   // value: hybrid score for each candidate.
   mapping(address => uint256) public candidateScoreMap;
 
+  // key: delegator address
+  // value: mask which asset staked, if the mask is zero.
+  mapping(address => uint256) public delegatesMaskMap;
+
   // key: Asset's agent address
   // value: useful state information of round
   mapping(address => AssetState) public stateMap;
@@ -44,7 +52,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   // key: delegator, value: Liability
   mapping(address => Liability) liabilities;
 
-  mapping(address => bool) public liabilityOperators;
+  mapping(address => bool) public operators;
 
   // key: creditor address
   // value: amount of note payable for claim.
@@ -84,14 +92,19 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   function init() external onlyNotInit {
     // add three assets into list
-    assets.push(Asset("CORE", PLEDGE_AGENT_ADDR, 1, 6000));
+    assets.push(Asset("CORE", CORE_AGENT_ADDR, 1, 6000));
     assets.push(Asset("HASHPOWER", HASH_AGENT_ADDR, HASH_UNIT_CONVERSION * INIT_HASH_FACTOR, 2000));
     assets.push(Asset("BTC", BTC_AGENT_ADDR, BTC_UNIT_CONVERSION * INIT_BTC_FACTOR, 4000));
 
     _initHybridScore();
 
-    liabilityOperators[BTC_STAKE_ADDR] = true;
-    liabilityOperators[BTCLST_STAKE_ADDR] = true;
+    operators[PLEDGE_AGENT_ADDR] = true;
+    operators[CORE_AGENT_ADDR] = true;
+    operators[HASH_AGENT_ADDR] = true;
+    operators[BTC_AGENT_ADDR] = true;
+    operators[BTC_STAKE_ADDR] = true;
+    operators[BTCLST_STAKE_ADDR] = true;
+
     alreadyInit = true;
   }
 
@@ -208,7 +221,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   }
 
   function addNotePayable(address delegator, address creditor, uint256 amount) external override {
-    require(liabilityOperators[msg.sender], 'only liability operators');
+    require(operators[msg.sender], 'only liability operators');
     liabilities[delegator].notes.push(NotePayable(creditor, amount));
   }
 
@@ -304,34 +317,47 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   /*********************** Internal methods ********************************/
   function _initHybridScore() internal {
+    // get active candidates.
+    (bool success, bytes memory data) = CANDIDATE_HUB_ADDR.call(abi.encodeWithSignature("getCandidates()"));
+    require (success, "call CANDIDATE_HUB.getCandidates fail");
+    address[] memory candidates = abi.decode(data, (address[]));
+    // get fixed core,hash,core, and real core, real btc.
+    (success, data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("getStakeInfo(address[] memory)", candidates));
+    require (success, "call PLEDGE_AGENT_ADDR.getStakeInfo fail");
+    (uint256[] memory cores, uint256[] memory hashs, uint256[] memory btcs, uint256[] memory realCores, uint256[] memory realBtcs) = abi.decode(data, (uint256[], uint256[], uint256[], uint256[], uint256[]));
+
+    (success,) = assets[0].agent.call(abi.encodeWithSignature("initHardforkRound(address[] memory,uint256[] memory,uint256[] memory)", candidates, cores, realCores));
+    require (success, "call CORE_AGENT_ADDR.initHardforkRound fail");
+    (success,) = assets[2].agent.call(abi.encodeWithSignature("initHardforkRound(address[] memory,uint256[] memory,uint256[] memory)", candidates, btcs, realBtcs));
+    require (success, "call BTC_AGENT_ADDR.initHardforkRound fail");
+
     // get validator set
     address[] memory validators = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getValidatorOps();
+    (success, data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("getStakeInfo(address[] memory)", validators));
+    require (success, "call PLEDGE_AGENT_ADDR.getStakeInfo fail");
+    (cores, hashs, btcs,,) = abi.decode(data, (uint256[], uint256[], uint256[], uint256[], uint256[]));
+
+    (success,) = BTC_STAKE_ADDR.call(abi.encodeWithSignature("initHardforkRound(address[] memory,uint256[] memory)", validators, btcs));
+    require (success, "call BTC_STAKE_ADDR.initHardforkRound fail");
+
     uint256 validatorSize = validators.length;
-    uint256 core;
-    uint256 hashpower;
-    uint256 btc;
-    uint256 totalCore;
-    uint256 totalHashPower;
-    uint256 totalBtc;
+    uint256[] memory totalAmounts = new uint256[](3);
     for (uint256 i = 0; i < validatorSize; ++i) {
       address validator = validators[i];
-      (bool success, bytes memory data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("getStakeInfo(address)", validator));
-      if (success) {
-        (core, hashpower, btc) = abi.decode(data, (uint256, uint256, uint256));
-      }
-      totalCore += core;
-      totalHashPower += hashpower;
-      totalBtc += btc;
 
-      candidateAmountMap[validator].push(core);
-      candidateAmountMap[validator].push(hashpower);
-      candidateAmountMap[validator].push(btc);
+      totalAmounts[0] += cores[i];
+      totalAmounts[1] += hashs[i];
+      totalAmounts[2] += btcs[i];
 
-      candidateScoreMap[validator] = core * assets[0].factor + hashpower * assets[1].factor + btc * assets[2].factor;
+      candidateAmountMap[validator].push(cores[i]);
+      candidateAmountMap[validator].push(hashs[i]);
+      candidateAmountMap[validator].push(btcs[i]);
+
+      candidateScoreMap[validator] = cores[i] * assets[0].factor + hashs[i] * assets[1].factor + btcs[i] * assets[2].factor;
     }
 
-    stateMap[assets[0].agent] = AssetState(totalCore, assets[0].factor, DENOMINATOR);
-    stateMap[assets[1].agent] = AssetState(totalHashPower, assets[1].factor, DENOMINATOR);
-    stateMap[assets[2].agent] = AssetState(totalBtc, assets[2].factor, DENOMINATOR);
+    for (uint256 j = 0; j < 3; j++) {
+      stateMap[assets[j].agent] = AssetState(totalAmounts[j], assets[j].factor, DENOMINATOR);
+    }
   }
 }

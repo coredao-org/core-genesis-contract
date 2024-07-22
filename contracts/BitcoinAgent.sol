@@ -28,6 +28,13 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     alreadyInit = true;
   }
 
+  function initHardforkRound(address[] memory candidates, uint256[] memory amounts) external onlyStakeHub {
+    uint256 s = candidates.length;
+    for (uint256 i = 0; i < s; ++i) {
+      candidateMap[candidates[i]].stakeAmount = amounts[i];
+    }
+  }
+
   /*********************** IAgent implementations ***************************/
   /// Do some preparement before new round.
   /// @param round The new round tag
