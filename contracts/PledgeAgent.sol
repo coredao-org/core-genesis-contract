@@ -234,8 +234,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param agentList The list of validators to claim rewards on, it can be empty
   /// @return (Amount claimed, Are all rewards claimed)
   function claimReward(address[] calldata agentList) external override returns (uint256, bool) {
-    // limit round count to control gas usage
-    uint256 reward;
     uint256 rewardSum = rewardMap[msg.sender];
     if (rewardSum != 0) {
       rewardMap[msg.sender] = 0;
@@ -243,16 +241,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
     uint256 agentSize = agentList.length;
     for (uint256 i = 0; i < agentSize; ++i) {
-      Agent storage a = agentsMap[agentList[i]];
-      if (a.rewardSet.length == 0) {
-        continue;
-      }
-      CoinDelegator storage d = a.cDelegatorMap[msg.sender];
-      if (d.newDeposit == 0 && d.transferOutDeposit == 0) {
-        continue;
-      }
-      reward = move2CoreAgent(agentList[i], msg.sender, false);
-      rewardSum += reward;
+      rewardSum += move2CoreAgent(agentList[i], msg.sender, false);
     }
 
     if (rewardSum != 0) {
@@ -261,27 +250,16 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return (rewardSum, true);
   }
 
-  function calculateReward(address[] calldata agentList) external override returns (uint256) {
-    uint256 reward;
-    uint256 rewardSum;
+  function calculateReward(address[] calldata agentList, address delegator) external override returns (uint256 reward) {
     uint256 agentSize = agentList.length;
     for (uint256 i = 0; i < agentSize; ++i) {
-      Agent storage a = agentsMap[agentList[i]];
-      if (a.rewardSet.length == 0) {
-        continue;
-      }
-      CoinDelegator storage d = a.cDelegatorMap[msg.sender];
-      if (d.newDeposit == 0 && d.transferOutDeposit == 0) {
-        continue;
-      }
-      reward = move2CoreAgent(agentList[i], msg.sender, false);
-      rewardSum += reward;
+      reward += move2CoreAgent(agentList[i], delegator, false);
     }
 
-    if (rewardSum != 0) {
-      rewardMap[msg.sender] += rewardSum;
+    if (reward != 0) {
+      rewardMap[delegator] += reward;
     }
-    return rewardMap[msg.sender];
+    return rewardMap[delegator];
   }
 
   // HARDFORK V-1.0.7 
@@ -374,7 +352,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     Agent storage a = agentsMap[agent];
     CoinDelegator storage d = a.cDelegatorMap[delegator];
     if (d.changeRound != 0) {
-      reward = collectCoinReward(a, d, 0x7FFFFFFF);
+      reward = collectCoinReward(a, d);
       if (dist && reward != 0) {
         distributeReward(payable(delegator), reward);
       }
@@ -405,7 +383,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return curReward;
   }
 
-  function collectCoinReward(Agent storage a, CoinDelegator storage d, int256 roundLimit) internal returns (uint256 rewardAmount) {
+  function collectCoinReward(Agent storage a, CoinDelegator storage d) internal returns (uint256 rewardAmount) {
     uint256 changeRound = d.changeRound;
     uint256 curRound = roundTag;
     if (changeRound < curRound) {
@@ -417,10 +395,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     if (rewardIndex >= rewardLength) {
       return 0;
     }
-    if (rewardIndex + uint256(roundLimit) < rewardLength) {
-      rewardLength = rewardIndex + uint256(roundLimit);
-    }
-
     while (rewardIndex < rewardLength) {
       Reward storage r = a.rewardSet[rewardIndex];
       uint256 rRound = r.round;

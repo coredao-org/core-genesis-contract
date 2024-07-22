@@ -226,14 +226,15 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   }
 
   /// Claim reward for delegator
-  /// @return reward Amount claimed
-  function claimReward() external returns (uint256 reward, uint256 liabilityAmount) {
-    uint256 subReward;
+  /// @return rewards Amounts of each assets can be claimed
+  function claimReward() external returns (uint256[] memory rewards, uint256 liabilityAmount) {
     uint256 assetSize = assets.length;
     address delegator = msg.sender;
+    rewards = new uint256[](3);
+    uint256 reward;
     for (uint256 i = 0; i < assetSize; ++i) {
-      subReward = IAgent(assets[i].agent).claimReward(delegator);
-      reward += subReward;
+      rewards[i] = IAgent(assets[i].agent).claimReward(delegator);
+      reward += rewards[i];
     }
     if (reward != 0) {
       Liability storage lb = liabilities[delegator];
@@ -328,8 +329,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
     (success,) = assets[0].agent.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[],uint256[])", candidates, cores, realCores));
     require (success, "call CORE_AGENT_ADDR.initHardforkRound fail");
-    (success,) = assets[2].agent.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[],uint256[])", candidates, btcs, realBtcs));
-    require (success, "call BTC_AGENT_ADDR.initHardforkRound fail");
+    (success,) = BTC_STAKE_ADDR.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[],uint256[])", candidates, btcs, realBtcs));
+    require (success, "call BTC_STAKE_ADDR.initHardforkRound fail");
 
     // get validator set
     address[] memory validators = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getValidatorOps();
@@ -337,8 +338,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     require (success, "call PLEDGE_AGENT_ADDR.getStakeInfo 2 fail");
     (cores, hashs, btcs,,) = abi.decode(data, (uint256[], uint256[], uint256[], uint256[], uint256[]));
 
-    (success,) = BTC_STAKE_ADDR.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[])", validators, btcs));
-    require (success, "call BTC_STAKE_ADDR.initHardforkRound fail");
+    (success,) = assets[2].agent.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[])", validators, btcs));
+    require (success, "call BTC_AGENT_ADDR.initHardforkRound fail");
 
     uint256 validatorSize = validators.length;
     uint256[] memory totalAmounts = new uint256[](3);
