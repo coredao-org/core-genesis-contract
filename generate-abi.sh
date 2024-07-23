@@ -1,12 +1,11 @@
-name=$1
-
-if [ -n $1 ]; then
+name="$1"
+if [ ! -z "$name" ]; then
 	echo "$name"
 	solc @openzeppelin/=$(pwd)/node_modules/@openzeppelin/ --optimize --overwrite --abi -o ./abi contracts/${name}.sol
 else
   contracts=( "BtcLightClient" "Burn" "CandidateHub" "Foundation" "GovHub" \
     "PledgeAgent" "RelayerHub" "SlashIndicator" "SystemReward" "ValidatorSet" \
-    "BitcoinAgent" "BitcoinLSTStake" "BitcoinStake" "HashPowerAgent")
+    "BitcoinAgent" "BitcoinLSTStake" "BitcoinStake" "HashPowerAgent" "CoreAgent")
 
   for e in ${contracts[@]}
   do

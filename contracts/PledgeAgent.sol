@@ -177,17 +177,18 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /*********************** External methods ***************************/
   /// Delegate coin to a validator
   /// @param agent The operator address of validator
-  // HARDFORK V-1.0.10 Deprecated
+  /// HARDFORK V-1.0.10 Deprecated
   function delegateCoin(address agent) external payable override {
-    move2CoreAgent(agent, msg.sender, true);
+    move2CoreAgent(agent, msg.sender);
+    distributeReward(msg.sender);
 
-    (bool success, ) = CORE_AGENT_ADDR.call {value:msg.value} (abi.encodeWithSignature("proxyDelegate(address,address)",agent, msg.sender));
+    (bool success, ) = CORE_AGENT_ADDR.call {value:msg.value} (abi.encodeWithSignature("proxyDelegate(address,address)", agent, msg.sender));
     require (success, "call CORE_AGENT_ADDR.proxyDelegate fail");
   }
 
   /// Undelegate coin from a validator
   /// @param agent The operator address of validator
-  // HARDFORK V-1.0.10 Deprecated
+  /// HARDFORK V-1.0.10 Deprecated
   function undelegateCoin(address agent) external override {
     undelegateCoin(agent, 0);
   }
@@ -195,14 +196,11 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Undelegate coin from a validator
   /// @param agent The operator address of validator
   /// @param amount The amount of CORE to undelegate
-  // HARDFORK V-1.0.10 Deprecated
+  /// HARDFORK V-1.0.10 Deprecated
   function undelegateCoin(address agent, uint256 amount) public override {
+    move2CoreAgent(agent, msg.sender);
+    distributeReward(msg.sender);
 
-    if (amount == 0) {
-      amount = agentsMap[agent].cDelegatorMap[msg.sender].newDeposit;
-    }
-    move2CoreAgent(agent, msg.sender, true);
-    
     (bool success, ) = CORE_AGENT_ADDR.call(abi.encodeWithSignature("proxyUnDelegate(address,address,uint256)", agent, msg.sender, amount));
     require (success, "call CORE_AGENT_ADDR.proxyUnDelegate fail");
   }
@@ -221,11 +219,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param amount The amount of CORE to transfer
   // HARDFORK V-1.0.10 Deprecated
   function transferCoin(address sourceAgent, address targetAgent, uint256 amount) public override {
-    if (amount == 0) {
-      amount = agentsMap[sourceAgent].cDelegatorMap[msg.sender].newDeposit;
-    }
-    move2CoreAgent(sourceAgent, msg.sender, true);
-    move2CoreAgent(targetAgent, msg.sender, true);
+    move2CoreAgent(sourceAgent, msg.sender);
+    move2CoreAgent(targetAgent, msg.sender);
+    distributeReward(msg.sender);
 
     (bool success, ) = CORE_AGENT_ADDR.call(abi.encodeWithSignature("proxyTransfer(address,address,address,uint256)", sourceAgent, targetAgent, msg.sender, amount));
     require (success, "call CORE_AGENT_ADDR.proxyTransfer fail");
@@ -235,30 +231,19 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param agentList The list of validators to claim rewards on, it can be empty
   /// @return (Amount claimed, Are all rewards claimed)
   function claimReward(address[] calldata agentList) external override returns (uint256, bool) {
-    uint256 rewardSum = rewardMap[msg.sender];
-    if (rewardSum != 0) {
-      rewardMap[msg.sender] = 0;
-    }
-
     uint256 agentSize = agentList.length;
     for (uint256 i = 0; i < agentSize; ++i) {
-      rewardSum += move2CoreAgent(agentList[i], msg.sender, false);
+      move2CoreAgent(agentList[i], msg.sender);
     }
-
-    if (rewardSum != 0) {
-      distributeReward(payable(msg.sender), rewardSum);
-    }
+    uint256 rewardSum = rewardMap[msg.sender];
+    distributeReward(msg.sender);
     return (rewardSum, true);
   }
 
-  function calculateReward(address[] calldata agentList, address delegator) external override returns (uint256 reward) {
+  function calculateReward(address[] calldata agentList, address delegator) external override returns (uint256) {
     uint256 agentSize = agentList.length;
     for (uint256 i = 0; i < agentSize; ++i) {
-      reward += move2CoreAgent(agentList[i], delegator, false);
-    }
-
-    if (reward != 0) {
-      rewardMap[delegator] += reward;
+      move2CoreAgent(agentList[i], delegator);
     }
     return rewardMap[delegator];
   }
@@ -284,7 +269,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
 
     if (rewardSum != 0) {
-      distributeReward(payable(msg.sender), rewardSum);
+      rewardMap[msg.sender] += rewardSum;
+      distributeReward(msg.sender);
     }
     return rewardSum;
   }
@@ -369,19 +355,27 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     require (success, "call BTC_STAKE_ADDR.initHardforkRound fail");
   }
 
-  /*********************** Internal methods ***************************/
-  function distributeReward(address payable delegator, uint256 reward) internal {
-    Address.sendValue(delegator, reward);
-    emit claimedReward(delegator, msg.sender, reward, true);
+  function moveDelegator(address agent, address delegator) external {
+    move2CoreAgent(agent, delegator);
   }
 
-  function move2CoreAgent(address agent, address delegator, bool dist) internal returns (uint256 reward) {
+  /*********************** Internal methods ***************************/
+  function distributeReward(address delegator) internal {
+    uint256 reward = rewardMap[delegator];
+    if (reward != 0) {
+      rewardMap[delegator] = 0;
+      Address.sendValue(payable(delegator), reward);
+      emit claimedReward(delegator, msg.sender, reward, true);
+    }
+  }
+
+  function move2CoreAgent(address agent, address delegator) internal {
     Agent storage a = agentsMap[agent];
     CoinDelegator storage d = a.cDelegatorMap[delegator];
     if (d.changeRound != 0) {
-      reward = collectCoinReward(a, d);
-      if (dist && reward != 0) {
-        distributeReward(payable(delegator), reward);
+      uint256 reward = collectCoinReward(a, d);
+      if (reward != 0) {
+        rewardMap[delegator] += reward;
       }
 
       (bool success, ) = CORE_AGENT_ADDR.call {value: d.newDeposit} (abi.encodeWithSignature("moveData(address,address,uint256,uint256)", agent, delegator, d.deposit, d.transferOutDeposit, roundTag));
@@ -391,7 +385,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       delete a.cDelegatorMap[delegator];
       delete debtDepositMap[roundTag][delegator];
     }
-    return reward;
   }
 
   function collectCoinReward(Reward storage r, uint256 deposit) internal returns (uint256 rewardAmount) {
