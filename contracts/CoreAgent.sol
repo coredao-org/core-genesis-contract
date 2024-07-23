@@ -257,8 +257,8 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       cd.transferredAmount += transferredAmount;
     }
     cd.stakedAmount += stakedAmount;
-    cd.realAmount += amount;
-    delegatorMap[delegator].amount += amount;
+    cd.realAmount += realAmount;
+    delegatorMap[delegator].amount += realAmount;
   }
 
   function proxyDelegate(address candidate, address delegator) external payable onlyPledgeAgent {
@@ -369,27 +369,26 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     }
   }
 
-
-  function collectReward(address candidate, uint256 stakedAmount, uint256 realAmount, uint256 transferredAmount, uint256 changeRound) internal returns (uint256 reward) {
+  function collectReward(address candidate, uint256 stakedAmount, uint256 realAmount, uint256 transferredAmount, uint256 changeRound) internal view returns (uint256 reward) {
     require(changeRound != 0, "invalid coindelegator");
     uint256 lastRoundTag = roundTag - 1;
     if (changeRound <= lastRoundTag) {
-      uint256 aclastRoundReward = getRoundAccuredReward(candidate, lastRoundTag);
-      uint256 aclastChangeRoundReward = getRoundAccuredReward(candidate, changeRound - 1);
-      uint256 acChangeRoundReward;
-      reward = stakedAmount * (aclastRoundReward - aclastChangeRoundReward);
+      uint256 lastRoundReward = getRoundAccuredReward(candidate, lastRoundTag);
+      uint256 lastChangeRoundReward = getRoundAccuredReward(candidate, changeRound - 1);
+      uint256 changeRoundReward;
+      reward = stakedAmount * (lastRoundReward - lastChangeRoundReward);
       if (transferredAmount != 0) {
-        acChangeRoundReward = getRoundAccuredReward(candidate, changeRound);
-        reward += transferredAmount * (acChangeRoundReward - aclastChangeRoundReward);
+        changeRoundReward = getRoundAccuredReward(candidate, changeRound);
+        reward += transferredAmount * (changeRoundReward - lastChangeRoundReward);
         transferredAmount = 0;
       }
 
       if (realAmount != stakedAmount) {
         if (changeRound < lastRoundTag) {
-          if (acChangeRoundReward == 0) {
-            acChangeRoundReward = getRoundAccuredReward(candidate, changeRound);
+          if (changeRoundReward == 0) {
+            changeRoundReward = getRoundAccuredReward(candidate, changeRound);
           }
-          reward += (realAmount - stakedAmount) * (lastRoundReward - acChangeRoundReward);
+          reward += (realAmount - stakedAmount) * (lastRoundReward - changeRoundReward);
         }
       }
       reward /= SatoshiPlusHelper.CORE_STAKE_DECIMAL;
