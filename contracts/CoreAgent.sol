@@ -236,7 +236,9 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     return rewardSum;
   }
 
-  function moveData(address candidate, address delegator, uint256 stakedAmount, uint256 transferAmount, uint256 round) external payable onlyPledgeAgent {
+  function moveData(address candidate, address delegator, uint256 stakedAmount, uint256 transferredAmount, uint256 round) external payable onlyPledgeAgent {
+    uint256 realAmount = msg.value;
+    require(stakedAmount + transferredAmount <= realAmount, "require stakedAmount + transferredAmount <= realAmount");
     Candidate storage a = candidateMap[candidate];
     CoinDelegator storage cd = a.cDelegatorMap[delegator];
     uint256 changeRound = cd.changeRound;
@@ -248,10 +250,12 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       rewardMap[delegator] += reward;
     }
     if (round < roundTag) {
-      // TODO collect coin
+      uint256 reward = collectReward(candidate, stakedAmount, realAmount,  transferredAmount, round);
+      stakedAmount = realAmount;
+      rewardMap[delegator] += reward;
+    } else {
+      cd.transferredAmount += transferredAmount;
     }
-    uint256 amount = msg.value;
-    require(stakedAmount <= amount, "stakedAmount should be less than the received value");
     cd.stakedAmount += stakedAmount;
     cd.realAmount += amount;
     delegatorMap[delegator].amount += amount;
@@ -317,7 +321,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     uint256 stakedAmount = cd.stakedAmount;
     require(stakedAmount >= amount, "Not enough staked token");
     if (amount != stakedAmount) {
-      require(stakedAmount - amount >= requiredCoinDeposit, "remain amount is too small");
+      require(cd.realAmount - amount >= requiredCoinDeposit, "remain amount is too small");
     }
 
     a.realAmount -= amount;
@@ -362,6 +366,33 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       }
       reward /= SatoshiPlusHelper.CORE_STAKE_DECIMAL;
       cd.changeRound = roundTag;
+    }
+  }
+
+
+  function collectReward(address candidate, uint256 stakedAmount, uint256 realAmount, uint256 transferredAmount, uint256 changeRound) internal returns (uint256 reward) {
+    require(changeRound != 0, "invalid coindelegator");
+    uint256 lastRoundTag = roundTag - 1;
+    if (changeRound <= lastRoundTag) {
+      uint256 aclastRoundReward = getRoundAccuredReward(candidate, lastRoundTag);
+      uint256 aclastChangeRoundReward = getRoundAccuredReward(candidate, changeRound - 1);
+      uint256 acChangeRoundReward;
+      reward = stakedAmount * (aclastRoundReward - aclastChangeRoundReward);
+      if (transferredAmount != 0) {
+        acChangeRoundReward = getRoundAccuredReward(candidate, changeRound);
+        reward += transferredAmount * (acChangeRoundReward - aclastChangeRoundReward);
+        transferredAmount = 0;
+      }
+
+      if (realAmount != stakedAmount) {
+        if (changeRound < lastRoundTag) {
+          if (acChangeRoundReward == 0) {
+            acChangeRoundReward = getRoundAccuredReward(candidate, changeRound);
+          }
+          reward += (realAmount - stakedAmount) * (lastRoundReward - acChangeRoundReward);
+        }
+      }
+      reward /= SatoshiPlusHelper.CORE_STAKE_DECIMAL;
     }
   }
 
