@@ -603,21 +603,17 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return expireInfo.agent2valueMap[agent];
   }
 
-  function getStakeInfo(address[] memory candidates) external view returns (uint256[] memory cores, uint256[] memory hashs, uint256[] memory btcs, uint256[] memory realCore, uint256[] memory realBtc) {
+  function getStakeInfo(address[] memory candidates) external view returns (uint256[] memory cores, uint256[] memory hashs, uint256[] memory btcs) {
     uint256 l = candidates.length;
     cores = new uint256[](l);
     hashs = new uint256[](l);
     btcs = new uint256[](l);
-    realCore = new uint256[](l);
-    realBtc = new uint256[](l);
 
     for (uint256 i = 0; i < l; ++i) {
       Agent storage agent = agentsMap[candidates[i]];
       cores[i] = agent.coin;
       hashs[i] = agent.power / POWER_BLOCK_FACTOR;
       btcs[i] = agent.btc;
-      realCore[i] = agent.totalDeposit;
-      realBtc[i] = agent.totalBtc;
     }
   }
 }
