@@ -42,7 +42,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
 
   struct CoinDelegator {
     uint256 stakedAmount;
-    uint256 totalAmount;
+    uint256 realAmount;
     uint256 changeRound;
     uint256 transferredAmount;
   }
@@ -63,14 +63,14 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
 
   /*********************** events **************************/
   event paramChange(string key, bytes value);
-  event delegatedCoin(address indexed candidate, address indexed delegator, uint256 amount, uint256 totalAmount);
+  event delegatedCoin(address indexed candidate, address indexed delegator, uint256 amount, uint256 realAmount);
   event undelegatedCoin(address indexed candidate, address indexed delegator, uint256 amount);
   event transferredCoin(
     address indexed sourceCandidate,
     address indexed targetCandidate,
     address indexed delegator,
     uint256 amount,
-    uint256 totalAmount
+    uint256 realAmount
   );
   event claimedReward(address indexed delegator, uint256 amount);
 
@@ -93,28 +93,12 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     alreadyInit = true;
   }
 
-  function initHardforkRound(address[] memory candidates, uint256[] memory amounts, uint256[] memory realAmounts) external onlyStakeHub {
+  function initHardforkRound(address[] memory candidates, uint256[] memory amounts, uint256[] memory realAmounts) external onlyPledgeAgent {
     uint256 s = candidates.length;
     for (uint256 i = 0; i < s; ++i) {
       Candidate storage c = candidateMap[candidates[i]];
       c.amount = amounts[i];
       c.realAmount = realAmounts[i];
-    }
-  }
-
-  function initValidatorAmounts(address[] memory validators, uint256[] memory amounts) external onlyStakeHub {
-    uint256 validatorSize = validators.length;
-    for (uint256 i = 0; i < validatorSize; ++i) {
-      Candidate storage a = candidateMap[validators[i]];
-      a.amount = amounts[i];
-    }
-  }
-
-  function initCandidateRealAmounts(address[] memory candidates, uint256[] memory amounts) external onlyStakeHub {
-    uint256 candidateSize = candidates.length;
-    for (uint256 i = 0; i < candidateSize; ++i) {
-      Candidate storage a = candidateMap[candidates[i]];
-      a.realAmount = amounts[i];
     }
   }
 
@@ -166,13 +150,13 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param candidates List of candidate operator addresses
   ///
   /// @return amounts List of amounts of all special candidates in this round
-  /// @return totalAmount The sum of all amounts of valid/invalid candidates.
-  function getStakeAmounts(address[] calldata candidates, uint256) external override view returns (uint256[] memory amounts, uint256 totalAmount) {
+  /// @return realAmount The sum of all amounts of valid/invalid candidates.
+  function getStakeAmounts(address[] calldata candidates, uint256) external override view returns (uint256[] memory amounts, uint256 realAmount) {
     uint256 candidateSize = candidates.length;
     amounts = new uint256[](candidateSize);
     for (uint256 i = 0; i < candidateSize; ++i) {
       amounts[i] = candidateMap[candidates[i]].realAmount;
-      totalAmount += amounts[i];
+      realAmount += amounts[i];
     }
   }
 
@@ -196,8 +180,8 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       revert InactiveCandidate(candidate);
     }
     require(msg.value >= requiredCoinDeposit, "delegate amount is too small");
-    uint256 totalAmount = delegateCoin(candidate, msg.sender, msg.value, false);
-    emit delegatedCoin(candidate, msg.sender, msg.value, totalAmount);
+    uint256 realAmount = delegateCoin(candidate, msg.sender, msg.value, false);
+    emit delegatedCoin(candidate, msg.sender, msg.value, realAmount);
   }
 
   /// Undelegate coin from a validator
@@ -245,7 +229,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       CoinDelegator storage cd = candidateMap[candidate].cDelegatorMap[delegator];
       reward = collectCoinReward(candidate, cd);
       rewardSum += reward;
-      if (cd.totalAmount == 0 && cd.transferredAmount == 0) {
+      if (cd.realAmount == 0 && cd.transferredAmount == 0) {
         removeDelegation(delegator, candidate);
       }
     }
@@ -269,14 +253,14 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     uint256 amount = msg.value;
     require(stakedAmount <= amount, "stakedAmount should be less than the received value");
     cd.stakedAmount += stakedAmount;
-    cd.totalAmount += amount;
+    cd.realAmount += amount;
     delegatorMap[delegator].amount += amount;
   }
 
   function proxyDelegate(address candidate, address delegator) external payable onlyPledgeAgent {
     require(msg.value >= requiredCoinDeposit, "delegate amount is too small");
-    uint256 totalAmount = delegateCoin(candidate, delegator, msg.value, false);
-    emit delegatedCoin(candidate, delegator, msg.value, totalAmount);
+    uint256 realAmount = delegateCoin(candidate, delegator, msg.value, false);
+    emit delegatedCoin(candidate, delegator, msg.value, realAmount);
   }
 
   function proxyUnDelegate(address candidate, address delegator, uint256 amount) external onlyPledgeAgent {
@@ -313,12 +297,12 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       rewardMap[delegator] += reward;
     }
     a.realAmount += amount;
-    cd.totalAmount += amount;
+    cd.realAmount += amount;
     if (!isTransfer) {
       delegatorMap[delegator].amount += amount;
     }
 
-    return cd.totalAmount;
+    return cd.realAmount;
   }
   
   function undelegateCoin(address candidate, address delegator, uint256 amount, bool isTransfer) internal returns (uint256) {
@@ -342,10 +326,10 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     } else {
       delegatorMap[delegator].amount -= amount;
     }
-    if (!isTransfer && cd.totalAmount == amount && cd.transferredAmount == 0) {
+    if (!isTransfer && cd.realAmount == amount && cd.transferredAmount == 0) {
       removeDelegation(delegator, candidate);
     } else {
-      cd.totalAmount -= amount;
+      cd.realAmount -= amount;
       cd.stakedAmount -= amount;
     }
     return amount;
@@ -367,14 +351,14 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
         cd.transferredAmount = 0;
       }
 
-      if (cd.totalAmount != stakedAmount) {
+      if (cd.realAmount != stakedAmount) {
         if (changeRound < lastRoundTag) {
           if (changeRoundReward == 0) {
             changeRoundReward = getRoundAccuredReward(candidate, changeRound);
           }
-          reward += (cd.totalAmount - stakedAmount) * (lastRoundReward - changeRoundReward);
+          reward += (cd.realAmount - stakedAmount) * (lastRoundReward - changeRoundReward);
         }
-        cd.stakedAmount = cd.totalAmount;
+        cd.stakedAmount = cd.realAmount;
       }
       reward /= SatoshiPlusHelper.CORE_STAKE_DECIMAL;
       cd.changeRound = roundTag;

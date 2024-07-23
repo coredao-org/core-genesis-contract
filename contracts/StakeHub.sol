@@ -230,7 +230,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   function claimReward() external returns (uint256[] memory rewards, uint256 liabilityAmount) {
     uint256 assetSize = assets.length;
     address delegator = msg.sender;
-    rewards = new uint256[](3);
+    rewards = new uint256[](assetSize);
     uint256 reward;
     for (uint256 i = 0; i < assetSize; ++i) {
       rewards[i] = IAgent(assets[i].agent).claimReward(delegator);
@@ -318,25 +318,12 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   /*********************** Internal methods ********************************/
   function _initHybridScore() internal {
-    // get active candidates.
-    (bool success, bytes memory data) = CANDIDATE_HUB_ADDR.call(abi.encodeWithSignature("getCandidates()"));
-    require (success, "call CANDIDATE_HUB.getCandidates fail");
-    address[] memory candidates = abi.decode(data, (address[]));
-    // get fixed core,hash,core, and real core, real btc.
-    (success, data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("getStakeInfo(address[])", candidates));
-    require (success, "call PLEDGE_AGENT_ADDR.getStakeInfo 1 fail");
-    (uint256[] memory cores, uint256[] memory hashs, uint256[] memory btcs, uint256[] memory realCores, uint256[] memory realBtcs) = abi.decode(data, (uint256[], uint256[], uint256[], uint256[], uint256[]));
-
-    (success,) = assets[0].agent.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[],uint256[])", candidates, cores, realCores));
-    require (success, "call CORE_AGENT_ADDR.initHardforkRound fail");
-    (success,) = BTC_STAKE_ADDR.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[],uint256[])", candidates, btcs, realBtcs));
-    require (success, "call BTC_STAKE_ADDR.initHardforkRound fail");
 
     // get validator set
     address[] memory validators = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getValidatorOps();
-    (success, data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("getStakeInfo(address[])", validators));
+    (bool success, bytes memory data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("getStakeInfo(address[])", validators));
     require (success, "call PLEDGE_AGENT_ADDR.getStakeInfo 2 fail");
-    (cores, hashs, btcs,,) = abi.decode(data, (uint256[], uint256[], uint256[], uint256[], uint256[]));
+    (uint256[] memory cores, uint256[] memory hashs, uint256[] memory btcs) = abi.decode(data, (uint256[], uint256[], uint256[]));
 
     (success,) = assets[2].agent.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[])", validators, btcs));
     require (success, "call BTC_AGENT_ADDR.initHardforkRound fail");
@@ -360,5 +347,13 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     for (uint256 j = 0; j < 3; j++) {
       stateMap[assets[j].agent] = AssetState(totalAmounts[j], assets[j].factor, DENOMINATOR);
     }
+
+    // get active candidates.
+    (success, data) = CANDIDATE_HUB_ADDR.call(abi.encodeWithSignature("getCandidates()"));
+    require (success, "call CANDIDATE_HUB.getCandidates fail");
+    address[] memory candidates = abi.decode(data, (address[]));
+    // move candidate amount.
+    (success,) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("moveAgent(address[])", candidates));
+    require (success, "call PLEDGE_AGENT_ADDR.moveAgent fail");
   }
 }

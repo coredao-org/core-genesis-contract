@@ -144,6 +144,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 coin;
     uint256 btc;
     uint256 totalBtc;
+    bool    moved;
   }
 
   struct RoundState {
@@ -342,6 +343,32 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     delete btcReceiptMap[txid];
   }
 
+  function moveAgent(address[] memory candidates) external {
+    uint256 l = candidates.length;
+    uint256[] memory amounts = new uint256[](l);
+    uint256[] memory realAmounts = new uint256[](l);
+
+    for (uint256 i = 0; i < l; ++i) {
+      Agent storage agent = agentsMap[candidates[i]];
+      require(!agent.moved && agent.totalDeposit != 0, "agent has been moved");
+      amounts[i] = agent.coin;
+      realAmounts[i] = agent.totalDeposit;
+      agent.coin = 0;
+      agent.moved = true;
+    }
+    (bool success,) = CORE_AGENT_ADDR.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[],uint256[])", candidates, amounts, realAmounts));
+    require (success, "call CORE_AGENT_ADDR.initHardforkRound fail");
+
+    for (uint256 i = 0; i < l; ++i) {
+      Agent storage agent = agentsMap[candidates[i]];
+      amounts[i] = agent.btc;
+      realAmounts[i] = agent.totalBtc;
+      agent.btc = 0;
+    }
+    (success,) = BTC_STAKE_ADDR.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[],uint256[])", candidates, amounts, realAmounts));
+    require (success, "call BTC_STAKE_ADDR.initHardforkRound fail");
+  }
+
   /*********************** Internal methods ***************************/
   function distributeReward(address payable delegator, uint256 reward) internal {
     Address.sendValue(delegator, reward);
@@ -357,7 +384,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         distributeReward(payable(delegator), reward);
       }
 
-      (bool success, ) = CORE_AGENT_ADDR.call {value: d.newDeposit} (abi.encodeWithSignature("moveData(address,address,uint256,uint256)", agent, delegator, d.deposit, d.transferOutDeposit));
+      (bool success, ) = CORE_AGENT_ADDR.call {value: d.newDeposit} (abi.encodeWithSignature("moveData(address,address,uint256,uint256)", agent, delegator, d.deposit, d.transferOutDeposit, roundTag));
       require (success, "call CORE_AGENT_ADDR.moveData fail");
 
       a.totalDeposit -= d.newDeposit;
