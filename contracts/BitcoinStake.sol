@@ -314,7 +314,9 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     address candidate;
     for (uint256 r = roundTag + 1; r <= round; ++r) {
       ExpireInfo storage expireInfo = round2expireInfoMap[r];
-      for (uint256 j = expireInfo.candidateList.length; j != 0; --j) {
+      uint256 l = expireInfo.candidateList.length;
+      if (l == 0) continue;
+      for (uint256 j = l; j != 0; --j) {
         candidate = expireInfo.candidateList[j - 1];
         candidateMap[candidate].realAmount -= (expireInfo.amountMap[candidate] - 1);
         expireInfo.candidateList.pop();
