@@ -293,69 +293,23 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// Claim reward for delegator
   /// @param delegator the delegator address
   /// @return reward Amount claimed
-<<<<<<< HEAD
-  function claimReward(address delegator) external override onlyBtcAgent returns (uint256 reward) {
+  /// @return rewardUnclaimed Amount unclaimed
+  function claimReward(address delegator) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed) {
     bool expired;
     bytes32[] storage txids = delegatorMap[delegator].txids;
     for (uint256 i = txids.length; i != 0; i--) {
       (, expired) = collectReward(txids[i - 1], false);
       if (expired) {
-=======
-  /// @return rewardUnclaimed Amount unclaimed
-  function claimReward(address delegator) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed) {
-    reward = rewardMap[delegator];
-    if (reward != 0) {
-      rewardMap[delegator] = 0;
-    }
-    uint256 tlpRatesLength = tlpRates.length;
-    bytes32[] storage txids = delegatorMap[delegator].txids;
-    for (uint256 i = txids.length; i != 0; i--) {
-      bytes32 txid = txids[i - 1];
-      BtcTx storage bt = btcTxMap[txid];
-      DepositReceipt storage dr = receiptMap[txid];
-      uint256 unlockRound = bt.lockTime / SatoshiPlusHelper.ROUND_INTERVAL;
-      if (dr.round < roundTag - 1 && dr.round < unlockRound) {
-        uint256 minRound = roundTag - 1 < unlockRound ? roundTag - 1 : unlockRound;
-        // Calculate reward
-        uint256 txReward = (getRoundRewardPerBTC(dr.candidate, minRound) - getRoundRewardPerBTC(dr.candidate, dr.round)) * bt.amount / SatoshiPlusHelper.BTC_DECIMAL;
-        uint256 txRewardUnclaimed = 0;
-        if (isActive && tlpRatesLength != 0) {
-          // TLP Rates is configured
-          uint256 delegateMonth = (bt.lockTime - bt.blockTimestamp) / 86400 / 30;
-          uint256 p =  TLP_BASE;
-          for (uint256 j = tlpRatesLength; j != 0; j--) {
-            if (delegateMonth >= tlpRates[j].tl) {
-               p = tlpRates[j].tp;
-              break;
-            }
-          }
-          uint256 txRewardClaimed = txReward * p / TLP_BASE;
-          txRewardUnclaimed = txReward - txRewardClaimed;
-          txReward = txRewardClaimed;
-        }
-
-        reward += txReward;
-        rewardUnclaimed += txRewardUnclaimed;
-        dr.round = minRound;
-      }
-
-      // Remove txid and deposit receipt
-      if (unlockRound <= roundTag) {
->>>>>>> 8683e14 (support dual staking)
         if (i != txids.length) {
           txids[i - 1] = txids[txids.length - 1];
         }
         txids.pop();
       }
     }
-<<<<<<< HEAD
     reward = rewardMap[delegator];
     if (reward != 0) {
       rewardMap[delegator] = 0;
     }
-=======
-    return (reward, rewardUnclaimed);
->>>>>>> 8683e14 (support dual staking)
   }
 
   /// Start new round, this is called by the CandidateHub contract
