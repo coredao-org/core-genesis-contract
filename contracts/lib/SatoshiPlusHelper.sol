@@ -2,6 +2,8 @@
 pragma solidity 0.8.4;
 
 library SatoshiPlusHelper {
+  uint256 public constant DENOMINATOR = 1e4;
+
   // Protocol MAGIC `SAT+`, represents the short name for Satoshi plus protocol.
   uint256 public constant BTC_STAKE_MAGIC = 0x5341542b;
   uint256 public constant BTC_DECIMAL = 1e8;

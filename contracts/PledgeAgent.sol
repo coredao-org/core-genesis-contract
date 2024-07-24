@@ -379,7 +379,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         rewardMap[delegator] += reward;
       }
 
-      (bool success, ) = CORE_AGENT_ADDR.call {value: d.newDeposit} (abi.encodeWithSignature("moveData(address,address,uint256,uint256)", agent, delegator, d.deposit, d.transferOutDeposit, roundTag));
+      (bool success, ) = CORE_AGENT_ADDR.call {value: d.newDeposit} (abi.encodeWithSignature("moveData(address,address,uint256,uint256,uint256)", agent, delegator, d.deposit, d.transferOutDeposit, roundTag));
       require (success, "call CORE_AGENT_ADDR.moveData fail");
 
       a.totalDeposit -= d.newDeposit;

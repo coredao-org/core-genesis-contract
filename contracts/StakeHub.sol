@@ -10,6 +10,7 @@ import "./System.sol";
 import "./lib/Address.sol";
 import "./lib/Memory.sol";
 import "./lib/BytesLib.sol";
+import "./lib/SatoshiPlusHelper.sol";
 
 /// This contract manages all stake implementation agent on Core blockchain
 /// Currently, it supports three types of stake: Core, Hash, and BTC/BTCLST.
@@ -23,8 +24,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   uint256 public constant INIT_HASH_FACTOR = 1e6;
   uint256 public constant BTC_UNIT_CONVERSION = 1e10;
   uint256 public constant INIT_BTC_FACTOR = 1e4;
-  uint256 public constant DENOMINATOR = 1e4;
-  uint256 public constant LP_BASE = 1e4;
 
   uint256 public constant MASK_STAKE_CORE_MASK = 1;
   uint256 public constant MASK_STAKE_HASH_MASK = 2;
@@ -118,7 +117,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     operators[BTC_STAKE_ADDR] = true;
     operators[BTCLST_STAKE_ADDR] = true;
 
-    btcPoolRate = LP_BASE;
+    btcPoolRate = SatoshiPlusHelper.DENOMINATOR;
     alreadyInit = true;
   }
 
@@ -139,8 +138,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
     address validator;
     uint256[] memory bonuses = new uint256[](assetSize);
-    bonuses[2] = unclaimedReward * btcPoolRate / LP_BASE / validatorSize;
-    bonuses[0] = unclaimedReward * (LP_BASE - btcPoolRate) / LP_BASE / validatorSize;
+    bonuses[2] = unclaimedReward * btcPoolRate / SatoshiPlusHelper.DENOMINATOR / validatorSize;
+    bonuses[0] = unclaimedReward * (SatoshiPlusHelper.DENOMINATOR - btcPoolRate) / SatoshiPlusHelper.DENOMINATOR / validatorSize;
     uint256 burnReward = unclaimedReward - (bonuses[0]+bonuses[2]) * validatorSize;
     unclaimedReward = 0;
     for (uint256 i = 0; i < assetSize; ++i) {
@@ -157,7 +156,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
           continue;
         }
         uint256 r = rewardList[j] * candidateAmountMap[validator][i] * cs.factor / candidateScoreMap[validator];
-        rewards[j] = r * cs.discount / DENOMINATOR;
+        rewards[j] = r * cs.discount / SatoshiPlusHelper.DENOMINATOR;
         burnReward += (r - rewards[j]);
         emit roundReward(assets[i].name, validator, rewards[j], bonuses[i]);
         rewards[j] += bonuses[i];
@@ -210,7 +209,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
           candidateAmountMap[candiate][i] = amounts[j];
         }
       }
-      stateMap[assets[i].agent] = AssetState(totalAmount, t, DENOMINATOR);
+      stateMap[assets[i].agent] = AssetState(totalAmount, t, SatoshiPlusHelper.DENOMINATOR);
     }
 
     for (uint256 j = 0; j < candidateSize; ++j) {
@@ -225,7 +224,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       //    then discount = hardcap_proportion / stake_proportion
       // above if condition transform ==> assetScores[i] * hardcapSum > hardcap * t
       if (assetScores[i] * hardcapSum > assets[i].hardcap * t) {
-        stateMap[assets[i].agent].discount = assets[i].hardcap * t * DENOMINATOR / (hardcapSum * assetScores[i]);
+        stateMap[assets[i].agent].discount = assets[i].hardcap * t * SatoshiPlusHelper.DENOMINATOR / (hardcapSum * assetScores[i]);
       }
     }
   }
@@ -256,8 +255,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     uint256 lpRatesLength = lpRates.length;
     if (isActive && lpRatesLength != 0) {
       // LP Rates is configured
-      uint256 bb = coreReward * LP_BASE / btcReward;
-      uint256 p =  LP_BASE;
+      uint256 bb = coreReward * SatoshiPlusHelper.DENOMINATOR / btcReward;
+      uint256 p =  SatoshiPlusHelper.DENOMINATOR;
       for (uint256 i = lpRatesLength; i != 0; i--) {
         if (bb >= lpRates[i].l) {
           p = lpRates[i].p;
@@ -265,7 +264,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         }
       }
 
-      uint256 btcRewardClaimed = btcReward * p / LP_BASE;
+      uint256 btcRewardClaimed = btcReward * p / SatoshiPlusHelper.DENOMINATOR;
       btcRewardUnclaimed += (btcReward - btcRewardClaimed);
       btcReward = btcRewardClaimed;
     }
@@ -352,9 +351,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       for (i = 0; i < currentLength; i++) {
         uint256 startIndex = (i << 2) + 1;
         uint256 l = value.indexUint(startIndex, 2);
-        require(l <= LP_BASE, "invalid param l");
+        require(l <= SatoshiPlusHelper.DENOMINATOR, "invalid param l");
         uint256 p =  value.indexUint(startIndex + 2, 2);
-        require(p <= LP_BASE, "invalid param p");
+        require(p <= SatoshiPlusHelper.DENOMINATOR, "invalid param p");
         LP memory lp = LP({
           l: l,
           p: p
@@ -417,7 +416,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     }
 
     for (uint256 j = 0; j < 3; j++) {
-      stateMap[assets[j].agent] = AssetState(totalAmounts[j], assets[j].factor, DENOMINATOR);
+      stateMap[assets[j].agent] = AssetState(totalAmounts[j], assets[j].factor, SatoshiPlusHelper.DENOMINATOR);
     }
 
     // get active candidates.
