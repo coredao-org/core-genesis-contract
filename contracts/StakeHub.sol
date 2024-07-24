@@ -248,6 +248,15 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// @return reward Amount claimed
   function claimReward() external returns (uint256 reward, uint256 liabilityAmount) {
     address delegator = msg.sender;
+    (reward, liabilityAmount) = calculateReward(delegator);
+    if (reward != 0) {
+      Address.sendValue(payable(delegator), reward);
+      emit claimedReward(delegator, reward);
+    }
+  }
+
+  /// Calculate reward for delegator
+  function calculateReward(address delegator) public returns (uint256 reward, uint256 liabilityAmount) {
     (uint256 coreReward, uint256 coreRewardUnclaimed) = IAgent(assets[0].agent).claimReward(delegator);
     (uint256 hashPowerReward, uint256 hashPowerRewardUnclaimed) = IAgent(assets[1].agent).claimReward(delegator);
     (uint256 btcReward, uint256 btcRewardUnclaimed) = IAgent(assets[2].agent).claimReward(delegator);
@@ -288,10 +297,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
           reward = 0;
           break;
         }
-      }
-      if (reward != 0) {
-        Address.sendValue(payable(delegator), reward);
-        emit claimedReward(delegator, reward);
       }
     }
 
