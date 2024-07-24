@@ -217,7 +217,6 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @return reward Amount claimed
   /// @return rewardUnclaimed Amount unclaimed
   function claimReward(address delegator) external override onlyStakeHub returns (uint256 reward, uint256 rewardUnclaimed) {
-    uint256 reward;
     uint256 rewardSum = rewardMap[delegator];
     if (rewardSum != 0) {
       rewardMap[delegator] = 0;
@@ -252,7 +251,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       rewardMap[delegator] += reward;
     }
     if (round < roundTag) {
-      uint256 reward = collectReward(candidate, stakedAmount, realAmount,  transferredAmount, round);
+      (uint256 reward,) = collectReward(candidate, stakedAmount, realAmount,  transferredAmount, round);
       stakedAmount = realAmount;
       rewardMap[delegator] += reward;
     } else {
@@ -345,8 +344,9 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     uint256 stakedAmount = cd.stakedAmount;
     uint256 realAmount = cd.realAmount;
     uint256 transferredAmount = cd.transferredAmount;
-    reward = collectReward(candidate, stakedAmount, realAmount, transferredAmount, cd.changeRound);
-    if (reward != 0) {
+    bool changed;
+    (reward, changed) = collectReward(candidate, stakedAmount, realAmount, transferredAmount, cd.changeRound);
+    if (changed) {
       if (transferredAmount != 0) {
         cd.transferredAmount = 0;
       }
@@ -357,8 +357,8 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     }
   }
 
-  function collectReward(address candidate, uint256 stakedAmount, uint256 realAmount, uint256 transferredAmount, uint256 changeRound) internal returns (uint256 reward) {
-    require(changeRound != 0, "invalid coindelegator");
+  function collectReward(address candidate, uint256 stakedAmount, uint256 realAmount, uint256 transferredAmount, uint256 changeRound) internal returns (uint256 reward, bool changed) {
+    require(changeRound != 0, "invalid delegator");
     uint256 lastRoundTag = roundTag - 1;
     if (changeRound <= lastRoundTag) {
       uint256 lastRoundReward = getRoundAccuredReward(candidate, lastRoundTag);
@@ -380,7 +380,9 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
         }
       }
       reward /= SatoshiPlusHelper.CORE_STAKE_DECIMAL;
+      return (reward, true);
     }
+    return (0, false);
   }
 
   function removeDelegation(address delegator, address candidate) internal {
