@@ -102,7 +102,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     }
   }
 
-  /*********************** Interface implementations ***************************/
+  /*********************** IAgent implementations ***************************/
   /// Do some preparement before new round.
   function prepare(uint256) external override {
     // Nothing
@@ -150,13 +150,13 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param candidates List of candidate operator addresses
   ///
   /// @return amounts List of amounts of all special candidates in this round
-  /// @return realAmount The sum of all amounts of valid/invalid candidates.
-  function getStakeAmounts(address[] calldata candidates, uint256) external override view returns (uint256[] memory amounts, uint256 realAmount) {
+  /// @return totalAmount The sum of all amounts of valid/invalid candidates.
+  function getStakeAmounts(address[] calldata candidates, uint256) external override view returns (uint256[] memory amounts, uint256 totalAmount) {
     uint256 candidateSize = candidates.length;
     amounts = new uint256[](candidateSize);
     for (uint256 i = 0; i < candidateSize; ++i) {
       amounts[i] = candidateMap[candidates[i]].realAmount;
-      realAmount += amounts[i];
+      totalAmount += amounts[i];
     }
   }
 
@@ -236,6 +236,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     return rewardSum;
   }
 
+  /*********************** Receive data from PledgeAgent ***************************/
   function moveData(address candidate, address delegator, uint256 stakedAmount, uint256 transferredAmount, uint256 round) external payable onlyPledgeAgent {
     uint256 realAmount = msg.value;
     require(stakedAmount + transferredAmount <= realAmount, "require stakedAmount + transferredAmount <= realAmount");
@@ -340,36 +341,22 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   }
 
   function collectCoinReward(address candidate, CoinDelegator storage cd) internal returns (uint256 reward) {
-    uint256 changeRound = cd.changeRound;
-    require(changeRound != 0, "invalid coindelegator");
-    uint256 lastRoundTag = roundTag - 1;
-    if (changeRound <= lastRoundTag) {
-      uint256 stakedAmount = cd.stakedAmount;
-      uint256 lastRoundReward = getRoundAccuredReward(candidate, lastRoundTag);
-      uint256 lastChangeRoundReward = getRoundAccuredReward(candidate, changeRound - 1);
-      uint256 changeRoundReward;
-      reward = stakedAmount * (lastRoundReward - lastChangeRoundReward);
-      if (cd.transferredAmount != 0) {
-        changeRoundReward = getRoundAccuredReward(candidate, changeRound);
-        reward += cd.transferredAmount * (changeRoundReward - lastChangeRoundReward);
+    uint256 stakedAmount = cd.stakedAmount;
+    uint256 realAmount = cd.realAmount;
+    uint256 transferredAmount = cd.transferredAmount;
+    reward = collectReward(candidate, stakedAmount, realAmount, transferredAmount, cd.changeRound);
+    if (reward != 0) {
+      if (transferredAmount != 0) {
         cd.transferredAmount = 0;
       }
-
-      if (cd.realAmount != stakedAmount) {
-        if (changeRound < lastRoundTag) {
-          if (changeRoundReward == 0) {
-            changeRoundReward = getRoundAccuredReward(candidate, changeRound);
-          }
-          reward += (cd.realAmount - stakedAmount) * (lastRoundReward - changeRoundReward);
-        }
-        cd.stakedAmount = cd.realAmount;
+      if (realAmount != stakedAmount) {
+        cd.stakedAmount = realAmount;
       }
-      reward /= SatoshiPlusHelper.CORE_STAKE_DECIMAL;
       cd.changeRound = roundTag;
     }
   }
 
-  function collectReward(address candidate, uint256 stakedAmount, uint256 realAmount, uint256 transferredAmount, uint256 changeRound) internal view returns (uint256 reward) {
+  function collectReward(address candidate, uint256 stakedAmount, uint256 realAmount, uint256 transferredAmount, uint256 changeRound) internal returns (uint256 reward) {
     require(changeRound != 0, "invalid coindelegator");
     uint256 lastRoundTag = roundTag - 1;
     if (changeRound <= lastRoundTag) {
@@ -410,7 +397,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     delete candidateMap[candidate].cDelegatorMap[delegator];
   }
 
-  function getRoundAccuredReward(address candidate, uint256 round) internal view returns (uint256 reward) {
+  function getRoundAccuredReward(address candidate, uint256 round) internal returns (uint256 reward) {
     reward = accuredRewardMap[candidate][round];
     if (reward != 0) {
       return reward;
@@ -442,6 +429,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     }
     if (targetRound != 0) {
       reward = accuredRewardMap[candidate][targetRound];
+      accuredRewardMap[candidate][round] = reward;
     }
     return reward;
   }
@@ -466,7 +454,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     emit paramChange(key, value);
   }
 
-  /*********************** Public view ********************************/
+  /*********************** Public view methods ********************************/
   /// Get delegator information
   /// @param candidate The operator address of candidate
   /// @param delegator The delegator address
@@ -475,6 +463,9 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     return candidateMap[candidate].cDelegatorMap[delegator];
   }
 
+  /// Get delegator information
+  /// @param delegator The delegator address
+  /// return the delegated candidates list of the delegator
   function getCandidateListByDelegator(address delegator) external view returns (address[] memory) {
     return delegatorMap[delegator].candidates;
   }

@@ -55,8 +55,9 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   // The lst token contract's address.
   address public lstToken;
 
+  uint64 public stakedAmount;
   // delegated real value.
-  uint64 public totalAmount;
+  uint64 public realAmount;
 
   // key: delegator
   // value: stake info.
@@ -113,7 +114,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   // User stake information
   struct UserStakeInfo {
     uint256 changeRound;// the round of any op, including mint/burn/transfer/claim.
-    uint64 totalAmount; // Total amount of BTC staked including the one staked in changeRound
+    uint64 realAmount; // Total amount of BTC staked including the one staked in changeRound
     uint64 stakedAmount;// Amount of BTC staked which can claim reward.
   }
 
@@ -182,7 +183,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
     _afterMint(delegator, btcAmount);
 
-    totalAmount += btcAmount;   
+    realAmount += btcAmount;   
   }
 
   /// Bitcoin undelegate, it is called by relayer
@@ -237,10 +238,10 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     for (uint256 i = 0; i < validatorSize; ++i) {
       reward += rewardList[i];
     }
-    if (totalAmount == 0) {
+    if (stakedAmount == 0) {
       accuredRewardPerBTCMap[roundTag] = accuredRewardPerBTCMap[roundTag-1];
     } else {
-      accuredRewardPerBTCMap[roundTag] = accuredRewardPerBTCMap[roundTag-1] + reward * SatoshiPlusHelper.BTC_DECIMAL / totalAmount;
+      accuredRewardPerBTCMap[roundTag] = accuredRewardPerBTCMap[roundTag-1] + reward * SatoshiPlusHelper.BTC_DECIMAL / stakedAmount;
     }
   }
 
@@ -260,7 +261,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       }
     }
     if (sustainValidatorCount != 0) {
-      uint256 avgAmount = totalAmount / sustainValidatorCount;
+      uint256 avgAmount = realAmount / sustainValidatorCount;
       for (uint256 i = 0; i < length; i++) {
         if (amounts[i] == 1) {
           amounts[i] = avgAmount;
@@ -272,6 +273,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// Start new round, this is called by the CandidateHub contract
   /// @param round The new round tag
   function setNewRound(address[] calldata /*validators*/, uint256 round) external override onlyBtcAgent {
+    stakedAmount = realAmount;
     roundTag = round;
   }
 
@@ -297,7 +299,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     require(addrType != WTYPE_UNKNOWN, "invalid pkscript");
 
     UserStakeInfo storage user = userStakeInfo[msg.sender];
-    uint64 balance = user.totalAmount;
+    uint64 balance = user.realAmount;
     // check there is enough balance.
     require(amount + utxoFee <= balance, "Not enough btc token");
     if (amount == 0) {
@@ -312,7 +314,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     emit redeemed(msg.sender, amount, utxoFee, pkscript);
 
     _afterBurn(msg.sender, burnAmount);
-    totalAmount -= burnAmount;
+    realAmount -= burnAmount;
   }
 
   /// callback when btclst token transferred.
@@ -438,11 +440,11 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       uint256 lastRoundReward = getRoundRewardPerBTC(lastRoundTag);
       reward = uint256(user.stakedAmount) * (lastRoundReward - getRoundRewardPerBTC(changeRound - 1)) / SatoshiPlusHelper.BTC_DECIMAL;
 
-      if (user.totalAmount != user.stakedAmount) {
+      if (user.realAmount != user.stakedAmount) {
         if (changeRound < lastRoundTag) {
-          reward += (user.totalAmount - user.stakedAmount) * (lastRoundReward - getRoundRewardPerBTC(changeRound)) / SatoshiPlusHelper.BTC_DECIMAL;
+          reward += (user.realAmount - user.stakedAmount) * (lastRoundReward - getRoundRewardPerBTC(changeRound)) / SatoshiPlusHelper.BTC_DECIMAL;
         }
-        user.stakedAmount = user.totalAmount;
+        user.stakedAmount = user.realAmount;
       }
     }
     if (changeRound != roundTag) {
@@ -461,19 +463,19 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   function _afterBurn(address from, uint64 value) internal {
     require(from != address(0), "invalid sender");
     UserStakeInfo storage user = userStakeInfo[from];
-    uint64 balance = user.totalAmount;
+    uint64 balance = user.realAmount;
     require(value <= balance, "Insufficient balance");
     _updateUserRewards(from, false);
-    user.totalAmount -= value;
-    if (user.totalAmount < user.stakedAmount) {
-      user.stakedAmount = user.totalAmount;
+    user.realAmount -= value;
+    if (user.realAmount < user.stakedAmount) {
+      user.stakedAmount = user.realAmount;
     }
   }
 
   function _afterMint(address to, uint64 value) internal {
     require(to != address(0), "invalid receiver");
     _updateUserRewards(to, false);
-    userStakeInfo[to].totalAmount += value;
+    userStakeInfo[to].realAmount += value;
   }
 
 

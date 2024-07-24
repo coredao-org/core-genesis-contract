@@ -157,7 +157,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   /*********************** events **************************/
   event paramChange(string key, bytes value);
-  event roundReward(address indexed agent, uint256 coinReward, uint256 powerReward, uint256 btcReward);
   event claimedReward(address indexed delegator, address indexed operator, uint256 amount, bool success);
   event transferredBtcFee(bytes32 indexed txid, address payable feeReceiver, uint256 fee);
   event failedTransferBtcFee(bytes32 indexed txid, address payable feeReceiver, uint256 fee);
@@ -275,6 +274,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return rewardSum;
   }
 
+  // HARDFORK V-1.0.10
+  /*********************** Move data ***************************/
   function cleanDelegateInfo(bytes32 txid) external onlyBtcStake returns (address candidate, address delegator, uint256 amount, uint256 round, uint256 lockTime) {
     BtcReceipt storage br = btcReceiptMap[txid];
     if (br.value == 0) {

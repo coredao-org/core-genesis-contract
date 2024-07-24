@@ -23,7 +23,7 @@ contract HashPowerAgent is IAgent, System, IParamSubscriber {
     alreadyInit = true;
   }
 
-  /*********************** Interface implementations ***************************/
+  /*********************** IAgent implementations ***************************/
   /// Do some preparement before new round.
   /// @param round The new round tag
   function prepare(uint256 round) external override {
