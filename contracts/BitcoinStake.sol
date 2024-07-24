@@ -91,7 +91,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   struct ExpireInfo {
     address[] candidateList;
     mapping(address => uint256) amountMap;
-    mapping(address => uint256) existMap;
   }
 
   /*********************** events **************************/
@@ -317,10 +316,9 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       ExpireInfo storage expireInfo = round2expireInfoMap[r];
       for (uint256 j = expireInfo.candidateList.length; j != 0; --j) {
         candidate = expireInfo.candidateList[j - 1];
-        candidateMap[candidate].realAmount -= expireInfo.amountMap[candidate];
+        candidateMap[candidate].realAmount -= (expireInfo.amountMap[candidate] - 1);
         expireInfo.candidateList.pop();
         delete expireInfo.amountMap[candidate];
-        delete expireInfo.existMap[candidate];
       }
       delete round2expireInfoMap[r];
     }
@@ -425,11 +423,12 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   function addExpire(DepositReceipt storage receipt, uint32 lockTime, uint64 amount) internal {
     uint256 endRound = uint256(lockTime) / SatoshiPlusHelper.ROUND_INTERVAL;
     ExpireInfo storage expireInfo = round2expireInfoMap[endRound];
-    if (expireInfo.existMap[receipt.candidate] == 0) {
+    uint256 existAmount = expireInfo.amountMap[receipt.candidate];
+    if (existAmount == 0) {
       expireInfo.candidateList.push(receipt.candidate);
-      expireInfo.existMap[receipt.candidate] = 1;
+      existAmount = 1;
     }
-    expireInfo.amountMap[receipt.candidate] += amount;
+    expireInfo.amountMap[receipt.candidate] = existAmount + amount;
   }
 
   /// Parses the target output and the op_return of a transaction
