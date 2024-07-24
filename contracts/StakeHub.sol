@@ -283,6 +283,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       btcReward = btcRewardClaimed;
     }
 
+    rewards = new uint256[](assets.length);
     rewards[0] = coreReward;
     rewards[1] = hashPowerReward;
     rewards[2] = btcReward;
