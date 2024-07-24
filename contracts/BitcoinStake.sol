@@ -54,7 +54,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   // This field is used to store reward of delegators
   // key: delegator address
   // value: amount of CORE tokens claimable
-  mapping(address => uint256) public rewardMap;
+  mapping(address => Reward) public rewardMap;
 
   // the number of blocks to mark a BTC staking transaction as confirmed
   uint32 public btcConfirmBlock;
@@ -103,6 +103,11 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   struct TLP {
     uint256 tl;
     uint256 tp;
+  }
+
+  struct Reward {
+    uint256 reward;
+    uint256 unclaimedReward;
   }
 
   /*********************** events **************************/
@@ -306,9 +311,10 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
         txids.pop();
       }
     }
-    reward = rewardMap[delegator];
+    reward = rewardMap[delegator].reward;
+    rewardUnclaimed = rewardMap[delegator].unclaimedReward;
     if (reward != 0) {
-      rewardMap[delegator] = 0;
+      delete rewardMap[delegator];
     }
   }
 
@@ -601,9 +607,29 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       uint256 minRound = lastRound < unlockRound1 ? lastRound : unlockRound1;
       // Calculate reward
       reward = (getRoundAccuredReward(dr.candidate, minRound) - getRoundAccuredReward(dr.candidate, drRound)) * bt.amount / SatoshiPlusHelper.BTC_DECIMAL;
+      
+      uint256 rewardUnclaimed = 0;
+      if (isActive && tlpRates.length != 0) {
+        // TLP Rates is configured
+        uint256 delegateMonth = (bt.lockTime - bt.blockTimestamp) / 86400 / 30;
+        uint256 p =  TLP_BASE;
+        for (uint256 j = tlpRates.length; j != 0; j--) {
+          if (delegateMonth >= tlpRates[j].tl) {
+            p = tlpRates[j].tp;
+            break;
+          }
+        }
+        uint256 rewardClaimed = reward * p / TLP_BASE;
+        rewardUnclaimed = reward - rewardClaimed;
+        reward = rewardClaimed;
+      }
+      
       dr.round = minRound;
       if (reward != 0) {
-        rewardMap[dr.delegator] += reward;
+        rewardMap[dr.delegator].reward += reward;
+      }
+      if (rewardUnclaimed != 0) {
+        rewardMap[dr.delegator].unclaimedReward += rewardUnclaimed;
       }
     }
     // Remove txid and deposit receipt
