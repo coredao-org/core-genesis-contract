@@ -122,6 +122,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     _;
   }
 
+  /*********************** Init ********************************/
   function init() external onlyNotInit {
     roundTag = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
@@ -136,6 +137,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     }
   }
 
+  /*********************** External functions ********************************/
   /// Bitcoin delegate, it is called by relayer
   ///
   /// User workflow to delegate BTC to Core blockchain
@@ -233,6 +235,39 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     require(count != 0, "no btc tx undelegated.");
   }
 
+  function transferBtc(bytes32 txid, address targetCandidate) external {
+    BtcTx storage bt = btcTxMap[txid];
+    DepositReceipt storage dr = receiptMap[txid];
+    uint64 amount = bt.amount;
+    require(amount != 0, "btc tx not found");
+    require(dr.delegator == msg.sender, "not the delegator of this btc receipt");
+
+    address candidate = dr.candidate;
+    require(candidate != targetCandidate, "can not transfer to the same validator");
+    uint256 endRound = bt.lockTime / SatoshiPlusHelper.ROUND_INTERVAL;
+    require(endRound > roundTag + 1, "insufficient locking rounds");
+
+    if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetCandidate)) {
+      revert InactiveCandidate(targetCandidate);
+    }
+    collectReward(txid, false);
+
+    Candidate storage c = candidateMap[candidate];
+    c.realFixAmount -= amount;
+    round2expireInfoMap[endRound].amountMap[candidate] -= amount;
+
+    // Set candidate to targetCandidate
+    dr.candidate = targetCandidate;
+    dr.round = roundTag + 1;
+
+    addExpire(dr, bt.lockTime, amount);
+    Candidate storage tc = candidateMap[targetCandidate];
+    tc.realFixAmount += amount;
+
+    emit transferredBtc(txid, candidate, targetCandidate, msg.sender, bt.amount);
+  }
+
+  /*********************** Governance ********************************/
   /// Receive round rewards from BitcoinAgent. It is triggered at the beginning of turn round
   /// @param validators List of validator operator addresses
   /// @param rewardList List of reward amount
@@ -277,107 +312,33 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     }
   }
 
-  function getRoundRewardPerBTC(address candidate, uint256 round) internal view returns (uint256 reward) {
-    reward = accuredRewardPerBTCMap[candidate][round];
-    if (reward != 0) {
-      return reward;
-    }
-    // if there's no field with the round,
-    // use binary search to get the previous nearest round.
-    Candidate storage c = candidateMap[candidate];
-    uint256 b = c.continuousRewardEndRounds.length;
-    if (b == 0) {
-      return 0;
-    }
-    b -= 1;
-    uint256 a;
-    uint256 m;
-    uint256 tr;
-    while (a <= b) {
-      m = (a + b) / 2;
-      tr = c.continuousRewardEndRounds[m];
-      // tr should never be equal to round because the above reward value is zero.
-      if (tr < round) {
-        reward = accuredRewardPerBTCMap[candidate][tr];
-        a = m + 1;
-      } else if (m == 0) {
-        return 0;
-      } else {
-        b = m - 1;
-      }
-    }
-    return reward;
-  }
-
   /// Claim reward for delegator
   /// @param delegator the delegator address
   /// @return reward Amount claimed
   function claimReward(address delegator) external override onlyBtcAgent returns (uint256 reward) {
-    reward = rewardMap[delegator];
-    if (reward != 0) {
-      rewardMap[delegator] = 0;
-    }
+    bool expired;
     bytes32[] storage txids = delegatorMap[delegator].txids;
     for (uint256 i = txids.length; i != 0; i--) {
-      bytes32 txid = txids[i - 1];
-      BtcTx storage bt = btcTxMap[txid];
-      DepositReceipt storage dr = receiptMap[txid];
-      uint256 unlockRound = bt.lockTime / SatoshiPlusHelper.ROUND_INTERVAL;
-      if (dr.round < roundTag - 1 && dr.round < unlockRound) {
-        uint256 minRound = roundTag - 1 < unlockRound ? roundTag - 1 : unlockRound;
-        // Calculate reward
-        uint256 txReward = (getRoundRewardPerBTC(dr.candidate, minRound) - getRoundRewardPerBTC(dr.candidate, dr.round)) * bt.amount / SatoshiPlusHelper.BTC_DECIMAL;
-        reward += txReward;
-        dr.round = minRound;
-      }
-
-      // Remove txid and deposit receipt
-      if (unlockRound <= roundTag) {
+      (, expired) = collectReward(txids[i - 1], false);
+      if (expired) {
         if (i != txids.length) {
           txids[i - 1] = txids[txids.length - 1];
         }
         txids.pop();
-        emit btcExpired(txid, delegator);
-        delete receiptMap[txid];
       }
     }
-    return reward;
+    reward = rewardMap[delegator];
+    if (reward != 0) {
+      rewardMap[delegator] = 0;
+    }
   }
 
-  function transferBtc(bytes32 txid, address targetCandidate) external {
-    BtcTx storage bt = btcTxMap[txid];
-    DepositReceipt storage dr = receiptMap[txid];
-    uint64 amount = bt.amount;
-    require(amount != 0, "btc tx not found");
-    require(dr.delegator == msg.sender, "not the delegator of this btc receipt");
-    address candidate = dr.candidate;
-    require(dr.candidate != targetCandidate, "can not transfer to the same validator");
-    uint256 endRound = bt.lockTime / SatoshiPlusHelper.ROUND_INTERVAL;
-    require(endRound > roundTag + 1, "insufficient locking rounds");
-
-    if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetCandidate)) {
-      revert InactiveCandidate(targetCandidate);
+  function calculateReward(bytes32[] calldata txids) external returns (uint256 amount) {
+    uint256 reward;
+    for (uint256 i = txids.length; i != 0; i--) {
+      (reward, ) = collectReward(txids[i - 1], true);
+      amount += reward;
     }
-
-    Candidate storage c = candidateMap[candidate];
-    c.realFixAmount -= amount;
-    round2expireInfoMap[endRound].amountMap[candidate] -= amount;
-
-    // Calculate reward
-    uint256 reward = (accuredRewardPerBTCMap[dr.candidate][roundTag - 1] - accuredRewardPerBTCMap[dr.candidate][dr.round]) * bt.amount / SatoshiPlusHelper.BTC_DECIMAL;
-    if (reward != 0) {
-      rewardMap[msg.sender] += reward;
-    }
-
-    // Set candidate to targetCandidate
-    dr.candidate = targetCandidate;
-    dr.round = roundTag;
-
-    addExpire(dr, bt.lockTime, amount);
-    Candidate storage tc = candidateMap[targetCandidate];
-    tc.realFixAmount += amount;
-
-    emit transferredBtc(txid, candidate, targetCandidate, msg.sender, bt.amount);
   }
 
   // Upgrade function.
@@ -406,15 +367,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       // Set delegatorMap
       Delegator storage d = delegatorMap[delegator];
       d.txids.push(txid);
-
-      // Set candidateMap
-      Candidate storage c = candidateMap[candidate];
-      if (round < roundTag) {
-        c.fixAmount += amount;
-        (success,) = BTC_AGENT_ADDR.call(abi.encodeWithSignature("updateStakeAmount(address,uint256)", candidate, c.fixAmount));
-        require (success, "call BTC_AGENT_ADDR.updateStakeAmount failed.");
-      }
-      c.realFixAmount += amount;
 
       addExpire(dr, uint32(lockTime), uint64(amount));
 
@@ -484,8 +436,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     expireInfo.amountMap[receipt.candidate] += amount;
   }
 
-
-
   /// Parses the target output and the op_return of a transaction
   /// @dev  Finds the BTC amount that payload size is less than 80 bytes
   /// @param _voutView      The vout of a Bitcoin transaction
@@ -547,5 +497,74 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     candidate = payload.indexAddress(27);
     fee = payload.indexUint(47, 1);
     delegator = payload.indexAddress(7);
+  }
+
+  function getRoundReward(address candidate, uint256 round) internal view returns (uint256 reward) {
+    reward = accuredRewardPerBTCMap[candidate][round];
+    if (reward != 0) {
+      return reward;
+    }
+    // if there's no field with the round,
+    // use binary search to get the previous nearest round.
+    Candidate storage c = candidateMap[candidate];
+    uint256 b = c.continuousRewardEndRounds.length;
+    if (b == 0) {
+      return 0;
+    }
+    b -= 1;
+    uint256 a;
+    uint256 m;
+    uint256 tr;
+    while (a <= b) {
+      m = (a + b) / 2;
+      tr = c.continuousRewardEndRounds[m];
+      // tr should never be equal to round because the above reward value is zero.
+      if (tr < round) {
+        reward = accuredRewardPerBTCMap[candidate][tr];
+        a = m + 1;
+      } else if (m == 0) {
+        return 0;
+      } else {
+        b = m - 1;
+      }
+    }
+    return reward;
+  }
+
+  function collectReward(bytes32 txid, bool pop) internal returns (uint256 reward, bool expired) {
+    BtcTx storage bt = btcTxMap[txid];
+    DepositReceipt storage dr = receiptMap[txid];
+    uint256 drRound = dr.round;
+    require(dr.round != 0, "invalid deposit receipt");
+    uint256 lastRound = roundTag - 1;
+    uint256 unlockRound1 = bt.lockTime / SatoshiPlusHelper.ROUND_INTERVAL - 1;
+    if (drRound < lastRound && drRound < unlockRound1) {
+      uint256 minRound = lastRound < unlockRound1 ? lastRound : unlockRound1;
+      // Calculate reward
+      reward = (getRoundReward(dr.candidate, minRound) - getRoundReward(dr.candidate, drRound)) * bt.amount / SatoshiPlusHelper.BTC_DECIMAL;
+      dr.round = minRound;
+      if (reward != 0) {
+        rewardMap[dr.delegator] += reward;
+      }
+    }
+    // Remove txid and deposit receipt
+    if (unlockRound1 < roundTag) {
+      if (pop) {
+        bytes32[] storage txids = delegatorMap[dr.delegator].txids;
+        for (uint i = txids.length; i != 0; --i) {
+          if (txids[i - 1] == txid) {
+            if (i != txids.length) {
+              txids[i - 1] = txids[txids.length - 1];
+            }
+            txids.pop();
+            break;
+          }
+        }
+      }
+      emit btcExpired(txid, dr.delegator);
+      delete receiptMap[txid];
+      return (reward, true);
+    }
+    return (reward, false);
   }
 }

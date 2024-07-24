@@ -111,10 +111,6 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     return reward;
   }
 
-  function updateStakeAmount(address candidate, uint256 stakeAmount) external onlyBtcStake {
-    candidateMap[candidate].stakeAmount = stakeAmount;
-  }
-
   /*********************** Governance ********************************/
   /// Update parameters through governance vote
   /// @param key The name of the parameter

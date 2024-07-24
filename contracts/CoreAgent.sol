@@ -425,19 +425,23 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     b -= 1;
     uint256 a;
     uint256 m;
-    uint256 tr;
+    uint256 targetRound;
+    uint256 t;
     while (a <= b) {
       m = (a + b) / 2;
-      tr = c.continuousRewardEndRounds[m];
+      t = c.continuousRewardEndRounds[m];
       // tr should never be equal to round because the above reward value is zero.
-      if (tr < round) {
-        reward = accuredRewardMap[candidate][tr];
+      if (t < round) {
+        targetRound = t;
         a = m + 1;
       } else if (m == 0) {
         return 0;
       } else {
         b = m - 1;
       }
+    }
+    if (targetRound != 0) {
+      reward = accuredRewardMap[candidate][targetRound];
     }
     return reward;
   }
