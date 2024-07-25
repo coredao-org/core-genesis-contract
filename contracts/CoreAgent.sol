@@ -74,14 +74,6 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   );
   event claimedReward(address indexed delegator, uint256 amount);
 
-  /// The validator candidate is inactive, it is expected to be active
-  /// @param candidate Address of the validator candidate
-  error InactiveCandidate(address candidate);
-
-  /// Same address provided when transfer.
-  /// @param candidate Address of the candidate
-  error SameCandidate(address candidate);
-
   modifier onlyPledgeAgent() {
     require(msg.sender == PLEDGE_AGENT_ADDR, "the sender must be pledge agent contract");
     _;
@@ -217,23 +209,12 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @return reward Amount claimed
   /// @return rewardUnclaimed Amount unclaimed
   function claimReward(address delegator) external override onlyStakeHub returns (uint256 reward, uint256 rewardUnclaimed) {
-    uint256 rewardSum = rewardMap[delegator];
-    if (rewardSum != 0) {
-      rewardMap[delegator] = 0;
-    }
-    address[] storage candidates = delegatorMap[delegator].candidates;
-    uint256 candidateSize = candidates.length;
-    address candidate;
-    for (uint256 i = candidateSize; i != 0; --i) {
-      candidate = candidates[i - 1];
-      CoinDelegator storage cd = candidateMap[candidate].cDelegatorMap[delegator];
-      reward = collectCoinReward(candidate, cd);
-      rewardSum += reward;
-      if (cd.realAmount == 0 && cd.transferredAmount == 0) {
-        removeDelegation(delegator, candidate);
-      }
-    }
-    return (rewardSum, 0);
+    reward = calculateReward(delegator, true);
+    return (reward, 0);
+  }
+
+  function calculateReward(address delegator) external returns (uint256) {
+    return calculateReward(delegator, false);
   }
 
   /*********************** Receive data from PledgeAgent ***************************/
@@ -309,7 +290,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
 
     return cd.realAmount;
   }
-  
+
   function undelegateCoin(address candidate, address delegator, uint256 amount, bool isTransfer) internal returns (uint256) {
     Candidate storage a = candidateMap[candidate];
     CoinDelegator storage cd = a.cDelegatorMap[delegator];
@@ -435,6 +416,30 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       accuredRewardMap[candidate][round] = reward;
     }
     return reward;
+  }
+
+  function calculateReward(address delegator, bool clearCache) internal returns (uint256 reward) {
+    address[] storage candidates = delegatorMap[delegator].candidates;
+    uint256 candidateSize = candidates.length;
+    address candidate;
+    uint256 rewardSum;
+    for (uint256 i = candidateSize; i != 0; --i) {
+      candidate = candidates[i - 1];
+      CoinDelegator storage cd = candidateMap[candidate].cDelegatorMap[delegator];
+      reward = collectCoinReward(candidate, cd);
+      rewardSum += reward;
+      if (cd.realAmount == 0 && cd.transferredAmount == 0) {
+        removeDelegation(delegator, candidate);
+      }
+    }
+
+    reward = rewardMap[delegator];
+    if (clearCache) {
+      rewardMap[delegator] = 0;
+    } else if (reward != 0) {
+      rewardMap[delegator] = reward + rewardSum;
+    }
+    return reward + rewardSum;
   }
 
   /*********************** Governance ********************************/

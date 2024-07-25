@@ -22,8 +22,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   using TypedMemView for *;
   using BytesLib for *;
 
-  uint256 public constant TLP_BASE = 1e4;
-
   // This field records each btc staking tx, and it will never be clean.
   // key: bitcoin tx id
   // value: bitcoin stake record.
@@ -448,9 +446,9 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       for (i = 0; i < currentLength; i++) {
         uint256 startIndex = (i << 2) + 1;
         uint256 tl = value.indexUint(startIndex, 2);
-        require(tl <= TLP_BASE, "invalid param tl");
+        require(tl <= SatoshiPlusHelper.DENOMINATOR, "invalid param tl");
         uint256 tp =  value.indexUint(startIndex + 2, 2);
-        require(tp <= TLP_BASE, "invalid param tl");
+        require(tp <= SatoshiPlusHelper.DENOMINATOR, "invalid param tl");
         TLP memory lp = TLP({
           tl: tl,
           tp: tp
@@ -612,14 +610,14 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       if (isActive && tlpRates.length != 0) {
         // TLP Rates is configured
         uint256 delegateMonth = (bt.lockTime - bt.blockTimestamp) / 86400 / 30;
-        uint256 p =  TLP_BASE;
+        uint256 p =  SatoshiPlusHelper.DENOMINATOR;
         for (uint256 j = tlpRates.length; j != 0; j--) {
           if (delegateMonth >= tlpRates[j].tl) {
             p = tlpRates[j].tp;
             break;
           }
         }
-        uint256 rewardClaimed = reward * p / TLP_BASE;
+        uint256 rewardClaimed = reward * p / SatoshiPlusHelper.DENOMINATOR;
         rewardUnclaimed = reward - rewardClaimed;
         reward = rewardClaimed;
       }
