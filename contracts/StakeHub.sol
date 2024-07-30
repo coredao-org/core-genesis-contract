@@ -105,6 +105,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   event roundReward(string indexed name, address indexed validator, uint256 amount, uint256 bonus);
   event paramChange(string key, bytes value);
   event claimedReward(address indexed delegator, uint256 amount);
+  event claimedRelayerReward(address indexed relayer, uint256 amount);
 
   function init() external onlyNotInit {
     // initialize list of supported assets
@@ -324,6 +325,18 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     }
 
     unclaimedReward += (btcRewardUnclaimed + coreRewardUnclaimed + hashPowerRewardUnclaimed);
+  }
+
+  /// Claim reward for relayer
+  /// @return reward Amount claimed
+  function claimRelayerReward() external returns (uint256 reward) {
+    address relayer = msg.sender;
+    reward = payableNotes[relayer];
+    if (reward != 0) {
+      payableNotes[relayer] = 0;
+      Address.sendValue(payable(relayer), reward);
+      emit claimedRelayerReward(relayer, reward);
+    }
   }
 
   /*********************** Governance ********************************/
