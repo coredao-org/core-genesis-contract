@@ -285,8 +285,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       uint256 bb = coreReward * SatoshiPlusHelper.DENOMINATOR / btcReward;
       uint256 p =  SatoshiPlusHelper.DENOMINATOR;
       for (uint256 i = lpRatesLength; i != 0; i--) {
-        if (bb >= lpRates[i].l) {
-          p = lpRates[i].p;
+        if (bb >= lpRates[i - 1].l) {
+          p = lpRates[i - 1].p;
           break;
         }
       }

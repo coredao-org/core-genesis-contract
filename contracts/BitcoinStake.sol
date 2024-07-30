@@ -644,8 +644,8 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
         uint256 delegateMonth = (bt.lockTime - bt.blockTimestamp) / 86400 / 30;
         uint256 p =  SatoshiPlusHelper.DENOMINATOR;
         for (uint256 j = tlpRates.length; j != 0; j--) {
-          if (delegateMonth >= tlpRates[j].tl) {
-            p = tlpRates[j].tp;
+          if (delegateMonth >= tlpRates[j - 1].tl) {
+            p = tlpRates[j - 1].tp;
             break;
           }
         }
