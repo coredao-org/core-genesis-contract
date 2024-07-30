@@ -231,7 +231,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param round data of the round
   function moveData(address candidate, address delegator, uint256 stakedAmount, uint256 transferredAmount, uint256 round) external payable onlyPledgeAgent {
     uint256 realtimeAmount = msg.value;
-    require(stakedAmount + transferredAmount <= realtimeAmount, "require stakedAmount + transferredAmount <= realtimeAmount");
+    require(stakedAmount <= realtimeAmount, "require stakedAmount <= realtimeAmount");
     Candidate storage a = candidateMap[candidate];
     CoinDelegator storage cd = a.cDelegatorMap[delegator];
     uint256 changeRound = cd.changeRound;
@@ -246,6 +246,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       (uint256 reward,) = collectReward(candidate, stakedAmount, realtimeAmount,  transferredAmount, round);
       stakedAmount = realtimeAmount;
       rewardMap[delegator] += reward;
+      cd.changeRound = roundTag;
     } else {
       cd.transferredAmount += transferredAmount;
     }
