@@ -136,7 +136,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
   }
 
-  function initHardforkRound(address[] memory candidates, uint256[] memory amounts, uint256[] memory realtimeAmounts) external onlyPledgeAgent {
+  function _initializeFromPledgeAgent(address[] memory candidates, uint256[] memory amounts, uint256[] memory realtimeAmounts) external onlyPledgeAgent {
     uint256 s = candidates.length;
     for (uint256 i = 0; i < s; ++i) {
       Candidate storage c = candidateMap[candidates[i]];
@@ -399,13 +399,13 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// Migration
   /// Fetch a list of BTC stake transaction data from `PledgeAgent.sol`
   /// @param txids list of BTC stake transactions
-  function migrateDelegateInfo(bytes32[] calldata txids) external{
+  function moveData(bytes32[] calldata txids) external{
     uint256 txLength = txids.length;
     bytes32 txid;
     for (uint256 i = 0; i < txLength; i++) {
       txid = txids[i];
-      (bool success, bytes memory data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("cleanDelegateInfo(bytes32)", txid));
-      require(success, "call PLEDGE_AGENT_ADDR.cleanDelegateInfo() failed.");
+      (bool success, bytes memory data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("moveBtcData(bytes32)", txid));
+      require(success, "call PLEDGE_AGENT_ADDR.moveBtcData() failed.");
       (address candidate, address delegator, uint256 amount, uint256 round, uint256 lockTime) = abi.decode(data, (address,address,uint256,uint256,uint256));
       BtcTx storage bt = btcTxMap[txid];
       if (bt.amount != 0) {

@@ -113,7 +113,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     assets.push(Asset("HASHPOWER", HASH_AGENT_ADDR, HASH_UNIT_CONVERSION * INIT_HASH_FACTOR, 2000));
     assets.push(Asset("BTC", BTC_AGENT_ADDR, BTC_UNIT_CONVERSION * INIT_BTC_FACTOR, 4000));
 
-    _initHybridScore();
+    _initializeFromPledgeAgent();
 
     operators[PLEDGE_AGENT_ADDR] = true;
     operators[CORE_AGENT_ADDR] = true;
@@ -430,16 +430,18 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   }
 
   /*********************** Internal methods ********************************/
-  function _initHybridScore() internal {
-    // get validator set
+  function _initializeFromPledgeAgent() internal {
+    // get stake summary of current round (snapshot values of last turn round)
     address[] memory validators = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getValidatorOps();
     (bool success, bytes memory data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("getStakeInfo(address[])", validators));
     require (success, "call PLEDGE_AGENT_ADDR.getStakeInfo() failed");
     (uint256[] memory cores, uint256[] memory hashs, uint256[] memory btcs) = abi.decode(data, (uint256[], uint256[], uint256[]));
 
-    (success,) = assets[2].agent.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[])", validators, btcs));
-    require (success, "call BTC_AGENT_ADDR.initHardforkRound() failed");
+    // TODO should be moved to PledgeAgent.moveCandidateData()
+    (success,) = assets[2].agent.call(abi.encodeWithSignature("_initializeFromPledgeAgent(address[],uint256[])", validators, btcs));
+    require (success, "call BTC_AGENT_ADDR._initializeFromPledgeAgent() failed");
 
+    // initialize hybrid score based on data migrated from PledgeAgent.getStakeInfo()
     uint256 validatorSize = validators.length;
     uint256[] memory totalAmounts = new uint256[](3);
     for (uint256 i = 0; i < validatorSize; ++i) {
@@ -465,8 +467,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     (success, data) = CANDIDATE_HUB_ADDR.call(abi.encodeWithSignature("getCandidates()"));
     require (success, "call CANDIDATE_HUB.getCandidates() failed");
     address[] memory candidates = abi.decode(data, (address[]));
+
     // move candidate amount.
-    (success,) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("moveAgent(address[])", candidates));
-    require (success, "call PLEDGE_AGENT_ADDR.moveAgent() failed");
+    (success,) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("moveCandidateData(address[])", candidates));
+    require (success, "call PLEDGE_AGENT_ADDR.moveCandidateData() failed");
   }
 }

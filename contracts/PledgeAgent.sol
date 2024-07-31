@@ -181,18 +181,19 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /*********************** External methods ***************************/
   /// Delegate coin to a validator
   /// @param agent The operator address of validator
-  /// HARDFORK V-1.0.12 Deprecated
+  /// HARDFORK V-1.0.12 Deprecated, the method is kept here for backward compatibility
+  /// TODO possible reentrant risk
   function delegateCoin(address agent) external payable override {
-    move2CoreAgent(agent, msg.sender);
+    _moveCOREData(agent, msg.sender);
     distributeReward(msg.sender);
 
     (bool success, ) = CORE_AGENT_ADDR.call {value:msg.value} (abi.encodeWithSignature("proxyDelegate(address,address)", agent, msg.sender));
-    require (success, "call CORE_AGENT_ADDR.proxyDelegate() failes");
+    require (success, "call CORE_AGENT_ADDR.proxyDelegate() failed");
   }
 
   /// Undelegate coin from a validator
   /// @param agent The operator address of validator
-  /// HARDFORK V-1.0.12 Deprecated
+  /// HARDFORK V-1.0.12 Deprecated, the method is kept here for backward compatibility
   function undelegateCoin(address agent) external override {
     undelegateCoin(agent, 0);
   }
@@ -200,9 +201,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Undelegate coin from a validator
   /// @param agent The operator address of validator
   /// @param amount The amount of CORE to undelegate
-  /// HARDFORK V-1.0.12 Deprecated
+  /// HARDFORK V-1.0.12 Deprecated, the method is kept here for backward compatibility
   function undelegateCoin(address agent, uint256 amount) public override {
-    move2CoreAgent(agent, msg.sender);
+    _moveCOREData(agent, msg.sender);
     distributeReward(msg.sender);
 
     (bool success, ) = CORE_AGENT_ADDR.call(abi.encodeWithSignature("proxyUnDelegate(address,address,uint256)", agent, msg.sender, amount));
@@ -212,7 +213,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Transfer coin stake to a new validator
   /// @param sourceAgent The validator to transfer coin stake from
   /// @param targetAgent The validator to transfer coin stake to
-  // HARDFORK V-1.0.12 Deprecated
+  // HARDFORK V-1.0.12 Deprecated, the method is kept here for backward compatibility
   function transferCoin(address sourceAgent, address targetAgent) external override {
     transferCoin(sourceAgent, targetAgent, 0);
   }
@@ -221,10 +222,10 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param sourceAgent The validator to transfer coin stake from
   /// @param targetAgent The validator to transfer coin stake to
   /// @param amount The amount of CORE to transfer
-  // HARDFORK V-1.0.12 Deprecated
+  // HARDFORK V-1.0.12 Deprecated, the method is kept here for backward compatibility
   function transferCoin(address sourceAgent, address targetAgent, uint256 amount) public override {
-    move2CoreAgent(sourceAgent, msg.sender);
-    move2CoreAgent(targetAgent, msg.sender);
+    _moveCOREData(sourceAgent, msg.sender);
+    _moveCOREData(targetAgent, msg.sender);
     distributeReward(msg.sender);
 
     (bool success, ) = CORE_AGENT_ADDR.call(abi.encodeWithSignature("proxyTransfer(address,address,address,uint256)", sourceAgent, targetAgent, msg.sender, amount));
@@ -237,7 +238,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   function claimReward(address[] calldata agentList) external override returns (uint256, bool) {
     uint256 agentSize = agentList.length;
     for (uint256 i = 0; i < agentSize; ++i) {
-      move2CoreAgent(agentList[i], msg.sender);
+      _moveCOREData(agentList[i], msg.sender);
     }
     uint256 rewardSum = rewardMap[msg.sender];
     distributeReward(msg.sender);
@@ -250,7 +251,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   function calculateReward(address[] calldata agentList, address delegator) external override returns (uint256) {
     uint256 agentSize = agentList.length;
     for (uint256 i = 0; i < agentSize; ++i) {
-      move2CoreAgent(agentList[i], delegator);
+      _moveCOREData(agentList[i], delegator);
     }
     return rewardMap[delegator];
   }
@@ -284,14 +285,16 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   // HARDFORK V-1.0.12
   /*********************** Move data ***************************/
-  /// clean BTC stake information by transaction id
+  /// move BTC data to BitcoinStake by transaction id
+  /// the reward will be calculated and saved in rewardMap and the record will be deleted
+  /// this method is called by BitcoinStake.moveData
   /// @param txid the BTC stake transaction id
   /// @return candidate the validator candidate address
   /// @return delegator the delegator address
   /// @return amount the staked BTC amount
   /// @return round the round of stake
   /// @return lockTime the CLTV locktime value
-  function cleanDelegateInfo(bytes32 txid) external onlyBtcStake returns (address candidate, address delegator, uint256 amount, uint256 round, uint256 lockTime) {
+  function moveBtcData(bytes32 txid) external onlyBtcStake returns (address candidate, address delegator, uint256 amount, uint256 round, uint256 lockTime) {
     BtcReceipt storage br = btcReceiptMap[txid];
     if (br.value == 0) {
       return (address(0), address(0), 0, 0, 0);
@@ -345,13 +348,18 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     delete btcReceiptMap[txid];
   }
 
-  /// move validator candidate data to new set of contracts
+  /// Move detail data of active validator candidates - this method is called by StakeHub to migrate data from PledgeAgent after 1.0.12 hardfork is activated
+  /// At the round of N where 1.0.12 takes effect at block S
+  /// All user staking actions happen on PledgeAgent when block number < S, and on StakeHub when block number >= S
+  /// After this method is called, StakeHub obtains full staking data with a smooth transition
+  /// TODO should only be called by StakeHub
   /// @param candidates list of validator candidate addresses
-  function moveAgent(address[] memory candidates) external {
+  function moveCandidateData(address[] memory candidates) external {
     uint256 l = candidates.length;
     uint256[] memory amounts = new uint256[](l);
     uint256[] memory realAmounts = new uint256[](l);
 
+    // move CORE stake data to CoreAgent
     for (uint256 i = 0; i < l; ++i) {
       Agent storage agent = agentsMap[candidates[i]];
       require(!agent.moved && agent.totalDeposit != 0, "candidate has been moved");
@@ -360,24 +368,25 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       agent.coin = 0;
       agent.moved = true;
     }
-    (bool success,) = CORE_AGENT_ADDR.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[],uint256[])", candidates, amounts, realAmounts));
-    require (success, "call CORE_AGENT_ADDR.initHardforkRound() failed");
+    (bool success,) = CORE_AGENT_ADDR.call(abi.encodeWithSignature("_initializeFromPledgeAgent(address[],uint256[],uint256[])", candidates, amounts, realAmounts));
+    require (success, "call CORE_AGENT_ADDR._initializeFromPledgeAgent() failed");
 
+    // move BTC stake data to BitcoinStake
     for (uint256 i = 0; i < l; ++i) {
       Agent storage agent = agentsMap[candidates[i]];
       amounts[i] = agent.btc;
       realAmounts[i] = agent.totalBtc;
       agent.btc = 0;
     }
-    (success,) = BTC_STAKE_ADDR.call(abi.encodeWithSignature("initHardforkRound(address[],uint256[],uint256[])", candidates, amounts, realAmounts));
-    require (success, "call BTC_STAKE_ADDR.initHardforkRound() failed");
+    (success,) = BTC_STAKE_ADDR.call(abi.encodeWithSignature("_initializeFromPledgeAgent(address[],uint256[],uint256[])", candidates, amounts, realAmounts));
+    require (success, "call BTC_STAKE_ADDR._initializeFromPledgeAgent() failed");
   }
 
   /// move delegator data to new contracts
   /// @param candidate the validator candidate address
   /// @param delegator the delegator address
-  function moveDelegator(address candidate, address delegator) external {
-    move2CoreAgent(candidate, delegator);
+  function moveCOREData(address candidate, address delegator) external {
+    _moveCOREData(candidate, delegator);
   }
 
   /*********************** Internal methods ***************************/
@@ -390,7 +399,11 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
   }
 
-  function move2CoreAgent(address candidate, address delegator) internal {
+  /// move historical CORE stake information from PledgeAgent to CoreAgent
+  /// TODO possible gas issues if too many rounds, need stress test to verify
+  /// @param candidate the validator candidate address
+  /// @param delegator the delegator address
+  function _moveCOREData(address candidate, address delegator) internal {
     Agent storage a = agentsMap[candidate];
     CoinDelegator storage d = a.cDelegatorMap[delegator];
     if (d.changeRound != 0) {
@@ -412,7 +425,11 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
   }
 
-  function collectCoinReward(Reward storage r, uint256 deposit) internal returns (uint256 rewardAmount) {
+  /// collect rewards on a given reward map
+  /// @param r the reward map to collect
+  /// @param deposit the amount of stake
+  /// @return rewardAmount the amount of reward to claim
+  function collectFromRoundReward(Reward storage r, uint256 deposit) internal returns (uint256 rewardAmount) {
     require(r.coin >= deposit, "reward is not enough");
     uint256 curReward;
     if (r.coin == deposit) {
@@ -428,6 +445,10 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return curReward;
   }
 
+  /// collect rewards on a candidate/delegator paris
+  /// @param a the validator candidate
+  /// @param d the delegator
+  /// @return rewardAmount the amount of reward to claim
   function collectCoinReward(Agent storage a, CoinDelegator storage d) internal returns (uint256 rewardAmount) {
     uint256 changeRound = d.changeRound;
     uint256 curRound = roundTag;
@@ -462,7 +483,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
           transferOutDeposit = 0;
         }
         if (transferOutDeposit != d.transferOutDeposit) {
-          uint256 undelegateReward = collectCoinReward(r, d.transferOutDeposit - transferOutDeposit);
+          uint256 undelegateReward = collectFromRoundReward(r, d.transferOutDeposit - transferOutDeposit);
           if (r.coin == 0) {
             delete a.rewardSet[rewardIndex];
           }
@@ -473,7 +494,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         d.transferOutDeposit = 0;
       }
       if (deposit != 0) {
-        rewardAmount += collectCoinReward(r, deposit);
+        rewardAmount += collectFromRoundReward(r, deposit);
         if (r.coin == 0) {
           delete a.rewardSet[rewardIndex];
         }
@@ -486,6 +507,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return rewardAmount;
   }
 
+  /// calculate reward for a BTC stake transaction
+  /// @param txid the BTC transaction id
   function collectBtcReward(bytes32 txid) internal returns (uint256) {
     uint256 curRound = roundTag;
     BtcReceipt storage br = btcReceiptMap[txid];
@@ -500,7 +523,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         break;
       }
       uint256 deposit = br.value * stateMap[rRound].btcFactor;
-      reward += collectCoinReward(r, deposit);
+      reward += collectFromRoundReward(r, deposit);
       if (r.coin == 0) {
         delete a.rewardSet[rewardIndex];
       }
@@ -621,7 +644,11 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return expireInfo.agent2valueMap[agent];
   }
 
-  /// Get stake information - this method is called by new contracts to migrate data from PledgeAgent
+  /// Get stake information - this method is called by StakeHub to migrate data from PledgeAgent after 1.0.12 hardfork is activated
+  /// At the round of N where 1.0.12 takes effect at block S
+  /// All user staking actions happen on PledgeAgent when block number < S, and on StakeHub when block number >= S
+  /// After this method is called, StakeHub obtains full staking data with a smooth transition
+  /// Note only data of active validators in round N are migrated at block S
   /// @param candidates list of validator candidate addresses
   /// @return cores list of CORE staked value of the given candidates
   /// @return hashs list of BTC hash powered staked (measured in blocks) of the given candidates
