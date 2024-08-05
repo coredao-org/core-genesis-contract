@@ -375,7 +375,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
     // Set candidate to targetCandidate
     dr.candidate = targetCandidate;
-    dr.round = roundTag + 1;
+    dr.round = roundTag;
     addExpire(dr, bt.lockTime, amount);
 
     Candidate storage tc = candidateMap[targetCandidate];

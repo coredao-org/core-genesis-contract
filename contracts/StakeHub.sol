@@ -141,22 +141,19 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     uint256 assetSize = assets.length;
     uint256[] memory rewards = new uint256[](validatorSize);
 
-    address validator;
-    uint256[] memory bonuses = new uint256[](assetSize);
-    bonuses[2] = unclaimedReward * btcPoolRate / SatoshiPlusHelper.DENOMINATOR / validatorSize;
-    bonuses[0] = unclaimedReward * (SatoshiPlusHelper.DENOMINATOR - btcPoolRate) / SatoshiPlusHelper.DENOMINATOR / validatorSize;
-    uint256 burnReward = unclaimedReward - (bonuses[0]+bonuses[2]) * validatorSize;
-    unclaimedReward = 0;
+    uint256 burnReward;
+    uint256 totalReward;
     for (uint256 i = 0; i < assetSize; ++i) {
       AssetState memory cs = stateMap[assets[i].agent];
+      totalReward = 0;
+
       for (uint256 j = 0; j < validatorSize; ++j) {
-        validator = validators[j];
+        address validator = validators[j];
         // only reach here if running a new chain from genesis
         if (candidateScoreMap[validator] == 0) {
           if (i == 0) {
             burnReward += rewardList[j];
           }
-          burnReward += bonuses[i];
           rewards[j] = 0;
           continue;
         }
@@ -164,14 +161,28 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         // hardcap is applied to each pool, using the discount calculated in `getHybridScore()` step
         rewards[j] = r * cs.discount / SatoshiPlusHelper.DENOMINATOR;
         burnReward += (r - rewards[j]);
-        emit roundReward(assets[i].name, validator, rewards[j], bonuses[i]);
-        // redistribute unclaimed rewards
-        // added after hardcap to leave more rewards to users
-        rewards[j] += bonuses[i];
+        totalReward += rewards[j];
       }
+      uint assetBonus;
+      if (i == 0) {
+        assetBonus = unclaimedReward * (SatoshiPlusHelper.DENOMINATOR - btcPoolRate) / SatoshiPlusHelper.DENOMINATOR;
+      } else if (i == 2) {
+        assetBonus = unclaimedReward * btcPoolRate / SatoshiPlusHelper.DENOMINATOR;
+      }
+      // redistribute unclaimed rewards
+      // added after hardcap to leave more rewards to users
+      for (uint256 j = 0; j < validatorSize; ++j) {
+        if (rewards[j] == 0) {
+          continue;
+        }
+        uint256 bonus = rewards[j] * assetBonus / totalReward;
+        emit roundReward(assets[i].name, validators[j], rewards[j], bonus);
+        rewards[j] += bonus;
+        unclaimedReward -= bonus;
+      }
+
       IAgent(assets[i].agent).distributeReward(validators, rewards, roundTag);
     }
-
     // burn overflow reward after hardcap
     ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: burnReward }();
   }

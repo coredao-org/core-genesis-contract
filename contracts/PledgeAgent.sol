@@ -368,7 +368,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     // move CORE stake data to CoreAgent
     for (uint256 i = 0; i < l; ++i) {
       Agent storage agent = agentsMap[candidates[i]];
-      require(!agent.moved && agent.totalDeposit != 0, "candidate has been moved");
+      require(!agent.moved && (agent.totalDeposit != 0 || agent.coin != 0), "candidate has been moved");
       amounts[i] = agent.coin;
       realAmounts[i] = agent.totalDeposit;
       agent.coin = 0;

@@ -83,6 +83,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   event deductedMargin(address indexed operateAddr, uint256 margin, uint256 totalMargin);
   event statusChanged(address indexed operateAddr, uint256 oldStatus, uint256 newStatus);
   event paramChange(string key, bytes value);
+  event turnedRound(uint256 round);
 
   /*********************** init **************************/
   function init() external onlyNotInit {
@@ -234,6 +235,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     for (uint256 i = 0; i < candidateSize; i++) {
       changeStatus(candidateSet[i], statusList[i]);
     }
+    emit turnedRound(roundTag);
   }
 
   /****************** register/unregister ***************************/

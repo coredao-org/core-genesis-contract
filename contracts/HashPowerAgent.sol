@@ -32,11 +32,11 @@ contract HashPowerAgent is IAgent, System, IParamSubscriber {
   }
 
   /// Receive round rewards from StakeHub, which is triggered at the beginning of turn round
-  /// @param validatorList List of validator operator addresses
+  /// @param validators List of validator operator addresses
   /// @param rewardList List of reward amount
   /// @param round The round tag
-  function distributeReward(address[] calldata validatorList, uint256[] calldata rewardList, uint256 round) external override onlyStakeHub {
-    uint256 validatorSize = validatorList.length;
+  function distributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 round) external override onlyStakeHub {
+    uint256 validatorSize = validators.length;
     require(validatorSize == rewardList.length, "the length of validatorList and rewardList should be equal");
 
     // fetch BTC miners who delegated hash power in the about to end round; 
@@ -47,7 +47,7 @@ contract HashPowerAgent is IAgent, System, IParamSubscriber {
       if (rewardList[i] == 0) {
         continue;
       }
-      address[] memory miners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(round-7, validatorList[i]);
+      address[] memory miners = ILightClient(LIGHT_CLIENT_ADDR).getRoundMiners(round-7, validators[i]);
       // distribute rewards to every miner
       minerSize = miners.length;
       if (minerSize != 0) {

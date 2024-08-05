@@ -565,6 +565,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
     // Finds total number of outputs
     uint _numberOfOutputs = uint256(_voutView.indexCompactInt(0));
+    bool opreturn;
 
     for (uint index = 0; index < _numberOfOutputs; index++) {
       _outputView = _voutView.indexVout(index);
@@ -582,9 +583,11 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
         }
       } else {
         (delegator, fee) = parsePayloadAndCheckProtocol(_arbitraryData);
+        opreturn = true;
       }
     }
     require(btcAmount != 0, "staked value is zero");
+    require(opreturn, "no opreturn");
   }
 
   /// parse the payload and do sanity check for SAT+ bytes
