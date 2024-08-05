@@ -173,7 +173,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     bytes32 txid = btcTx.calculateTxId();
     BtcTx storage bt = btcTxMap[txid];
     require(bt.amount == 0, "btc tx is already delegated.");
-    (bool txChecked, ) = ILightClient(LIGHT_CLIENT_ADDR).checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index);
+    bool txChecked = ILightClient(LIGHT_CLIENT_ADDR).checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index);
     require(txChecked, "btc tx isn't confirmed");
     checkWallet(script);
 
@@ -211,7 +211,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param index index of the tx in Merkle tree
   function undelegate(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index) external override nonReentrant {
     bytes32 txid = btcTx.calculateTxId();
-    (bool txChecked, ) = ILightClient(LIGHT_CLIENT_ADDR).checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index);
+    bool txChecked = ILightClient(LIGHT_CLIENT_ADDR).checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index);
     require(txChecked, "btc tx not confirmed");
     (,, bytes29 voutView,) = btcTx.extractTx();
 

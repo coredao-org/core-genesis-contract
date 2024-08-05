@@ -170,7 +170,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     BtcTx storage bt = btcTxMap[txid];
     uint32 lockTime = parseLockTime(script);
     {
-      (bool txChecked, uint64 blockTimestamp) = ILightClient(LIGHT_CLIENT_ADDR).checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index);
+      (bool txChecked, uint64 blockTimestamp) = ILightClient(LIGHT_CLIENT_ADDR).checkTxProofAndGetTime(txid, blockHeight, btcConfirmBlock, nodes, index);
       require(txChecked, "btc tx isn't confirmed");
       // compatible for migrated data.
       if (bt.amount > 0 && bt.blockTimestamp == 0) {
@@ -222,7 +222,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// @param index index of the tx in Merkle tree
   function undelegate(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index) external override nonReentrant {
     bytes32 txid = btcTx.calculateTxId();
-    (bool txChecked, ) = ILightClient(LIGHT_CLIENT_ADDR).checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index);
+    bool txChecked = ILightClient(LIGHT_CLIENT_ADDR).checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index);
     require(txChecked, "btc tx isn't confirmed");
     (,bytes29 _vinView, ,) = btcTx.extractTx();
 
