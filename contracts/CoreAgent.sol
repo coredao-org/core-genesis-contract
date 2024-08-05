@@ -448,7 +448,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     return reward;
   }
 
-  function calculateReward(address delegator, bool clearCache) internal returns (uint256 reward) {
+  function calculateReward(address delegator, bool clearRewardMap) internal returns (uint256 reward) {
     address[] storage candidates = delegatorMap[delegator].candidates;
     uint256 candidateSize = candidates.length;
     address candidate;
@@ -464,7 +464,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     }
 
     reward = rewardMap[delegator];
-    if (clearCache) {
+    if (clearRewardMap) {
       rewardMap[delegator] = 0;
     } else if (reward != 0) {
       rewardMap[delegator] = reward + rewardSum;

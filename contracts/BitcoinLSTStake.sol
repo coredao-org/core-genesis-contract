@@ -161,9 +161,9 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// Bitcoin LST delegate, it is called by relayer
   ///
   /// User workflow to delegate BTC to Core blockchain
-  ///  1. A user creates a bitcoin transaction.
-  ///  2. Relayer commits BTC tx to Core chain.
-  ///  3. Contract mints btc lst token.
+  ///  1. A user creates a bitcoin transaction by minting lstBTC
+  ///  2. Relayer transmits BTC tx to Core chain by calling this method
+  ///  3. lstBTC token contract is called in this method
   ///
   /// @param btcTx the BTC transaction data
   /// @param blockHeight block height of the transaction
@@ -224,6 +224,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     bytes32 hash;
     uint32 addrType;
 
+    // TODO gas concerns on double loop, considering use a map instead for redeemRequests
     for (uint32 i = 0; i < _numberOfOutputs; ++i) {
       (_amount, _pkScript) = voutView.parseOutputValueAndScript(i);
       (hash, addrType) = extractPkScriptAddr(_pkScript.clone());
@@ -329,6 +330,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     // check there is enough balance.
     require(amount + utxoFee <= balance, "Not enough btc token");
     if (amount == 0) {
+      // TODO should be balance >= utxoFee?
       require (balance >= 2 * utxoFee, "The redeem amount is too small.");
       amount = balance - utxoFee;
     }
@@ -506,6 +508,8 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     if (changeRound != roundTag) {
       user.changeRound = roundTag;
     }
+    // make sure the caller to send the rewards out
+    // otherwise the rewards will be gone
     if (claim) {
       if (rewardMap[userAddress] != 0) {
         reward += rewardMap[userAddress];

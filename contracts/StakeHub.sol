@@ -329,6 +329,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   /// Claim reward for relayer
   /// @return reward Amount claimed
+  /// TODO might also call system reward to send all rewards as a whole
   function claimRelayerReward() external returns (uint256 reward) {
     address relayer = msg.sender;
     reward = payableNotes[relayer];

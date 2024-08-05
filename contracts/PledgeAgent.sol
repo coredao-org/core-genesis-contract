@@ -45,6 +45,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   uint256 public constant BTC_UNIT_CONVERSION = 1e10;
   uint256 public constant INIT_DELEGATE_BTC_GAS_PRICE = 1e12;
 
+  // minimal CORE require to stake
   uint256 public requiredCoinDeposit;
 
   // powerFactor/10000 determines the weight of BTC hash power vs CORE stakes
@@ -56,10 +57,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   // key: candidate's operateAddr
   mapping(address => Agent) public agentsMap;
 
-  // This field is used to store `special` reward records of delegators. 
-  // There are two cases
-  //  1, distribute hash power rewards dust to one miner when turn round
-  //  2, save the amount of tokens failed to claim by coin delegators
+  // This field is used to store collected rewards of delegators. 
   // key: delegator address
   // value: amount of CORE tokens claimable
   mapping(address => uint256) public rewardMap;
@@ -100,6 +98,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   // minimum value to stake for a BTC staking transaction
   uint256 public minBtcValue;
 
+  // NOT USED
+  // TODO 
   uint256 public delegateBtcGasPrice;
 
   // HARDFORK V-1.0.7
@@ -182,11 +182,14 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Delegate coin to a validator
   /// @param agent The operator address of validator
   /// HARDFORK V-1.0.12 Deprecated, the method is kept here for backward compatibility
-  /// TODO possible reentrant risk
+  /// @dev all TODOs in this method also apply to undelegateCoin() and transferCoin()
   function delegateCoin(address agent) external payable override {
+    // TODO should be moved to CoreAgent.delegateCoin() and make distributeReward() as the last step to avoid reentrant attack
     _moveCOREData(agent, msg.sender);
+    // TODO possible reentrant risk
     distributeReward(msg.sender);
 
+    // TODO why not calling CoreAgent.delegateCoin()?
     (bool success, ) = CORE_AGENT_ADDR.call {value:msg.value} (abi.encodeWithSignature("proxyDelegate(address,address)", agent, msg.sender));
     require (success, "call CORE_AGENT_ADDR.proxyDelegate() failed");
   }
@@ -232,7 +235,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     require (success, "call CORE_AGENT_ADDR.proxyTransfer() failed");
   }
 
-  /// Claim reward for delegator
+  /// Claim rewards for delegator
   /// @param agentList The list of validators to claim rewards on, it can be empty
   /// @return (Amount claimed, Are all rewards claimed)
   function claimReward(address[] calldata agentList) external override returns (uint256, bool) {
@@ -246,6 +249,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   }
 
   /// calculate reward for delegator
+  /// the rewards will be collected to rewardMap after execution
+  /// TODO what's the purpose of this method?
   /// @param agentList The list of validators to calculate rewards
   /// @param delegator the delegator to calculate rewards
   function calculateReward(address[] calldata agentList, address delegator) external override returns (uint256) {
@@ -300,7 +305,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       return (address(0), address(0), 0, 0, 0);
     }
 
-    // Set return values
+    // set return values, which will be used by BitcoinStake to restore staking record
     candidate = br.agent;
     delegator = br.delegator;
     amount = br.value;
@@ -317,6 +322,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         round = roundTag - 1;
       }
     }
+
     // calculate and record rewards
     uint256 rewardAmount = collectBtcReward(txid);
     rewardMap[delegator] += rewardAmount;
@@ -348,7 +354,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     delete btcReceiptMap[txid];
   }
 
-  /// Move detail data of active validator candidates - this method is called by StakeHub to migrate data from PledgeAgent after 1.0.12 hardfork is activated
+  /// Move active candidates data - this method is called by StakeHub to migrate data from PledgeAgent after 1.0.12 hardfork is activated
   /// At the round of N where 1.0.12 takes effect at block S
   /// All user staking actions happen on PledgeAgent when block number < S, and on StakeHub when block number >= S
   /// After this method is called, StakeHub obtains full staking data with a smooth transition
@@ -390,6 +396,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   }
 
   /*********************** Internal methods ***************************/
+  /// send rewards to delegator and clear the record in rewardMap
+  /// @param delegator the delegator address
   function distributeReward(address delegator) internal {
     uint256 reward = rewardMap[delegator];
     if (reward != 0) {
@@ -400,6 +408,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   }
 
   /// move historical CORE stake information from PledgeAgent to CoreAgent
+  /// the record will be removed in PledgeAgent after move
   /// TODO possible gas issues if too many rounds, need stress test to verify
   /// @param candidate the validator candidate address
   /// @param delegator the delegator address

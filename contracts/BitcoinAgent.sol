@@ -17,7 +17,9 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   mapping (address => StakeAmount) public candidateMap;
 
   struct StakeAmount {
+    // staked BTC amount from LST
     uint256 lstStakeAmount;
+    // staked BTC amount from non custodial
     uint256 stakeAmount;
   }
 
@@ -60,6 +62,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
       rewards[i] = rewardList[i] * sa.lstStakeAmount / (sa.lstStakeAmount + sa.stakeAmount);
     }
     IBitcoinStake(BTCLST_STAKE_ADDR).distributeReward(validators, rewards);
+
     for (uint256 i = 0; i < validatorSize; ++i) {
       rewards[i] = rewardList[i] - rewards[i];
     }
@@ -78,6 +81,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     for (uint256 i = 0; i < candidateSize; ++i) {
       amounts[i] += lstAmounts[i];
       totalAmount += amounts[i];
+      // TODO bug should be called before amounts[i] is updated
       candidateMap[candidates[i]].lstStakeAmount = lstAmounts[i];
       candidateMap[candidates[i]].stakeAmount = amounts[i];
     }
