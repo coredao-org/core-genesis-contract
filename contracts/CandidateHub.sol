@@ -97,15 +97,27 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   
   /********************* ICandidateHub interface ****************************/
   /// Whether users can delegate on a validator candidate
-  /// @param agent The operator address of the validator candidate
+  /// @param candidate The operator address of the validator candidate
   /// @return true/false
-  function canDelegate(address agent) external override view returns(bool) {
-    uint256 index = operateMap[agent];
+  function canDelegate(address candidate) external override view returns(bool) {
+    uint256 index = operateMap[candidate];
     if (index == 0) {
       return false;
     }
     uint256 status = candidateSet[index - 1].status;
     return status == (status & ACTIVE_STATUS);
+  }
+
+  /// Whether the candidate is a validator
+  /// @param candidate The operator address of the validator candidate
+  /// @return true/false
+  function isValidator(address candidate) external override view returns(bool) {
+    uint256 index = operateMap[candidate];
+    if (index == 0) {
+      return false;
+    }
+    uint256 status = candidateSet[index - 1].status;
+    return status == (status & SET_VALIDATOR);  
   }
 
   /// Whether the input address is operator address of a validator candidate 

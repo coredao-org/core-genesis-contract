@@ -7,7 +7,6 @@ import "./interface/ICandidateHub.sol";
 import "./interface/ILightClient.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/IStakeHub.sol";
-import "./interface/IValidatorSet.sol";
 import "./lib/BytesLib.sol";
 import "./lib/Memory.sol";
 import "./lib/BitcoinHelper.sol";
@@ -48,8 +47,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   uint32 public constant WTYPE_P2TAPROOT = 16;
 
   uint64 public constant INIT_UTXO_FEE = 1e4;
-
-  uint256 public constant TLP_BASE = 1e4;
 
   // This field records each btc staking tx, and it will never be cleared.
   // key: bitcoin tx id
@@ -99,6 +96,8 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
   // Fee paid in BTC to burn lst tokens
   uint64 public utxoFee;
+
+  address[] public candidates;
 
   // Time grading applied to BTC stakers
   // There is no timelock set in the BTC lst stake transaction, as a result a same rate is set to apply to all
@@ -152,7 +151,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     initRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
     roundTag = initRound;
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
-    tlpRate = TLP_BASE;
+    tlpRate = SatoshiPlusHelper.DENOMINATOR;
     alreadyInit = true;
   }
 
@@ -272,7 +271,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     amounts = new uint256[](length);
     uint256 sustainValidatorCount;
     for (uint256 i = 0; i < length; i++) {
-      if (IValidatorSet(VALIDATOR_CONTRACT_ADDR).isValidator(candidates[i])) {
+      if (ICandidateHub(CANDIDATE_HUB_ADDR).isValidator(candidates[i])) {
         amounts[i] = 1;
         sustainValidatorCount++;
       }
@@ -307,7 +306,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     reward = _updateUserRewards(delegator, true);
     // apply time grading
     if (isActive) {
-      uint256 rewardClaimed = reward * tlpRate / TLP_BASE;
+      uint256 rewardClaimed = reward * tlpRate / SatoshiPlusHelper.DENOMINATOR;
       rewardUnclaimed = reward - rewardClaimed;
       reward = rewardClaimed;
     }
@@ -374,8 +373,8 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       lstToken = newLstTokenAddr;
     } else if (Memory.compareStrings(key, "tlpRate")) {
       uint256 newtlpRate = value.toUint256(0);
-      if (newtlpRate > TLP_BASE) {
-        revert OutOfBounds(key, newtlpRate, 0, TLP_BASE);
+      if (newtlpRate == 0 || newtlpRate > SatoshiPlusHelper.DENOMINATOR) {
+        revert OutOfBounds(key, newtlpRate, 0, SatoshiPlusHelper.DENOMINATOR);
       }
       tlpRate = newtlpRate;
     } else if (Memory.compareStrings(key, "isActive")) {

@@ -79,11 +79,10 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     amounts = IBitcoinStake(BTC_STAKE_ADDR).getStakeAmounts(candidates);
 
     for (uint256 i = 0; i < candidateSize; ++i) {
-      amounts[i] += lstAmounts[i];
-      totalAmount += amounts[i];
-      // TODO bug should be called before amounts[i] is updated
       candidateMap[candidates[i]].lstStakeAmount = lstAmounts[i];
       candidateMap[candidates[i]].stakeAmount = amounts[i];
+      amounts[i] += lstAmounts[i];
+      totalAmount += amounts[i];
     }
   }
 
