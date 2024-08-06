@@ -277,6 +277,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     for (uint256 i = 0; i < rewards.length; i++) {
       reward += rewards[i];
     }
+    reward -= debtAmount;
     if (reward != 0) {
       Address.sendValue(payable(delegator), reward);
       emit claimedReward(delegator, reward);
