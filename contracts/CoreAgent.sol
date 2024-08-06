@@ -465,8 +465,10 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
 
     reward = rewardMap[delegator];
     if (clearRewardMap) {
-      rewardMap[delegator] = 0;
-    } else if (reward != 0) {
+      if (reward != 0) {
+        rewardMap[delegator] = 0;
+      }
+    } else if (rewardSum != 0) {
       rewardMap[delegator] = reward + rewardSum;
     }
     return reward + rewardSum;

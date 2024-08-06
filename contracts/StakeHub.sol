@@ -138,12 +138,13 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   {
     uint256 validatorSize = validators.length;
     require(validatorSize == rewardList.length, "the length of validators and rewardList should be equal");
-    uint256 assetSize = assets.length;
     uint256[] memory rewards = new uint256[](validatorSize);
 
     uint256 burnReward;
     uint256 totalReward;
-    for (uint256 i = 0; i < assetSize; ++i) {
+    uint256 usedBonus;
+    for (uint256 i = assets.length; i != 0;) {
+      --i;
       AssetState memory cs = stateMap[assets[i].agent];
       totalReward = 0;
 

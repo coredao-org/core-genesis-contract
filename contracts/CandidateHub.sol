@@ -117,7 +117,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
       return false;
     }
     uint256 status = candidateSet[index - 1].status;
-    return status == (status & SET_VALIDATOR);  
+    return SET_VALIDATOR == (status & SET_VALIDATOR);  
   }
 
   /// Whether the input address is operator address of a validator candidate 
