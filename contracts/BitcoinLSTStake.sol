@@ -150,6 +150,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     roundTag = initRound;
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
     percentage = SatoshiPlusHelper.DENOMINATOR / 2;
+    lpActive = 1;
     alreadyInit = true;
   }
 
@@ -325,16 +326,16 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     UserStakeInfo storage user = userStakeInfo[msg.sender];
     uint64 balance = user.realtimeAmount;
     // check there is enough balance.
-    require(amount + utxoFee <= balance, "Not enough btc token");
+    require(amount <= balance, "Not enough btc token");
     if (amount == 0) {
-      // TODO should be balance >= utxoFee?
-      require (balance >= 2 * utxoFee, "The redeem amount is too small.");
-      amount = balance - utxoFee;
+      amount = balance;
     }
+    require (amount >= utxoFee * 2, "The redeem amount is too small");
+    uint64 burnAmount = amount;
+    amount -= utxoFee;
 
     redeemRequests.push(Redeem(hash, addrType, msg.sender, amount));
 
-    uint64 burnAmount = amount + utxoFee;
     IBitcoinLSTToken(lstToken).burn(msg.sender, uint256(burnAmount));
     emit redeemed(msg.sender, amount, utxoFee, pkscript);
 
