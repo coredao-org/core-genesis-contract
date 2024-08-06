@@ -179,11 +179,12 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         uint256 bonus = rewards[j] * assetBonus / totalReward;
         emit roundReward(assets[i].name, validators[j], rewards[j], bonus);
         rewards[j] += bonus;
-        unclaimedReward -= bonus;
+        usedBonus += bonus;
       }
 
       IAgent(assets[i].agent).distributeReward(validators, rewards, roundTag);
     }
+    unclaimedReward -= usedBonus;
     // burn overflow reward after hardcap
     ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: burnReward }();
   }

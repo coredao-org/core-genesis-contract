@@ -63,10 +63,10 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
   // Time grading applied to BTC stakers
   // TODO these values should be saved for each round; otherwise make sure to clear up unclaimed rewards in each round
-  TLP[] public tlpRates;
+  LockPercentage[] public lps;
 
   // whether the time grading is enabled
-  bool public isActive;
+  uint256 public lpActive;
 
   struct BtcTx {
     uint64 amount;
@@ -97,9 +97,9 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     mapping(address => uint256) amountMap;
   }
 
-  struct TLP {
-    uint256 tl;
-    uint256 tp;
+  struct LockPercentage {
+    uint64 lockDuration; // In second
+    uint32 percentage; // [0 ~ DENOMINATOR]
   }
 
   struct Reward {
@@ -437,44 +437,53 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
-    if (value.length != 32) {
-      revert MismatchParamLength(key);
-    }
     // TODO more details on how the grading binary array is designed and parsed
-    if(Memory.compareStrings(key, "tlpRates")) {
-      uint256 i;
-      uint256 lastLength = tlpRates.length;
+    if (Memory.compareStrings(key, "lps")) {
+      uint256 lastLength = lps.length;
       uint256 currentLength = value.indexUint(0, 1);
 
-      require(((currentLength << 2) + 1) == value.length, "invalid param length");
-
-      for (i = currentLength; i < lastLength; i++) {
-        tlpRates.pop();
+      if(((currentLength << 2) | 1) == value.length) {
+        revert MismatchParamLength(key);
       }
 
-      for (i = 0; i < currentLength; i++) {
-        uint256 startIndex = (i << 2) + 1;
-        uint256 tl = value.indexUint(startIndex, 2);
-        require(tl <= SatoshiPlusHelper.DENOMINATOR, "invalid param tl");
-        uint256 tp =  value.indexUint(startIndex + 2, 2);
-        require(tp <= SatoshiPlusHelper.DENOMINATOR, "invalid param tl");
-        TLP memory lp = TLP({
-          tl: tl,
-          tp: tp
-        });
+      for (uint256 i = currentLength; i < lastLength; i++) {
+        lps.pop();
+      }
+      uint256 lockDuration;
+      uint256 percentage;
+      for (uint256 i = 0; i < currentLength; i++) {
+        uint256 startIndex = (i << 2) | 1;
+        lockDuration = value.indexUint(startIndex, 2);
+        // limit lockDuration 4000 rounds.
+        if (lockDuration == 0 || lockDuration > 4000) {
+          revert OutOfBounds('lockDuration', percentage, 0, 4000);
+        }
+        percentage = value.indexUint(startIndex + 2, 2);
+        if (percentage == 0 || percentage > SatoshiPlusHelper.DENOMINATOR) {
+          revert OutOfBounds('percentage', percentage, 0, SatoshiPlusHelper.DENOMINATOR);
+        }
 
+        lockDuration *= SatoshiPlusHelper.ROUND_INTERVAL;
         if (i >= lastLength) {
-          tlpRates.push(lp);
+          lps.push(LockPercentage(uint64(lockDuration), uint32(percentage)));
         } else {
-          tlpRates[i] = lp;
+          lps[i] = LockPercentage(uint64(lockDuration), uint32(percentage));
         }
       }
-    } else if (Memory.compareStrings(key, "isActive")) {
-      uint256 newIsActive = value.toUint256(0);
-      if (newIsActive > 1) {
-        revert OutOfBounds(key, newIsActive, 0, 1);
+      // check lockDuration & percentage in order.
+      for (uint256 i = 1; i < currentLength; i++) {
+        require(lps[i-1].lockDuration < lps[i].lockDuration, "lockDuration disorder");
+        require(lps[i-1].percentage < lps[i].percentage, "percentage disorder");
       }
-      isActive = newIsActive == 1;
+    } else if (Memory.compareStrings(key, "lpActive")) {
+      if (value.length != 32) {
+        revert MismatchParamLength(key);
+      }
+      uint256 newLpActive = value.toUint256(0);
+      if (newLpActive > 1) {
+        revert OutOfBounds(key, newLpActive, 0, 1);
+      }
+      lpActive = newLpActive;
     } else {
       require(false, "unknown param");
     }
@@ -639,14 +648,13 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       reward = (getRoundAccuredReward(dr.candidate, minRound) - getRoundAccuredReward(dr.candidate, drRound)) * bt.amount / SatoshiPlusHelper.BTC_DECIMAL;
       
       // apply time grading to BTC rewards
-      // TODO make 86400 and 30 const variables
       uint256 rewardUnclaimed = 0;
-      if (isActive && tlpRates.length != 0) {
-        uint256 delegateMonth = (bt.lockTime - bt.blockTimestamp) / 86400 / 30;
-        uint256 p =  SatoshiPlusHelper.DENOMINATOR;
-        for (uint256 j = tlpRates.length; j != 0; j--) {
-          if (delegateMonth >= tlpRates[j - 1].tl) {
-            p = tlpRates[j - 1].tp;
+      if (lpActive == 1 && lps.length != 0) {
+        uint64 lockDuration = bt.lockTime - bt.blockTimestamp;
+        uint256 p = lps[0].percentage;
+        for (uint256 j = lps.length - 1; j > 1; j--) {
+          if (lockDuration >= lps[j].lockDuration) {
+            p = lps[j].percentage;
             break;
           }
         }
