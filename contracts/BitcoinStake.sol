@@ -109,7 +109,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
   /*********************** events **************************/
   event paramChange(string key, bytes value);
-  event delegated(bytes32 indexed txid, address indexed candidate, address indexed delegator, bytes script, uint64 amount, uint256 fee);
+  event delegated(bytes32 indexed txid, address indexed candidate, address indexed delegator, bytes script, uint32 outputIndex, uint64 amount, uint256 fee);
   event undelegated(bytes32 indexed outpointHash, uint32 indexed outpointIndex, bytes32 usedTxid);
   event migrated(bytes32 indexed txid);
   event transferredBtc(
@@ -203,7 +203,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
         fee *= SatoshiPlusHelper.CORE_DECIMAL;
         IStakeHub(STAKE_HUB_ADDR).addNotePayable(delegator, msg.sender, fee);
       }
-      emit delegated(txid, candidate, delegator, script, btcAmount, fee);
+      emit delegated(txid, candidate, delegator, script, outputIndex, btcAmount, fee);
     }
 
     delegatorMap[delegator].txids.push(txid);
