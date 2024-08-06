@@ -97,15 +97,13 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   // Fee paid in BTC to burn lst tokens
   uint64 public utxoFee;
 
-  address[] public candidates;
-
   // Time grading applied to BTC stakers
   // There is no timelock set in the BTC lst stake transaction, as a result a same rate is set to apply to all
   // TODO these values should be saved for each round; otherwise make sure to clear up unclaimed rewards in each round
-  uint256 public tlpRate;
+  uint256 public percentage;
 
   // whether the time grading is enabled
-  bool public isActive;
+  uint256 public lpActive;
 
   struct BtcTx {
     uint64 amount;
@@ -133,7 +131,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
   /*********************** events **************************/
   event paramChange(string key, bytes value);
-  event delegated(bytes32 indexed txid, address indexed delegator, uint64 amount);
+  event delegated(bytes32 indexed txid, address indexed delegator, uint64 amount, uint256 fee);
   event redeemed(address indexed delegator, uint64 amount, uint64 utxoFee, bytes pkscript);
   event undelegated(bytes32 indexed txid, uint32 outputIndex, address indexed delegator, uint64 amount, bytes pkscript);
   event addedWallet(bytes32 indexed _hash, uint64 _type);
@@ -151,7 +149,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     initRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
     roundTag = initRound;
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
-    tlpRate = SatoshiPlusHelper.DENOMINATOR;
+    percentage = SatoshiPlusHelper.DENOMINATOR / 2;
     alreadyInit = true;
   }
 
@@ -192,10 +190,10 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
         fee *= SatoshiPlusHelper.CORE_DECIMAL;
         IStakeHub(STAKE_HUB_ADDR).addNotePayable(delegator, msg.sender, fee);
       }
+      emit delegated(txid, delegator, btcAmount, fee);
     }
 
     IBitcoinLSTToken(lstToken).mint(delegator, btcAmount);
-    emit delegated(txid, delegator, btcAmount);
 
     _afterMint(delegator, btcAmount);
 
@@ -305,8 +303,8 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   function claimReward(address delegator) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed) {
     reward = _updateUserRewards(delegator, true);
     // apply time grading
-    if (isActive) {
-      uint256 rewardClaimed = reward * tlpRate / SatoshiPlusHelper.DENOMINATOR;
+    if (lpActive == 1) {
+      uint256 rewardClaimed = reward * percentage / SatoshiPlusHelper.DENOMINATOR;
       rewardUnclaimed = reward - rewardClaimed;
       reward = rewardClaimed;
     }
@@ -371,20 +369,25 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       address newLstTokenAddr = value.toAddress(0);
       require(newLstTokenAddr != address(0), "token address is empty");
       lstToken = newLstTokenAddr;
-    } else if (Memory.compareStrings(key, "tlpRate")) {
-      uint256 newtlpRate = value.toUint256(0);
-      if (newtlpRate == 0 || newtlpRate > SatoshiPlusHelper.DENOMINATOR) {
-        revert OutOfBounds(key, newtlpRate, 0, SatoshiPlusHelper.DENOMINATOR);
-      }
-      tlpRate = newtlpRate;
-    } else if (Memory.compareStrings(key, "isActive")) {
-      uint256 newIsActive = value.toUint256(0);
-      if (newIsActive > 1) {
-        revert OutOfBounds(key, newIsActive, 0, 1);
-      }
-      isActive = newIsActive == 1;
     } else {
-      require(false, "unknown param");
+      if (value.length != 32) {
+        revert MismatchParamLength(key);
+      }
+      if (Memory.compareStrings(key, "percentage")) {
+        uint256 newPercentage = value.toUint256(0);
+        if (newPercentage == 0 || newPercentage > SatoshiPlusHelper.DENOMINATOR) {
+          revert OutOfBounds(key, newPercentage, 1, SatoshiPlusHelper.DENOMINATOR);
+        }
+        percentage = newPercentage;
+      } else if (Memory.compareStrings(key, "lpActive")) {
+        uint256 newLpActive = value.toUint256(0);
+        if (newLpActive > 1) {
+          revert OutOfBounds(key, newLpActive, 0, 1);
+        }
+        lpActive = newLpActive;
+      } else {
+        require(false, "unknown param");
+      }
     }
     emit paramChange(key, value);
   }

@@ -109,8 +109,8 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
   /*********************** events **************************/
   event paramChange(string key, bytes value);
-  event delegatedBtc(bytes32 indexed txid, address indexed candidate, address indexed delegator, bytes script, uint256 amount);
-  event undelegatedBtc(bytes32 indexed outpointHash, uint32 indexed outpointIndex, bytes32 usedTxid);
+  event delegated(bytes32 indexed txid, address indexed candidate, address indexed delegator, bytes script, uint64 amount, uint256 fee);
+  event undelegated(bytes32 indexed outpointHash, uint32 indexed outpointIndex, bytes32 usedTxid);
   event migrated(bytes32 indexed txid);
   event transferredBtc(
     bytes32 indexed txid,
@@ -134,6 +134,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   function init() external onlyNotInit {
     roundTag = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
+    lpActive = 1;
     alreadyInit = true;
   }
 
@@ -202,6 +203,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
         fee *= SatoshiPlusHelper.CORE_DECIMAL;
         IStakeHub(STAKE_HUB_ADDR).addNotePayable(delegator, msg.sender, fee);
       }
+      emit delegated(txid, candidate, delegator, script, btcAmount, fee);
     }
 
     delegatorMap[delegator].txids.push(txid);
@@ -211,8 +213,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     dr.candidate = candidate;
     dr.round = roundTag;
 
-    addExpire(dr, lockTime, btcAmount);
-    emit delegatedBtc(txid, candidate, delegator, script, btcAmount);    
+    addExpire(dr, lockTime, btcAmount);   
   }
 
   /// Bitcoin undelegate, it is called by relayer
@@ -240,7 +241,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       if (bt.amount != 0 && bt.outputIndex == _outpointIndex) {
         bt.usedHeight = blockHeight;
         ++count;
-        emit undelegatedBtc(_outpointHash, _outpointIndex, txid);
+        emit undelegated(_outpointHash, _outpointIndex, txid);
         // TODO
         // In a future version with fixed | flexible term.
         // It should clear receiptMap, delegatorMap, and update other fields
@@ -455,12 +456,12 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
         uint256 startIndex = (i << 2) | 1;
         lockDuration = value.indexUint(startIndex, 2);
         // limit lockDuration 4000 rounds.
-        if (lockDuration == 0 || lockDuration > 4000) {
+        if (lockDuration > 4000) {
           revert OutOfBounds('lockDuration', percentage, 0, 4000);
         }
         percentage = value.indexUint(startIndex + 2, 2);
         if (percentage == 0 || percentage > SatoshiPlusHelper.DENOMINATOR) {
-          revert OutOfBounds('percentage', percentage, 0, SatoshiPlusHelper.DENOMINATOR);
+          revert OutOfBounds('percentage', percentage, 1, SatoshiPlusHelper.DENOMINATOR);
         }
 
         lockDuration *= SatoshiPlusHelper.ROUND_INTERVAL;
@@ -639,14 +640,14 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     BtcTx storage bt = btcTxMap[txid];
     DepositReceipt storage dr = receiptMap[txid];
     uint256 drRound = dr.round;
-    require(dr.round != 0, "invalid deposit receipt");
+    require(drRound != 0, "invalid deposit receipt");
     uint256 lastRound = roundTag - 1;
     uint256 unlockRound1 = bt.lockTime / SatoshiPlusHelper.ROUND_INTERVAL - 1;
     if (drRound < lastRound && drRound < unlockRound1) {
       uint256 minRound = lastRound < unlockRound1 ? lastRound : unlockRound1;
       // full reward
       reward = (getRoundAccuredReward(dr.candidate, minRound) - getRoundAccuredReward(dr.candidate, drRound)) * bt.amount / SatoshiPlusHelper.BTC_DECIMAL;
-      
+
       // apply time grading to BTC rewards
       uint256 rewardUnclaimed = 0;
       if (lpActive == 1 && lps.length != 0) {
