@@ -53,9 +53,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   // value: bitcoin stake record
   mapping(bytes32 => BtcTx) public btcTxMap;
 
-  // The lst token contract address.
-  address public lstToken;
-
   // staked BTC amount when the last round snapshot is taken
   uint64 public stakedAmount;
 
@@ -137,7 +134,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   event removedWallet(bytes32 indexed _hash, uint64 _type);
 
   modifier onlyBtcLSTToken() {
-    require(msg.sender == lstToken, 'only btc lst token can call this function');
+    require(msg.sender == BTCLST_TOKEN_ADDR, 'only btc lst token can call this function');
     _;
   }
 
@@ -193,7 +190,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       emit delegated(txid, delegator, btcAmount, fee);
     }
 
-    IBitcoinLSTToken(lstToken).mint(delegator, btcAmount);
+    IBitcoinLSTToken(BTCLST_TOKEN_ADDR).mint(delegator, btcAmount);
 
     _afterMint(delegator, btcAmount);
 
@@ -335,7 +332,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
     redeemRequests.push(Redeem(hash, addrType, msg.sender, amount));
 
-    IBitcoinLSTToken(lstToken).burn(msg.sender, uint256(burnAmount));
+    IBitcoinLSTToken(BTCLST_TOKEN_ADDR).burn(msg.sender, uint256(burnAmount));
     emit redeemed(msg.sender, amount, utxoFee, pkscript);
 
     _afterBurn(msg.sender, burnAmount);
@@ -362,13 +359,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       addWallet(value);
     } else if (Memory.compareStrings(key, "remove")) {
       removeWallet(value);
-    } else if (Memory.compareStrings(key, "setLstAddress")) {
-      if (value.length != 20) {
-        revert MismatchParamLength(key);
-      }
-      address newLstTokenAddr = value.toAddress(0);
-      require(newLstTokenAddr != address(0), "token address is empty");
-      lstToken = newLstTokenAddr;
     } else {
       if (value.length != 32) {
         revert MismatchParamLength(key);

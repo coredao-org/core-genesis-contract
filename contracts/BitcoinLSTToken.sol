@@ -1,22 +1,21 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+// SPDX-License-Identifier: Apache2.0
+pragma solidity 0.8.4;
 
 import '@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol';
 import '@openzeppelin/contracts/token/ERC20/extensions/ERC20Pausable.sol';
-import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/token/ERC20/ERC20.sol';
 import './interface/IBitcoinLSTToken.sol';
+import "./interface/IParamSubscriber.sol";
+import "./System.sol";
 
-contract BTCLSTToken is ERC20, ERC20Burnable, Pausable, Ownable, IBitcoinLSTToken {
-    address public bitcoinLSTStake;
+contract BTCLSTToken is ERC20, ERC20Burnable, Pausable, IBitcoinLSTToken, System, IParamSubscriber {
 
     modifier onlyBtcLSTStake() {
-        require(msg.sender == bitcoinLSTStake, "only invoked by bitcoin lst stake");
+        require(msg.sender == BTCLST_STAKE_ADDR, "only invoked by bitcoin lst stake");
         _;
     }
 
-    constructor(string memory _name, string memory _symbol, address _bitcoinLSTStake) ERC20(_name, _symbol) Ownable() {
-        bitcoinLSTStake = _bitcoinLSTStake;
+    constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {
     }
 
     function mint(address to, uint256 amount) external override onlyBtcLSTStake whenNotPaused {
@@ -41,23 +40,25 @@ contract BTCLSTToken is ERC20, ERC20Burnable, Pausable, Ownable, IBitcoinLSTToke
     }
 
     function _onTransfer(address from, address to, uint256 amount) internal {
-        (bool success, ) = bitcoinLSTStake.call(
+        (bool success, ) = BTCLST_STAKE_ADDR.call(
             abi.encodeWithSignature("onTokenTransfer(address,address,uint256)",
                 from, to, amount)
         );
         require(success, "call lstStake.onTokenTransfer failed.");
     }
 
-    function setBitcoinLSTStake(address newAddr) external onlyOwner {
-        bitcoinLSTStake = newAddr;
+  /*********************** Governance ********************************/
+  /// Update parameters through governance vote
+  /// @param key The name of the parameter
+  /// @param value the new value set to the parameter
+  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+    if (Memory.compareStrings(key, "pause")) {
+      _pause();
+    } else if (Memory.compareStrings(key, "unpause")) {
+      _unpause();
+    } else {
+      require(false, "unknown param");
     }
-
-    // Functions to pause and unpause the contract
-    function pause() external onlyOwner {
-        _pause();
-    }
-
-    function unpause() external onlyOwner {
-        _unpause();
-    }
+    emit paramChange(key, value);
+  }
 }
