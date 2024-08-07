@@ -184,7 +184,6 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param amount The amount of CORE to undelegate
   function undelegateCoin(address candidate, uint256 amount) public {
     require(amount >= requiredCoinDeposit, "undelegate amount is too small");
-    // TODO should also check the reminder > requiredCoinDeposit
     undelegateCoin(candidate, msg.sender, amount, false);
     Address.sendValue(payable(msg.sender), amount);
     emit undelegatedCoin(candidate, msg.sender, amount);
@@ -260,6 +259,9 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param candidate the validator candidate address
   /// @param delegator the delegator address
   function proxyDelegate(address candidate, address delegator) external payable onlyPledgeAgent {
+    if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(candidate)) {
+      revert InactiveCandidate(candidate);
+    }
     require(msg.value >= requiredCoinDeposit, "delegate amount is too small");
     uint256 realtimeAmount = delegateCoin(candidate, delegator, msg.value, false);
     emit delegatedCoin(candidate, delegator, msg.value, realtimeAmount);

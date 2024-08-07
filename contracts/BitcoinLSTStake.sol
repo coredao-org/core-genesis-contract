@@ -91,6 +91,10 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   // a list of lst redeem/burn request whose BTC payout transaction are in pending status
   Redeem[] public redeemRequests;
 
+  // key: keccak256 of pkscript.
+  // value: index+1 of redeemRequests.
+  mapping(bytes32 => uint256) redeemMap;
+
   // Fee paid in BTC to burn lst tokens
   uint64 public utxoFee;
 
@@ -221,14 +225,35 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     // TODO gas concerns on double loop, considering use a map instead for redeemRequests
     for (uint32 i = 0; i < _numberOfOutputs; ++i) {
       (_amount, _pkScript) = voutView.parseOutputValueAndScript(i);
-      (hash, addrType) = extractPkScriptAddr(_pkScript.clone());
+      bytes memory pkscript = _pkScript.clone();
+      // (hash, addrType) = extractPkScriptAddr(pkscript);
+      bytes32 key = keccak256(abi.encodePacked(pkscript));
+      uint256 index1 = redeemMap[key];
+      if (index1 != 0) {
+        Redeem storage rd = redeemRequests[index1 - 1];
+        if (rd.amount >= _amount) {
+          emit undelegated(txid, i, rd.delegator, _amount, pkscript);
+          if (rd.amount == _amount) {
+            delete redeemMap[key];
+            if (index1 < redeemRequests.length) {
+              rd = redeemRequests[redeemRequests.length - 1];
+              pkscript = buildPkScript(rd.hash, rd.addrType);
+              key = keccak256(abi.encodePacked(pkscript));
+              redeemMap[key] = index1;
+            }
+            redeemRequests.pop();
+          } else {
+            rd.amount -= _amount;
+          }
+        }
+      }
       redeemSize = redeemRequests.length;
       for (uint256 j = redeemSize; j != 0; --j) {
         Redeem storage rd = redeemRequests[j - 1];
         if (rd.amount == _amount && rd.hash == hash && rd.addrType == addrType) {
-          emit undelegated(txid, i, rd.delegator, _amount, _pkScript.clone());
+          
           if (j != redeemRequests.length) {
-            rd = redeemRequests[redeemRequests.length - 1];
+            
           }
           redeemRequests.pop();
           break;
@@ -330,7 +355,14 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     uint64 burnAmount = amount;
     amount -= utxoFee;
 
-    redeemRequests.push(Redeem(hash, addrType, msg.sender, amount));
+    bytes32 key = keccak256(abi.encodePacked(pkscript));
+    uint256 index1 = redeemMap[key];
+    if (index1 == 0) {
+      redeemRequests.push(Redeem(hash, addrType, msg.sender, amount));
+      redeemMap[key] = redeemRequests.length;
+    } else {
+      redeemRequests[index1 - 1].amount += amount;
+    }
 
     IBitcoinLSTToken(BTCLST_TOKEN_ADDR).burn(msg.sender, uint256(burnAmount));
     emit redeemed(msg.sender, amount, utxoFee, pkscript);
@@ -461,6 +493,49 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       }
     }
     return (0, WTYPE_UNKNOWN);
+  }
+
+  function buildPkScript(bytes32 whash, uint32 addrType) internal pure returns (bytes memory pkscript) {
+    if (addrType == WTYPE_P2WSH || addrType == WTYPE_P2TAPROOT) {
+      pkscript = new bytes(34);
+      pkscript[1] = OP_DATA_32;
+      if (addrType == WTYPE_P2WSH) {
+        pkscript[0] = OP_0;
+      } else if (addrType == WTYPE_P2TAPROOT) {
+        pkscript[0] = OP_1;
+      }
+      assembly {
+        mstore(add(mload(pkscript), 0x22), mload(whash))
+      }
+      return pkscript;
+    }
+    uint startPos = 0x22;
+    if (addrType == WTYPE_P2PKH) {
+      pkscript = new bytes(25);
+      pkscript[0] = OP_DUP;
+      pkscript[1] = OP_HASH160;
+      pkscript[2] = OP_DATA_20;
+      pkscript[23] = OP_EQUALVERIFY;
+      pkscript[24] = OP_CHECKSIG;
+      startPos = 0x23;
+    } else if (addrType == WTYPE_P2SH) {
+      pkscript = new bytes(23);
+      pkscript[0] = OP_HASH160;
+      pkscript[1] = OP_DATA_20;
+      pkscript[22] = OP_EQUAL;
+    } else if (addrType == WTYPE_P2WPKH) {
+      pkscript = new bytes(22);
+      pkscript[0] = OP_0;
+      pkscript[1] = OP_DATA_20;
+    }
+    unchecked {
+      uint mask = 256 ** (32 - 20) - 1;
+      assembly {
+        let srcpart := and(mload(whash), not(mask))
+        let destpart := and(add(mload(pkscript), startPos), mask)
+        mstore(add(mload(pkscript), startPos), or(destpart, srcpart))
+      }
+    }
   }
 
   /// get accrued reward for each unit of BTC of a given round
