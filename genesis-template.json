@@ -53,6 +53,10 @@
       "balance": "0x0",
       "code": "0x{{candidateHub}}"
     },
+    "0x0000000000000000000000000000000000001006": {
+      "balance": "0x0",
+      "code": "0x{{govHub}}"
+    },
     "0x0000000000000000000000000000000000001007": {
       "balance": "0x0",
       "code": "0x{{pledgeAgent}}"
@@ -92,10 +96,6 @@
     "0x0000000000000000000000000000000000010001": {
       "balance": "0x0",
       "code": "0x{{bitcoinLSTtoken}}"
-    },
-    "0x0000000000000000000000000000000000001006": {
-      "balance": "0x0",
-      "code": "0x{{govHub}}"
     }{% for v in initHolders %},
     "{{ v.address.replace('0x', '') }}": {
       "balance": "0x{{ v.balance }}"

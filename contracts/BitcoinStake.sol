@@ -124,6 +124,11 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// @param candidate Address of the validator candidate
   error InactiveCandidate(address candidate);
 
+  modifier onlyPledgeAgent() {
+    require(msg.sender == PLEDGE_AGENT_ADDR, "the sender must be pledge agent contract");
+    _;
+  }
+
   /*********************** Init ********************************/
   function init() external onlyNotInit {
     roundTag = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();

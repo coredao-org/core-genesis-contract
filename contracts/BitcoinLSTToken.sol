@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
-import '@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol';
-import '@openzeppelin/contracts/token/ERC20/extensions/ERC20Pausable.sol';
-import '@openzeppelin/contracts/token/ERC20/ERC20.sol';
 import './interface/IBitcoinLSTToken.sol';
 import "./interface/IParamSubscriber.sol";
 import "./lib/Memory.sol";
 import "./System.sol";
+import '@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol';
+import '@openzeppelin/contracts/token/ERC20/extensions/ERC20Pausable.sol';
+import '@openzeppelin/contracts/token/ERC20/ERC20.sol';
 
-contract BTCLSTToken is ERC20, ERC20Burnable, Pausable, IBitcoinLSTToken, System, IParamSubscriber {
+contract BitcoinLSTToken is IBitcoinLSTToken, System, IParamSubscriber, ERC20, ERC20Burnable, Pausable {
 
   /*********************** events **************************/
   event paramChange(string key, bytes value);
@@ -19,8 +19,13 @@ contract BTCLSTToken is ERC20, ERC20Burnable, Pausable, IBitcoinLSTToken, System
     _;
   }
 
-  constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {
+  /*********************** Init ********************************/
+  function init() external onlyNotInit {
+    // TODO how to init constructor
+    alreadyInit = true;
   }
+
+  constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {}
 
   function mint(address to, uint256 amount) external override onlyBtcLSTStake whenNotPaused {
     _mint(to, amount);
