@@ -100,7 +100,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   }
 
   /*********************** events **************************/
-  event roundReward(string indexed name, address indexed validator, uint256 amount, uint256 bonus);
+  event roundReward(string indexed name, uint256 round, address[] validator, uint256[] amount, uint256 bonus);
   event paramChange(string key, bytes value);
   event claimedReward(address indexed delegator, uint256 amount);
   event claimedRelayerReward(address indexed relayer, uint256 amount);
@@ -120,6 +120,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     operators[BTC_AGENT_ADDR] = true;
     operators[BTC_STAKE_ADDR] = true;
     operators[BTCLST_STAKE_ADDR] = true;
+
+    activeFlag = 1;
 
     alreadyInit = true;
   }
@@ -163,6 +165,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         totalReward += rewards[j];
       }
       uint assetBonus = unclaimedReward * assets[i].bonusRate / SatoshiPlusHelper.DENOMINATOR;
+      emit roundReward(assets[i].name, roundTag, validators, rewards, assetBonus);
       if (assetBonus != 0) {
         // redistribute unclaimed rewards
         // added after hardcap to leave more rewards to users
@@ -171,7 +174,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
             continue;
           }
           uint256 bonus = rewards[j] * assetBonus / totalReward;
-          emit roundReward(assets[i].name, validators[j], rewards[j], bonus);
+          //emit roundReward(assets[i].name, validators[j], rewards[j], bonus);
           rewards[j] += bonus;
           usedBonus += bonus;
         }
@@ -295,7 +298,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     if (activeFlag == 1 && gradeLength != 0 && btcReward != 0) {
       uint256 core2btcRate = coreReward * SatoshiPlusHelper.DENOMINATOR / btcReward;
       uint256 p = grades[0].percentage;
-      for (uint256 i = gradeLength - 1; i > 0; i--) {
+      for (uint256 i = gradeLength - 1; i != 0; i--) {
         if (core2btcRate >= grades[i].core2btcRate) {
           p = grades[i].percentage;
           break;

@@ -653,7 +653,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       if (lpActive == 1 && lps.length != 0) {
         uint64 lockDuration = bt.lockTime - bt.blockTimestamp;
         uint256 p = lps[0].percentage;
-        for (uint256 j = lps.length - 1; j > 1; j--) {
+        for (uint256 j = lps.length - 1; j != 0; j--) {
           if (lockDuration >= lps[j].lockDuration) {
             p = lps[j].percentage;
             break;
