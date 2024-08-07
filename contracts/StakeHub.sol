@@ -24,9 +24,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   uint256 public constant BTC_UNIT_CONVERSION = 1e10;
   uint256 public constant INIT_BTC_FACTOR = 1e4;
 
-  uint256 public constant MASK_STAKE_CORE_MASK = 1;
-  uint256 public constant MASK_STAKE_HASH_MASK = 2;
-  uint256 public constant MASK_STAKE_BTC_MASK = 4;
+  uint256 public constant MASK_STAKE_CORE = 1;
+  uint256 public constant MASK_STAKE_HASH = 2;
+  uint256 public constant MASK_STAKE_BTC = 4;
 
   // Supported asset types
   //  - CORE
@@ -120,8 +120,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     operators[BTC_AGENT_ADDR] = true;
     operators[BTC_STAKE_ADDR] = true;
     operators[BTCLST_STAKE_ADDR] = true;
-
-    activeFlag = 4; // Default active btc grade.
+    // Default active btc grade.
+    activeFlag = MASK_STAKE_BTC;
 
     alreadyInit = true;
   }
