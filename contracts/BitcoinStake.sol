@@ -62,10 +62,10 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   mapping(uint256 => ExpireInfo) round2expireInfoMap;
 
   // Time grading applied to BTC stakers
-  LockPercentage[] public lps;
+  LockLengthGrade[] public grades;
 
   // whether the time grading is enabled
-  uint256 public lpActive;
+  uint256 public gradeActive;
 
   struct BtcTx {
     uint64 amount;
@@ -96,7 +96,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     mapping(address => uint256) amountMap;
   }
 
-  struct LockPercentage {
+  struct LockLengthGrade {
     uint64 lockDuration; // In second
     uint32 percentage; // [0 ~ DENOMINATOR]
   }
@@ -124,16 +124,11 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// @param candidate Address of the validator candidate
   error InactiveCandidate(address candidate);
 
-  modifier onlyPledgeAgent() {
-    require(msg.sender == PLEDGE_AGENT_ADDR, "the sender must be pledge agent contract");
-    _;
-  }
-
   /*********************** Init ********************************/
   function init() external onlyNotInit {
     roundTag = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
-    lpActive = 1;
+    gradeActive = 1;
     alreadyInit = true;
   }
 
@@ -438,8 +433,8 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
     // TODO more details on how the grading binary array is designed and parsed
-    if (Memory.compareStrings(key, "lps")) {
-      uint256 lastLength = lps.length;
+    if (Memory.compareStrings(key, "grades")) {
+      uint256 lastLength = grades.length;
       uint256 currentLength = value.indexUint(0, 1);
 
       if(((currentLength << 2) | 1) == value.length) {
@@ -447,7 +442,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       }
 
       for (uint256 i = currentLength; i < lastLength; i++) {
-        lps.pop();
+        grades.pop();
       }
       uint256 lockDuration;
       uint256 percentage;
@@ -465,25 +460,25 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
         lockDuration *= SatoshiPlusHelper.ROUND_INTERVAL;
         if (i >= lastLength) {
-          lps.push(LockPercentage(uint64(lockDuration), uint32(percentage)));
+          grades.push(LockLengthGrade(uint64(lockDuration), uint32(percentage)));
         } else {
-          lps[i] = LockPercentage(uint64(lockDuration), uint32(percentage));
+          grades[i] = LockLengthGrade(uint64(lockDuration), uint32(percentage));
         }
       }
       // check lockDuration & percentage in order.
       for (uint256 i = 1; i < currentLength; i++) {
-        require(lps[i-1].lockDuration < lps[i].lockDuration, "lockDuration disorder");
-        require(lps[i-1].percentage < lps[i].percentage, "percentage disorder");
+        require(grades[i-1].lockDuration < grades[i].lockDuration, "lockDuration disorder");
+        require(grades[i-1].percentage < grades[i].percentage, "percentage disorder");
       }
-    } else if (Memory.compareStrings(key, "lpActive")) {
+    } else if (Memory.compareStrings(key, "gradeActive")) {
       if (value.length != 32) {
         revert MismatchParamLength(key);
       }
-      uint256 newLpActive = value.toUint256(0);
-      if (newLpActive > 1) {
-        revert OutOfBounds(key, newLpActive, 0, 1);
+      uint256 newActive = value.toUint256(0);
+      if (newActive > 1) {
+        revert OutOfBounds(key, newActive, 0, 1);
       }
-      lpActive = newLpActive;
+      gradeActive = newActive;
     } else {
       require(false, "unknown param");
     }
@@ -649,12 +644,12 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
       // apply time grading to BTC rewards
       uint256 rewardUnclaimed = 0;
-      if (lpActive == 1 && lps.length != 0) {
+      if (gradeActive == 1 && grades.length != 0) {
         uint64 lockDuration = bt.lockTime - bt.blockTimestamp;
-        uint256 p = lps[0].percentage;
-        for (uint256 j = lps.length - 1; j != 0; j--) {
-          if (lockDuration >= lps[j].lockDuration) {
-            p = lps[j].percentage;
+        uint256 p = grades[0].percentage;
+        for (uint256 j = grades.length - 1; j != 0; j--) {
+          if (lockDuration >= grades[j].lockDuration) {
+            p = grades[j].percentage;
             break;
           }
         }

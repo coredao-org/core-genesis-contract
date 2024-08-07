@@ -23,6 +23,11 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     uint256 stakeAmount;
   }
 
+  modifier onlyPledgeAgent() {
+    require(msg.sender == PLEDGE_AGENT_ADDR, "the sender must be pledge agent contract");
+    _;
+  }
+
   /*********************** events **************************/
   event paramChange(string key, bytes value);
 
@@ -30,7 +35,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     alreadyInit = true;
   }
 
-  function _initializeFromPledgeAgent(address[] memory candidates, uint256[] memory amounts) external onlyStakeHub {
+  function _initializeFromPledgeAgent(address[] memory candidates, uint256[] memory amounts) external onlyPledgeAgent {
     uint256 s = candidates.length;
     for (uint256 i = 0; i < s; ++i) {
       candidateMap[candidates[i]].stakeAmount = amounts[i];

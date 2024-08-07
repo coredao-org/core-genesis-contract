@@ -159,6 +159,11 @@ Promise.all([
     "bitcoinLSTstake",
     "contracts/BitcoinLSTStake.sol",
     "BitcoinLSTStake"
+  ),
+  compileContract(
+    "bitcoinLSTtoken",
+    "contracts/BitcoinLSTToken.sol",
+    "BitcoinLSTToken"
   )
 ]).then(result => {
 

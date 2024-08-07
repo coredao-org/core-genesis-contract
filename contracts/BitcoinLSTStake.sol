@@ -99,7 +99,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   uint256 public percentage;
 
   // whether the time grading is enabled
-  uint256 public lpActive;
+  uint256 public gradeActive;
 
   struct BtcTx {
     uint64 amount;
@@ -146,7 +146,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     roundTag = initRound;
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
     percentage = SatoshiPlusHelper.DENOMINATOR / 2;
-    lpActive = 1;
+    gradeActive = 1;
     alreadyInit = true;
   }
 
@@ -300,7 +300,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   function claimReward(address delegator) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed) {
     reward = _updateUserRewards(delegator, true);
     // apply time grading
-    if (lpActive == 1) {
+    if (gradeActive == 1) {
       uint256 rewardClaimed = reward * percentage / SatoshiPlusHelper.DENOMINATOR;
       rewardUnclaimed = reward - rewardClaimed;
       reward = rewardClaimed;
@@ -369,12 +369,12 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
           revert OutOfBounds(key, newPercentage, 1, SatoshiPlusHelper.DENOMINATOR);
         }
         percentage = newPercentage;
-      } else if (Memory.compareStrings(key, "lpActive")) {
-        uint256 newLpActive = value.toUint256(0);
-        if (newLpActive > 1) {
-          revert OutOfBounds(key, newLpActive, 0, 1);
+      } else if (Memory.compareStrings(key, "gradeActive")) {
+        uint256 newActive = value.toUint256(0);
+        if (newActive > 1) {
+          revert OutOfBounds(key, newActive, 0, 1);
         }
-        lpActive = newLpActive;
+        gradeActive = newActive;
       } else {
         require(false, "unknown param");
       }

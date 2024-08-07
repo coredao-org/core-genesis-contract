@@ -67,7 +67,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   DualStakingGrade[] public grades;
 
   // whether the CORE grading is enabled
-  uint256 public activeFlag;
+  uint256 public gradeActive;
 
   // accumulated unclaimed rewards each round, will be redistributed at the beginning of the next round
   uint256 public unclaimedReward;
@@ -121,7 +121,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     operators[BTC_STAKE_ADDR] = true;
     operators[BTCLST_STAKE_ADDR] = true;
     // Default active btc grade.
-    activeFlag = MASK_STAKE_BTC;
+    gradeActive = MASK_STAKE_BTC;
 
     alreadyInit = true;
   }
@@ -299,7 +299,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       (rewards[i], unclaimedRewards[i]) = IAgent(assets[i].agent).claimReward(delegator);
       uint256 mask = (1 << i);
       // apply CORE grading to rewards
-      if ((activeFlag & mask) == mask && gradeLength != 0 && rewards[i] != 0) {
+      if ((gradeActive & mask) == mask && gradeLength != 0 && rewards[i] != 0) {
         uint256 rewardRate = rewards[0] * SatoshiPlusHelper.DENOMINATOR / rewards[i];
         uint256 p = grades[0].percentage;
         for (uint256 j = gradeLength - 1; j != 0; j--) {
@@ -395,11 +395,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         revert MismatchParamLength(key);
       }
       uint256 newValue = value.toUint256(0);
-      if (Memory.compareStrings(key, "activeFlag")) {
+      if (Memory.compareStrings(key, "gradeActive")) {
         if (newValue > 7) {
           revert OutOfBounds(key, newValue, 0, 7);
         }
-        activeFlag = newValue;
+        gradeActive = newValue;
       } else if (Memory.compareStrings(key, "hashFactor")) {
         if (newValue == 0 || newValue > 1e8) {
           revert OutOfBounds(key, newValue, 1, 1e8);
