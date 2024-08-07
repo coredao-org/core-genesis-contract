@@ -127,7 +127,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   }
 
   /*********************** Interface implementations ***************************/
-  /// Receive round rewards from ValidatorSet, which is triggered at the beginning of turn round
+  /// Receive staking rewards from ValidatorSet, which is triggered at the
+  /// beginning of turn round
   /// @param validators List of validator operator addresses
   /// @param rewardList List of reward amount
   function addRoundReward(
@@ -147,7 +148,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       --i;
       AssetState memory cs = stateMap[assets[i].agent];
       totalReward = 0;
-
       for (uint256 j = 0; j < validatorSize; ++j) {
         address validator = validators[j];
         // only reach here if running a new chain from genesis
@@ -165,7 +165,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         burnReward += (r - rewards[j]);
         totalReward += rewards[j];
       }
-      uint assetBonus = unclaimedReward * assets[i].bonusRate / SatoshiPlusHelper.DENOMINATOR;
+      uint assetBonus = totalReward == 0 ? 0 : unclaimedReward * assets[i].bonusRate / SatoshiPlusHelper.DENOMINATOR;
       emit roundReward(assets[i].name, roundTag, validators, rewards, assetBonus);
       if (assetBonus != 0) {
         // redistribute unclaimed rewards
@@ -175,7 +175,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
             continue;
           }
           uint256 bonus = rewards[j] * assetBonus / totalReward;
-          //emit roundReward(assets[i].name, validators[j], rewards[j], bonus);
           rewards[j] += bonus;
           usedBonus += bonus;
         }
