@@ -396,8 +396,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       }
       uint256 newValue = value.toUint256(0);
       if (Memory.compareStrings(key, "activeFlag")) {
-        if (newValue > 1) {
-          revert OutOfBounds(key, newValue, 0, 1);
+        if (newValue > 7) {
+          revert OutOfBounds(key, newValue, 0, 7);
         }
         activeFlag = newValue;
       } else if (Memory.compareStrings(key, "hashFactor")) {
