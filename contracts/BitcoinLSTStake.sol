@@ -99,7 +99,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
   // Time grading applied to BTC stakers
   // There is no timelock set in the BTC lst stake transaction, as a result a same rate is set to apply to all
-  // TODO these values should be saved for each round; otherwise make sure to clear up unclaimed rewards in each round
   uint256 public percentage;
 
   // whether the time grading is enabled
@@ -600,7 +599,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     require(payload.indexUint(0, 4) == SatoshiPlusHelper.BTC_STAKE_MAGIC, "wrong magic");
     require(payload.indexUint(5, 2) == SatoshiPlusHelper.CHAINID, "wrong chain id");
     uint32 version = uint32(payload.indexUint(4, 1));
-    require(version == SatoshiPlusHelper.BTCLST_STAKE_VERSION, "unsupport sat+ version in btc staking");
+    require(version == SatoshiPlusHelper.BTCLST_STAKE_VERSION, "unsupported sat+ version in btc staking");
     delegator = payload.indexAddress(7);
     fee = payload.indexUint(27, 1);
   }

@@ -62,7 +62,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   mapping(uint256 => ExpireInfo) round2expireInfoMap;
 
   // Time grading applied to BTC stakers
-  // TODO these values should be saved for each round; otherwise make sure to clear up unclaimed rewards in each round
   LockPercentage[] public lps;
 
   // whether the time grading is enabled
@@ -581,7 +580,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     require(payload.indexUint(0, 4) == SatoshiPlusHelper.BTC_STAKE_MAGIC, "wrong magic");
     require(payload.indexUint(5, 2) == SatoshiPlusHelper.CHAINID, "wrong chain id");
     uint32 version = uint32(payload.indexUint(4, 1));
-    require(version == SatoshiPlusHelper.BTC_STAKE_VERSION, "unsupport sat+ version in btc staking");
+    require(version == SatoshiPlusHelper.BTC_STAKE_VERSION, "unsupported sat+ version in btc staking");
     candidate = payload.indexAddress(27);
     fee = payload.indexUint(47, 1);
     delegator = payload.indexAddress(7);

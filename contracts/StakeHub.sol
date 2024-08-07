@@ -18,6 +18,7 @@ import "./lib/SatoshiPlusHelper.sol";
 contract StakeHub is IStakeHub, System, IParamSubscriber {
   using BytesLib for *;
 
+  // TODO INIT_HASH_FACTOR and INIT_BTC_FACTOR should be set more accurately before launch
   uint256 public constant HASH_UNIT_CONVERSION = 1e18;
   uint256 public constant INIT_HASH_FACTOR = 1e6;
   uint256 public constant BTC_UNIT_CONVERSION = 1e10;
@@ -63,7 +64,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   mapping(address => uint256) public payableNotes;
 
   // CORE grading applied to BTC stakers
-  // TODO these values should be saved for each round; otherwise make sure to clear up unclaimed rewards in each round
   DualStakingGrade[] public grades;
 
   // whether the CORE grading is enabled
@@ -161,6 +161,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         uint256 r = rewardList[j] * candidateAmountMap[validator][i] * cs.factor / candidateScoreMap[validator];
         // hardcap is applied to each pool, using the discount calculated in `getHybridScore()` step
         rewards[j] = r * cs.discount / SatoshiPlusHelper.DENOMINATOR;
+        // TODO might add up with unclaimed rewards vs. burnt
         burnReward += (r - rewards[j]);
         totalReward += rewards[j];
       }

@@ -184,6 +184,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param amount The amount of CORE to undelegate
   function undelegateCoin(address candidate, uint256 amount) public {
     require(amount >= requiredCoinDeposit, "undelegate amount is too small");
+    // TODO should also check the reminder > requiredCoinDeposit
     undelegateCoin(candidate, msg.sender, amount, false);
     Address.sendValue(payable(msg.sender), amount);
     emit undelegatedCoin(candidate, msg.sender, amount);
