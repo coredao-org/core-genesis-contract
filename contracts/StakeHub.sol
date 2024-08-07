@@ -474,10 +474,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     require (success, "call PLEDGE_AGENT_ADDR.getStakeInfo() failed");
     (uint256[] memory cores, uint256[] memory hashs, uint256[] memory btcs) = abi.decode(data, (uint256[], uint256[], uint256[]));
 
-    // TODO should be moved to PledgeAgent.moveCandidateData()
-    (success,) = assets[2].agent.call(abi.encodeWithSignature("_initializeFromPledgeAgent(address[],uint256[])", validators, btcs));
-    require (success, "call BTC_AGENT_ADDR._initializeFromPledgeAgent() failed");
-
     // initialize hybrid score based on data migrated from PledgeAgent.getStakeInfo()
     uint256 validatorSize = validators.length;
     uint256[] memory totalAmounts = new uint256[](3);

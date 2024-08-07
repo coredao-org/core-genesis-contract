@@ -185,12 +185,11 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @dev all TODOs in this method also apply to undelegateCoin() and transferCoin()
   function delegateCoin(address agent) external payable override {
     // TODO should be moved to CoreAgent.delegateCoin() and make distributeReward() as the last step to avoid reentrant attack
-    _moveCOREData(agent, msg.sender);
-    // TODO possible reentrant risk
+    // This require can avoid reentrant risk.
+    require(_moveCOREData(agent, msg.sender), 'No old data.');
     distributeReward(msg.sender);
 
-    // TODO why not calling CoreAgent.delegateCoin()?
-    (bool success, ) = CORE_AGENT_ADDR.call {value:msg.value} (abi.encodeWithSignature("proxyDelegate(address,address)", agent, msg.sender));
+    (bool success, ) = CORE_AGENT_ADDR.call {value: msg.value} (abi.encodeWithSignature("proxyDelegate(address,address)", agent, msg.sender));
     require (success, "call CORE_AGENT_ADDR.proxyDelegate() failed");
   }
 
@@ -206,7 +205,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param amount The amount of CORE to undelegate
   /// HARDFORK V-1.0.12 Deprecated, the method is kept here for backward compatibility
   function undelegateCoin(address agent, uint256 amount) public override {
-    _moveCOREData(agent, msg.sender);
+    require(_moveCOREData(agent, msg.sender), 'No old data.');
     distributeReward(msg.sender);
 
     (bool success, ) = CORE_AGENT_ADDR.call(abi.encodeWithSignature("proxyUnDelegate(address,address,uint256)", agent, msg.sender, amount));
@@ -227,7 +226,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param amount The amount of CORE to transfer
   // HARDFORK V-1.0.12 Deprecated, the method is kept here for backward compatibility
   function transferCoin(address sourceAgent, address targetAgent, uint256 amount) public override {
-    _moveCOREData(sourceAgent, msg.sender);
+    require(_moveCOREData(sourceAgent, msg.sender), 'No old data.');
     _moveCOREData(targetAgent, msg.sender);
     distributeReward(msg.sender);
 
@@ -386,6 +385,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
     (success,) = BTC_STAKE_ADDR.call(abi.encodeWithSignature("_initializeFromPledgeAgent(address[],uint256[],uint256[])", candidates, amounts, realAmounts));
     require (success, "call BTC_STAKE_ADDR._initializeFromPledgeAgent() failed");
+
+    (success,) = BTC_AGENT_ADDR.call(abi.encodeWithSignature("_initializeFromPledgeAgent(address[],uint256[])", candidates, amounts));
+    require (success, "call BTC_AGENT_ADDR._initializeFromPledgeAgent() failed");
   }
 
   /// move delegator data to new contracts
@@ -412,7 +414,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// TODO possible gas issues if too many rounds, need stress test to verify
   /// @param candidate the validator candidate address
   /// @param delegator the delegator address
-  function _moveCOREData(address candidate, address delegator) internal {
+  function _moveCOREData(address candidate, address delegator) internal returns(bool) {
     Agent storage a = agentsMap[candidate];
     CoinDelegator storage d = a.cDelegatorMap[delegator];
     if (d.changeRound != 0) {
@@ -431,7 +433,9 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       a.totalDeposit -= d.newDeposit;
       delete a.cDelegatorMap[delegator];
       delete debtDepositMap[roundTag][delegator];
+      return true;
     }
+    return false;
   }
 
   /// collect rewards on a given reward map

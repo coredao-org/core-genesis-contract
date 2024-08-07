@@ -6,46 +6,50 @@ import '@openzeppelin/contracts/token/ERC20/extensions/ERC20Pausable.sol';
 import '@openzeppelin/contracts/token/ERC20/ERC20.sol';
 import './interface/IBitcoinLSTToken.sol';
 import "./interface/IParamSubscriber.sol";
+import "./lib/Memory.sol";
 import "./System.sol";
 
 contract BTCLSTToken is ERC20, ERC20Burnable, Pausable, IBitcoinLSTToken, System, IParamSubscriber {
 
-    modifier onlyBtcLSTStake() {
-        require(msg.sender == BTCLST_STAKE_ADDR, "only invoked by bitcoin lst stake");
-        _;
-    }
+  /*********************** events **************************/
+  event paramChange(string key, bytes value);
 
-    constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {
-    }
+  modifier onlyBtcLSTStake() {
+    require(msg.sender == BTCLST_STAKE_ADDR, "only invoked by bitcoin lst stake");
+    _;
+  }
 
-    function mint(address to, uint256 amount) external override onlyBtcLSTStake whenNotPaused {
-        _mint(to, amount);
-    }
+  constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {
+  }
 
-    function burn(address to, uint256 amount) external override onlyBtcLSTStake whenNotPaused {
-        _burn(to, amount);
-    }
+  function mint(address to, uint256 amount) external override onlyBtcLSTStake whenNotPaused {
+    _mint(to, amount);
+  }
 
-    function transfer(address to, uint256 amount) public override whenNotPaused returns (bool) {
-        bool b = super.transfer(to, amount);
-        address owner = _msgSender();
-        _onTransfer(owner, to, amount);
-        return b;
-    }
+  function burn(address to, uint256 amount) external override onlyBtcLSTStake whenNotPaused {
+    _burn(to, amount);
+  }
 
-    function transferFrom(address from, address to, uint256 amount) public override whenNotPaused returns (bool) {
-        bool b = super.transferFrom(from, to, amount);
-        _onTransfer(from, to, amount);
-        return b;
-    }
+  function transfer(address to, uint256 amount) public override whenNotPaused returns (bool) {
+    bool b = super.transfer(to, amount);
+    address owner = _msgSender();
+    _onTransfer(owner, to, amount);
+    return b;
+  }
 
-    function _onTransfer(address from, address to, uint256 amount) internal {
-        (bool success, ) = BTCLST_STAKE_ADDR.call(
-            abi.encodeWithSignature("onTokenTransfer(address,address,uint256)",
-                from, to, amount)
-        );
-        require(success, "call lstStake.onTokenTransfer failed.");
-    }
+  function transferFrom(address from, address to, uint256 amount) public override whenNotPaused returns (bool) {
+    bool b = super.transferFrom(from, to, amount);
+    _onTransfer(from, to, amount);
+    return b;
+  }
+
+  function _onTransfer(address from, address to, uint256 amount) internal {
+    (bool success, ) = BTCLST_STAKE_ADDR.call(
+        abi.encodeWithSignature("onTokenTransfer(address,address,uint256)",
+            from, to, amount)
+    );
+    require(success, "call lstStake.onTokenTransfer failed.");
+  }
 
   /*********************** Governance ********************************/
   /// Update parameters through governance vote
