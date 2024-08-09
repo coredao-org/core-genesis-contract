@@ -224,7 +224,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   /*********************** Internal Functions **************************/
   function parseHeader(RLPDecode.RLPItem[] memory items) internal pure returns (bytes32,address){
     bytes memory extra = items[12].toBytes();
-    bytes memory sig = BytesLib.slice(extra, 32, 65);
+    bytes memory sig = BytesLib.slice(extra, extra.length - 65, 65);
     bytes[] memory rlpbytes_list = new bytes[](16);
     rlpbytes_list[0] = RLPEncode.encodeUint(uint(SatoshiPlusHelper.CHAINID));
     for(uint256 i = 0; i < 15; ++i){
