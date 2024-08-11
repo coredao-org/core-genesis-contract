@@ -17,4 +17,13 @@ contract BitcoinLSTStakeMock is BitcoinLSTStake {
     function setRoundTag(uint256 value) external {
         roundTag = value;
     }
+
+    function setUtxoFee(uint64 value) external {
+        utxoFee = value;
+    }
+
+    function getRedeemRequestsLength() external view returns (uint) {
+        return redeemRequests.length;
+    }
+    
 }

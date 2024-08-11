@@ -13,7 +13,7 @@ redeem_public_key = "023821629dad3e7bad594d183f27bfca34511bedb319aec33faea6f71c2
 LOCK_SCRIPT = "0xa91454f0594a167b8226a2f4905e70f272fee9f5360387"
 LOCK_TIME = 1736956800
 BTC_LST_REWARD = 0
-FEE = 0
+FEE = 1
 BTC_REWARD = 0
 STAKE_ROUND = 3
 utxo_fee = 100
@@ -166,19 +166,18 @@ def test_delegate_lst_btc_p2wpkh_script_success(btc_lst_stake, lst_token, gov_hu
     assert tracker.delta() == BTC_LST_REWARD * 3
 
 
-def test_redeem_p2sh_success(btc_lst_stake, lst_token, set_candidate):
-    redeem_amount = BTC_VALUE
-    redeem_script = '0xa9143941c1d0eb3cdf633ef9b9c898bf37efe55412cc87'
-    script_hash, add_type = BTC_LIB.get_script_hash(redeem_script)
+def test_p2sh_lock_script_with_p2sh_redeem_script(btc_lst_stake, lst_token, set_candidate):
     btc_tx, lock_script = __get_lock_scrip_and_lst_btc_tx(accounts[0], BTC_VALUE)
+    redeem_script = lock_script
+    script_hash, add_type = BTC_LIB.get_script_hash(redeem_script)
     btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
     turn_round()
     assert lst_token.balanceOf(accounts[0]) == BTC_VALUE
     assert btc_lst_stake.realtimeAmount() == BTC_VALUE
-    tx = btc_lst_stake.redeem(redeem_amount, redeem_script)
+    tx = btc_lst_stake.redeem(BTC_VALUE, redeem_script)
     expect_event(tx, 'Transfer', {
         'from': accounts[0],
-        'value': redeem_amount
+        'value': BTC_VALUE
     })
     expect_event(tx, 'redeemed', {
         'delegator': accounts[0],
@@ -189,11 +188,130 @@ def test_redeem_p2sh_success(btc_lst_stake, lst_token, set_candidate):
         'hash': script_hash,
         'addrType': add_type,
         'delegator': accounts[0],
-        'amount': redeem_amount - utxo_fee,
+        'amount': BTC_VALUE - utxo_fee,
 
     })
+    redeem_btc_tx, _ = __get_lock_scrip_and_lst_btc_tx(accounts[0], BTC_VALUE - utxo_fee)
+    tx = btc_lst_stake.undelegate(redeem_btc_tx, 0, [], 0)
+    assert 'undelegated' in tx.events
     assert lst_token.balanceOf(accounts[0]) == 0
     assert btc_lst_stake.realtimeAmount() == 0
+
+
+def test_p2sh_lock_script_with_p2wsh_redeem_script(btc_lst_stake):
+    btc_tx, lock_script = __get_lock_scrip_and_lst_btc_tx(accounts[0], BTC_VALUE)
+    btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
+    turn_round()
+    # Lock script is P2SH, redeem script is P2WSH
+    redeem_script = '0x0014cdf3d02dd323c14bea0bed94962496c80c093344'
+    tx = btc_lst_stake.redeem(BTC_VALUE, redeem_script)
+    expect_event(tx, 'redeemed', {
+        'pkscript': redeem_script
+    })
+    redeem_btc_tx = (
+        "01000000019f5233e8114429c6ea8f9f956f34aaed8b813c1320e4b2721c2a84f4fded2048010000006a4730440220452a75c567f47f978b49f23ac12be52e3875e88a509b266f90b0198cd41ccd74022055e9f661bd9cbe7f800627c5251eb73547c300af68216a32f0a6c48a739ec2ca01210270e4215fbe540cab09ac91c9586eba4fc797537859489f4a23d3e22356f1732"
+        "fffffffff026c070000000000"
+        "00160014cdf3d02dd323c14bea0bed94962496c80c093344"
+        "bf61b100000000001976a914e1c5ba4d1fef0a3c7806603de565929684f9c2b188ac00000000")
+    tx = btc_lst_stake.undelegate(redeem_btc_tx, 0, [], 0)
+    assert 'undelegated' in tx.events
+    assert btc_lst_stake.getRedeemRequestsLength() == 0
+
+
+def test_p2sh_lock_script_with_p2pkh_redeem_script(btc_lst_stake):
+    btc_tx, lock_script = __get_lock_scrip_and_lst_btc_tx(accounts[0], BTC_VALUE)
+    btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
+    turn_round()
+    # Lock script is P2SH, redeem script is P2PKH
+    redeem_script = '0x76a914cdf3d02dd323c14bea0bed94962496c80c09334488ac'
+    tx = btc_lst_stake.redeem(BTC_VALUE, redeem_script)
+    expect_event(tx, 'redeemed', {
+        'pkscript': redeem_script
+    })
+    redeem_btc_tx = (
+        "0100000001737ee9f181e18183daab7df207a105a0d718a07fcd28a1aa8f3208f83cf2203c010000006b483045022100e1894f3f264c71a70da6bebcf219c04297f83ae336464047647da1e11796a076022051ae3b1d93db4a4bc2e8cca0284b46dffbcc1d175ee5beb6f7ed61382ba764e301210270e4215fbe540cab09ac91c9586eba4fc797537859489f4a23d3e22356f1732"
+        "fffffffff026c070000000000"
+        "001976a914cdf3d02dd323c14bea0bed94962496c80c09334488ac"
+        "8f58b100000000001976a914e1c5ba4d1fef0a3c7806603de565929684f9c2b188ac00000000")
+    tx = btc_lst_stake.undelegate(redeem_btc_tx, 0, [], 0)
+    assert 'undelegated' in tx.events
+    assert btc_lst_stake.getRedeemRequestsLength() == 0
+
+
+def test_btc_transaction_amount_exceeds_redeem_amount(btc_lst_stake, lst_token, set_candidate):
+    redeem_amount = BTC_VALUE
+    btc_tx, lock_script = __get_lock_scrip_and_lst_btc_tx(accounts[0], BTC_VALUE)
+    btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
+    turn_round()
+    btc_lst_stake.redeem(redeem_amount, lock_script)
+    tx = btc_lst_stake.undelegate(btc_tx, 0, [], 0)
+    assert 'undelegatedOverflow' in tx.events
+    assert 'undelegated' in tx.events
+
+
+def test_undelegate_success_with_zero_utxo_fee(btc_lst_stake, lst_token, set_candidate):
+    btc_lst_stake.setUtxoFee(0)
+    btc_tx, lock_script = __get_lock_scrip_and_lst_btc_tx(accounts[0], BTC_VALUE)
+    tx_id = get_transaction_txid(btc_tx)
+    btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
+    turn_round()
+    btc_lst_stake.redeem(BTC_VALUE, lock_script)
+    assert btc_lst_stake.getRedeemRequestsLength() == 1
+    tx = btc_lst_stake.undelegate(btc_tx, 0, [], 0)
+    expect_event(tx, 'undelegated', {
+        'txid': tx_id,
+        'outputIndex': 0,
+        'delegator': accounts[0],
+        'amount': BTC_VALUE,
+        'pkscript': lock_script,
+    })
+    assert btc_lst_stake.getRedeemRequestsLength() == 0
+
+
+def test_failed_undelegate_with_incorrect_redeem_script(btc_lst_stake, lst_token, set_candidate):
+    redeem_script = '0xa9143941c1d0eb3cdf633ef9b9c898bf37efe55412cc87'
+    btc_tx, lock_script = __get_lock_scrip_and_lst_btc_tx(accounts[0], BTC_VALUE)
+    btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
+    turn_round()
+    btc_lst_stake.redeem(BTC_VALUE, redeem_script)
+    tx = btc_lst_stake.undelegate(btc_tx, 0, [], 0)
+    assert 'undelegated' not in tx.events
+
+
+def test_no_rewards_generated_after_redeem(btc_lst_stake, lst_token, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    btc_tx, lock_script = __get_lock_scrip_and_lst_btc_tx(accounts[0], BTC_VALUE)
+    btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
+    turn_round()
+    btc_lst_stake.redeem(BTC_VALUE, lock_script)
+    turn_round(consensuses)
+    tracker = get_tracker(accounts[0])
+    tx = stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == 0
+    assert 'claimedReward' not in tx.events
+
+
+def test_partial_redeem_btc_stake_success(btc_lst_stake, lst_token, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    btc_tx, lock_script = __get_lock_scrip_and_lst_btc_tx(accounts[0], BTC_VALUE)
+    btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
+    turn_round()
+    btc_lst_stake.redeem(BTC_VALUE // 2, lock_script)
+    redeem_btc_tx, _ = __get_lock_scrip_and_lst_btc_tx(accounts[0], BTC_VALUE // 2)
+    tx = btc_lst_stake.undelegate(redeem_btc_tx, 0, [], 0)
+    expect_event(tx, 'undelegated', {
+        'outputIndex': 0,
+        'delegator': accounts[0],
+        'amount': BTC_VALUE // 2,
+        'pkscript': lock_script,
+    })
+    turn_round(consensuses)
+    tracker = get_tracker(accounts[0])
+    tx = stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == BTC_LST_REWARD * 3 // 2 - FEE
+    assert 'claimedReward' in tx.events
 
 
 @pytest.mark.parametrize("btc_amount", [100, 199, 200, 201])
@@ -295,7 +413,7 @@ def test_stake_error_with_address_zero(btc_lst_stake, lst_token, set_candidate, 
         btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[2]})
 
 
-def __get_lock_scrip_and_lst_btc_tx(delegator, amount, script_public_key=None, script_type='PTSH', fee=1, version=2,
+def __get_lock_scrip_and_lst_btc_tx(delegator, amount, script_public_key=None, script_type='P2SH', fee=1, version=2,
                                     chain_id=1112, magic='5341542b'):
     hard_tx = "01000000016f6187d0c4a17fd74bc61f1f16f15a94f13f22f13e0d4d455dabceebe317368e020000006a473044022011e1b2f120d4318433b2e41f8d536f33e323d609fad8d0ddcf98de5010382b480220314b1f7c49dfb638572b08ef2b2f4ed7940233ca29d8b2bdd9be3ff06169b7d701210270e4215fbe540cab09ac91c9586eba4fc797537859489f4a23d3e22356f1732"
     fee_hex = hex(fee).replace('x', '')
@@ -306,7 +424,7 @@ def __get_lock_scrip_and_lst_btc_tx(delegator, amount, script_public_key=None, s
     if script_public_key is None:
         script_public_key = public_key
     btc_txs = {"025615000708918f33f8743b2284558ac9d89e7b8d0df0d692ed48859eea73de93": {
-        'PTSH': {'lock_scrip': '0xa91454f0594a167b8226a2f4905e70f272fee9f5360387',
+        'P2SH': {'lock_scrip': '0xa91454f0594a167b8226a2f4905e70f272fee9f5360387',
                  'pay_address': '2MzzLg89yvATGtFJxZJEiYZK88QHYM9hBXQ',
                  'btc_tx': f'{hard_tx}'
                            f'fffffffff03{amount_hex}000000000017a91454f0594a167b8226a2f4905e70f272fee9f5360387'
@@ -317,6 +435,11 @@ def __get_lock_scrip_and_lst_btc_tx(delegator, amount, script_public_key=None, s
     btc_tx = btc_txs[script_public_key][script_type]['btc_tx']
     lock_scrip = btc_txs[script_public_key][script_type]['lock_scrip']
     return btc_tx, lock_scrip
+
+
+def __get_redeem_requests(index):
+    redeem_request = BTC_LST_STAKE.redeemRequests(index)
+    return redeem_request
 
 
 def __check__redeem_requests(redeem_index, result: dict):
