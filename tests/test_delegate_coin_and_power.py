@@ -2,13 +2,11 @@ import pytest
 from web3 import Web3
 from brownie import accounts
 from .common import turn_round, register_candidate, stake_hub_claim_reward
-from .constant import HardCap
-from .utils import get_tracker, padding_left
+from .utils import get_tracker
 from .calc_reward import parse_delegation, set_delegate
 
 MIN_INIT_DELEGATE_VALUE = 0
 BLOCK_REWARD = 0
-POWER_REWARD = 0
 ONE_ETHER = Web3.to_wei(1, 'ether')
 TX_FEE = int(1e4)
 
@@ -27,12 +25,11 @@ def set_min_init_delegate_value(min_init_delegate_value):
 
 @pytest.fixture(scope="module", autouse=True)
 def set_block_reward(validator_set, stake_hub):
-    global BLOCK_REWARD, POWER_REWARD
+    global BLOCK_REWARD
     block_reward = validator_set.blockReward()
     block_reward_incentive_percent = validator_set.blockRewardIncentivePercent()
     total_block_reward = block_reward + TX_FEE
     BLOCK_REWARD = total_block_reward * (100 - block_reward_incentive_percent) // 100
-    POWER_REWARD = BLOCK_REWARD // 2 * HardCap.POWER_HARD_CAP // HardCap.SUM_HARD_CAP
 
 
 @pytest.fixture()
@@ -66,9 +63,8 @@ def test_distribute_power_reward_during_turn_round(core_agent, hash_power_agent,
     tracker0 = get_tracker(clients[0])
     tracker1 = get_tracker(clients[1])
     tracker2 = get_tracker(clients[2])
-    discount = stake_hub.stateMap(hash_power_agent)
-    tx = turn_round(consensuses, tx_fee=TX_FEE)
-    rewards, _, account_rewards, collateral_reward, collateral_state = parse_delegation(
+    turn_round(consensuses, tx_fee=TX_FEE)
+    rewards, _, account_rewards, collateral_reward = parse_delegation(
         [{
             "address": operators[0],
             "active": True,
@@ -82,16 +78,9 @@ def test_distribute_power_reward_during_turn_round(core_agent, hash_power_agent,
             "coin": [set_delegate(clients[2], 900)],
             "btc": []
         }], BLOCK_REWARD // 2)
-    assert discount[-1] == collateral_state['power']
-    assert tx.events['roundReward'][0]['validator'] == operators
-    assert tx.events['roundReward'][0]['amount'] == [0, 0]
-    assert tx.events['roundReward'][1]['amount'] == [collateral_reward[1]['power'][operators[0]],
-                                                     collateral_reward[1]['power'][operators[1]]]
-    assert tx.events['roundReward'][2]['amount'] == [collateral_reward[1]['coin'][operators[0]],
-                                                     collateral_reward[1]['coin'][operators[1]]]
     stake_hub_claim_reward(clients[:3])
-    assert tracker0.delta() == rewards[1][accounts[0]] + rewards[0][accounts[0]]
-    assert tracker1.delta() == rewards[1][accounts[1]] + rewards[0][accounts[1]]
+    assert tracker0.delta() == account_rewards[accounts[0]]
+    assert tracker1.delta() == account_rewards[accounts[1]]
     assert tracker2.delta() == account_rewards[accounts[2]]
 
 
@@ -114,7 +103,7 @@ def test_delegate2one_agent_twice_in_different_rounds(candidate_hub, core_agent,
     turn_round(round_count=internal)
 
     btc_light_client.setMiners(candidate_hub.roundTag() - 6, operator, [accounts[0]] * 100)
-    _, _, account_rewards, _, _ = parse_delegation([{
+    _, _, account_rewards, _ = parse_delegation([{
         "address": operator,
         "active": True,
         "power": [set_delegate(accounts[0], 100)],
@@ -146,7 +135,7 @@ def test_scenario1(candidate_hub, core_agent, btc_light_client, stake_hub):
     btc_light_client.setMiners(round_tag + 2, accounts[2], [accounts[0]])
     core_agent.delegateCoin(accounts[1], {'value': MIN_INIT_DELEGATE_VALUE, 'from': accounts[0]})
 
-    _, _, account_rewards, _, _ = parse_delegation([{
+    _, _, account_rewards, _ = parse_delegation([{
         "address": accounts[1],
         "active": True,
         "coin": [set_delegate(accounts[0], MIN_INIT_DELEGATE_VALUE)],
@@ -187,7 +176,7 @@ def test_scenario2(candidate_hub, core_agent, btc_light_client, stake_hub):
     btc_light_client.setMiners(round_tag + 2, accounts[2], [accounts[0]])
     turn_round()
 
-    _, _, account_rewards, _, _ = parse_delegation([{
+    _, _, account_rewards, _ = parse_delegation([{
         "address": accounts[1],
         "active": True,
         "coin": [set_delegate(accounts[0], MIN_INIT_DELEGATE_VALUE)],
@@ -239,7 +228,7 @@ def test_scenario3(candidate_hub, core_agent, stake_hub, btc_light_client, hash_
     core_agent.delegateCoin(operators[2], {'value': MIN_INIT_DELEGATE_VALUE, 'from': accounts[0]})
     turn_round()
 
-    _, _, account_rewards, _, _ = parse_delegation([{
+    _, _, account_rewards, _ = parse_delegation([{
         "address": operators[0],
         "active": True,
         "coin": [set_delegate(accounts[0], MIN_INIT_DELEGATE_VALUE)],
@@ -268,7 +257,7 @@ def test_scenario3(candidate_hub, core_agent, stake_hub, btc_light_client, hash_
     assert tracker.delta() == account_rewards[accounts[0]]
     core_agent.transferCoin(operators[0], operators[2], MIN_INIT_DELEGATE_VALUE)
     turn_round(consensuses, tx_fee=TX_FEE, round_count=1)
-    _, _, account_rewards, _, _ = parse_delegation([
+    _, _, account_rewards, _ = parse_delegation([
         {
             "address": operators[0],
             "active": True,
@@ -324,7 +313,7 @@ def test_scenario4(candidate_hub, core_agent, validator_set, btc_light_client, s
     core_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE * 4, 'from': accounts[0]})
     core_agent.delegateCoin(operators[1], {'value': MIN_INIT_DELEGATE_VALUE, 'from': accounts[1]})
 
-    _, _, account_rewards, _, _ = parse_delegation([{
+    _, _, account_rewards, _ = parse_delegation([{
         "address": operators[0],
         "active": True,
         "coin": [set_delegate(accounts[0], MIN_INIT_DELEGATE_VALUE * 4)],
@@ -353,7 +342,7 @@ def test_scenario4(candidate_hub, core_agent, validator_set, btc_light_client, s
     turn_round(consensuses, tx_fee=TX_FEE)
     assert validator_set.getValidators() == [consensuses[1]]
 
-    delegator_coin_reward, delegator_power_reward, account_rewards, _, _ = parse_delegation([{
+    delegator_coin_reward, delegator_power_reward, account_rewards, _ = parse_delegation([{
         "address": operators[1],
         "active": True,
         "coin": [set_delegate(accounts[1], MIN_INIT_DELEGATE_VALUE)],
@@ -459,7 +448,7 @@ def test_scenario6(candidate_hub, core_agent, validator_set, stake_hub):
     core_agent.delegateCoin(agent0x97b, {'from': delegator0xc40, 'value': MIN_INIT_DELEGATE_VALUE})
 
     stake_hub.claimReward({'from': delegator0xB66})
-    assert tracker.delta() == BLOCK_REWARD // 4 * 3 - MIN_INIT_DELEGATE_VALUE
+    assert tracker.delta() == BLOCK_REWARD // 2 * 3 - MIN_INIT_DELEGATE_VALUE
 
 
 def test_scenario7(core_agent, btc_light_client, candidate_hub, set_candidate, stake_hub):
@@ -476,7 +465,7 @@ def test_scenario7(core_agent, btc_light_client, candidate_hub, set_candidate, s
     consensus, operator = set_candidate
     turn_round()
     turn_round([consensus], tx_fee=TX_FEE)
-    delegator_coin_reward, delegator_power_reward, account_rewards, _, _ = parse_delegation([{
+    delegator_coin_reward, delegator_power_reward, account_rewards, _ = parse_delegation([{
         "address": accounts[1],
         "active": True,
         "coin": [],
@@ -487,179 +476,3 @@ def test_scenario7(core_agent, btc_light_client, candidate_hub, set_candidate, s
     tracker = get_tracker(accounts[0])
     stake_hub.claimReward()
     assert tracker.delta() == account_rewards[accounts[0]]
-
-
-@pytest.mark.parametrize("power_factor", [100, 200, 300, 500])
-def test_delegate_after_power_factor_change(core_agent, btc_light_client, candidate_hub,
-                                            power_factor, gov_hub, stake_hub):
-    round_time_tag = 7
-
-    candidate_hub.setControlRoundTimeTag(True)
-    candidate_hub.setRoundTag(round_time_tag)
-    operators = accounts[4:6]
-    consensuses = []
-    for operator in operators:
-        consensuses.append(register_candidate(operator=operator))
-    clients = accounts[:3]
-    stake_hub.setPowerFactor(power_factor)
-    assert stake_hub.assets(1)[2] == power_factor
-    core_agent.delegateCoin(operators[0], {"value": MIN_INIT_DELEGATE_VALUE, "from": clients[0]})
-    core_agent.delegateCoin(operators[0], {"value": MIN_INIT_DELEGATE_VALUE * 3, "from": clients[1]})
-    core_agent.delegateCoin(operators[1], {"value": MIN_INIT_DELEGATE_VALUE * 9, "from": clients[2]})
-    round_time_tag = candidate_hub.roundTag() - 6
-    btc_light_client.setMiners(round_time_tag, operators[0], [clients[0]] * 2 + [clients[1]])
-    btc_light_client.setMiners(round_time_tag, operators[1], [clients[2]] * 2)
-    turn_round()
-    delegator_coin_reward, delegator_power_reward, account_rewards, _, _ = parse_delegation([{
-        "address": operators[0],
-        "active": True,
-        "power": [set_delegate(clients[0], 2), set_delegate(clients[1], 1)],
-        "coin": [set_delegate(clients[0], 100), set_delegate(clients[1], 300)],
-        "btc": []
-
-    }, {
-        "address": operators[1],
-        "active": True,
-        "power": [set_delegate(clients[2], 2)],
-        "coin": [set_delegate(clients[2], 900)],
-        "btc": []
-
-    }], BLOCK_REWARD // 2, power_factor)
-
-    tracker1 = get_tracker(clients[0])
-    tracker2 = get_tracker(clients[1])
-
-    turn_round(consensuses, tx_fee=TX_FEE)
-    stake_hub_claim_reward(clients[:2])
-    assert tracker1.delta() == account_rewards[clients[0]]
-    assert tracker2.delta() == account_rewards[clients[1]]
-
-
-@pytest.mark.parametrize("power_factor", [400, 500, 600, 700])
-def test_claim_reward_after_delegate_change_power_factor(core_agent, btc_light_client, candidate_hub, power_factor,
-                                                         stake_hub, gov_hub):
-    round_time_tag = 7
-    candidate_hub.setControlRoundTimeTag(True)
-    candidate_hub.setRoundTag(round_time_tag)
-    operators = accounts[4:6]
-    consensuses = []
-    for operator in operators:
-        consensuses.append(register_candidate(operator=operator))
-    clients = accounts[:3]
-    core_agent.delegateCoin(operators[0], {"value": MIN_INIT_DELEGATE_VALUE, "from": clients[0]})
-    core_agent.delegateCoin(operators[0], {"value": MIN_INIT_DELEGATE_VALUE * 3, "from": clients[1]})
-    core_agent.delegateCoin(operators[1], {"value": MIN_INIT_DELEGATE_VALUE * 9, "from": clients[2]})
-    round_time_tag = candidate_hub.roundTag() - 6
-    btc_light_client.setMiners(round_time_tag, operators[0], [clients[0]] * 2 + [clients[1]])
-    btc_light_client.setMiners(round_time_tag, operators[1], [clients[2]] * 2)
-    stake_hub.setPowerFactor(power_factor)
-    turn_round()
-    _, _, account_rewards, _, _ = parse_delegation([{
-        "address": operators[0],
-        "active": True,
-        "power": [set_delegate(clients[0], 2), set_delegate(clients[1], 1)],
-        "coin": [set_delegate(clients[0], 100), set_delegate(clients[1], 300)],
-        "btc": []
-
-    }, {
-        "address": operators[1],
-        "active": True,
-        "power": [set_delegate(clients[2], 2)],
-        "coin": [set_delegate(clients[2], 900)],
-        "btc": []
-
-    }], BLOCK_REWARD // 2, power_factor)
-
-    tracker1 = get_tracker(clients[0])
-    tracker2 = get_tracker(clients[1])
-    tracker3 = get_tracker(clients[2])
-
-    turn_round(consensuses, tx_fee=TX_FEE)
-    hex_value = padding_left(Web3.to_hex(power_factor + 1000), 64)
-    stake_hub.updateParam('hashFactor', hex_value, {'from': gov_hub})
-    turn_round()
-
-    stake_hub_claim_reward(clients[:3])
-
-    assert tracker1.delta() == account_rewards[clients[0]]
-    assert tracker2.delta() == account_rewards[clients[1]]
-    assert tracker3.delta() == account_rewards[clients[2]]
-
-
-@pytest.mark.parametrize("power_factor", [20000, 90000, 150000])
-def test_claim_reward_after_change_power_factor(core_agent, btc_light_client, candidate_hub, set_candidate,
-                                                power_factor, stake_hub, gov_hub):
-    round_time_tag = 7
-    candidate_hub.setControlRoundTimeTag(True)
-    candidate_hub.setRoundTag(round_time_tag)
-    operators = accounts[4:6]
-    consensuses = []
-    for operator in operators:
-        consensuses.append(register_candidate(operator=operator))
-    clients = accounts[:3]
-    round_time_tag = candidate_hub.roundTag() - 6
-    hex_value = padding_left(Web3.to_hex(power_factor), 64)
-    stake_hub.updateParam('hashFactor', hex_value, {'from': gov_hub})
-    btc_light_client.setMiners(round_time_tag, operators[0], [clients[0]] * 2 + [clients[1]] * 2)
-    turn_round()
-    turn_round(consensuses, tx_fee=TX_FEE)
-    _, _, account_rewards, _, _ = parse_delegation([{
-        "address": operators[0],
-        "active": True,
-        "power": [set_delegate(clients[0], 2), set_delegate(clients[1], 2)],
-        "coin": [],
-        "btc": []
-
-    }], BLOCK_REWARD // 2, power_factor)
-    tracker1 = get_tracker(clients[0])
-    tracker2 = get_tracker(clients[1])
-    stake_hub_claim_reward(clients[:2])
-    assert tracker1.delta() == account_rewards[accounts[0]]
-    assert tracker2.delta() == account_rewards[accounts[1]]
-
-
-def test_update_power_factor_in_next_round_and_claim_rewards(core_agent, btc_light_client, candidate_hub, stake_hub,
-                                                             gov_hub):
-    candidate_hub.setControlRoundTimeTag(True)
-    candidate_hub.setRoundTag(7)
-    operators = accounts[4:6]
-    consensuses = []
-    for operator in operators:
-        consensuses.append(register_candidate(operator=operator))
-    clients = accounts[:3]
-    core_agent.delegateCoin(operators[0], {"value": MIN_INIT_DELEGATE_VALUE, "from": clients[0]})
-    core_agent.delegateCoin(operators[0], {"value": MIN_INIT_DELEGATE_VALUE * 3, "from": clients[1]})
-    core_agent.delegateCoin(operators[1], {"value": MIN_INIT_DELEGATE_VALUE * 9, "from": clients[2]})
-    round_time_tag = candidate_hub.roundTag() - 6
-    btc_light_client.setMiners(round_time_tag, operators[0], [clients[0]] * 2 + [clients[1]])
-    btc_light_client.setMiners(round_time_tag, operators[1], [clients[2]] * 2)
-    turn_round()
-    power_factor = 200
-    hex_value = padding_left(Web3.to_hex(power_factor), 64)
-    stake_hub.updateParam('hashFactor', hex_value, {'from': gov_hub})
-    actual_power_factor = 500
-    _, _, account_rewards, _, _ = parse_delegation([{
-        "address": operators[0],
-        "active": True,
-        "power": [set_delegate(clients[0], 2), set_delegate(clients[1], 1)],
-        "coin": [set_delegate(clients[0], 100), set_delegate(clients[1], 300)],
-        "btc": []
-
-    }, {
-        "address": operators[1],
-        "active": True,
-        "power": [set_delegate(clients[2], 2)],
-        "coin": [set_delegate(clients[2], 900)],
-        "btc": []
-
-    }], BLOCK_REWARD // 2, actual_power_factor)
-
-    tracker1 = get_tracker(clients[0])
-    tracker2 = get_tracker(clients[1])
-    tracker3 = get_tracker(clients[2])
-
-    turn_round(consensuses, tx_fee=TX_FEE)
-    stake_hub_claim_reward(clients[:3])
-    assert tracker1.delta() == account_rewards[clients[0]]
-    assert tracker2.delta() == account_rewards[clients[1]]
-    assert tracker3.delta() == account_rewards[clients[2]]

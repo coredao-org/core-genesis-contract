@@ -1,0 +1,214 @@
+{
+    "help": {
+        "accounts": {
+            "delegatee_operator_address_list": "P0~P29",
+            "delegator_address_list": "U0~U59",
+            "sponsor_address_list": "S0"
+        },
+        "tasks": {
+            "NOTES": "except for the SponsorFund and RegisterCandidate, no other tasks can be configured in the initial round",
+            "SponsorFund": "sponsee addr, sponsor addr",
+            "RegisterCandidate": "operator addr, commision",
+            "UnregisterCandidate": "operator addr",
+            "AddSystemRewardOperator": "contract name, e.g. StakeHub",
+            "GenerateBlock": "block count",
+            "StakeCore": "delegator, delegatee, core amount(without decimals 1e18)",
+            "UnstakeCore": "delegator, delegatee, amount",
+            "TransferCore":"delegator, from elegatee, to delegatee, amount",
+            "StakePower": "delegatee addr, lagged round (calc stake round = round-lagged_round), miner1 addr, miner2 addr, ...",
+            "CreateStakeLockTx": "tx data storage key, delegator, delegatee, btc amount(without decimals 1e8), lock round, payment type, redeem script type",
+            "ConfirmBtcTx": "lock tx data key, minutes (The start time of the current round plus a few minutes is the time when the tx is included in the block)",
+            "StakeBtc": "lock tx data key, relayer addr",
+            "TransferBtc": "lock tx data key, delegator, delegatee",
+            "CreateLSTLockTx": "tx data storage key, delegator, amount, payment type, redeem script type",
+            "AddWallet": "lock tx data key",
+            "StakeLSTBtc": "lock tx data key, relayer addr",
+            "BurnLSTBtcAndPayBtcToRedeemer": "tx data storage key, delegator, amount, payment type, redeem script type",
+            "UnstakeLSTBtc": "unstake tx data key, relayer",
+            "TransferLSTBtc": "from delegator, to delegator, amount",
+            "ClaimReward":"delegator1 addr,delegator2 addr, ...",
+            "UpdateCoreStakeGradeFlag": "grade active value, 0 or 1",
+            "UpdateCoreStakeGrades": "grades list",
+            "UpdateBtcStakeGradeFlag": "grade active value, 0 or 1",
+            "UpdateBtcStakeGrades": "grades list",
+            "UpdateBtcLstStakeGradeFlag": "grade active value, 0 or 1, disallowed",
+            "UpdateBtcLstStakeGradePercent": "grade percentage",
+            "SlashValidator": "operator addr, slash count",
+            "AddMargin": "operator addr, amount",
+            "RefuseDelegate": "operator addr",
+            "AcceptDelegate": "operator addr"
+        }
+    },
+    "init_round": 7,
+    "round_tasks": {
+        "0": [
+            ["SponsorFund","ValidatorSet",10000000],
+            ["RegisterCandidate","P0",100],
+            ["RegisterCandidate","P1",200],
+            ["RegisterCandidate","P2",150],
+            ["RegisterCandidate","P3",100],
+            ["RegisterCandidate","P4",200],
+            ["RegisterCandidate","P5",150],
+            ["RegisterCandidate","P6",100],
+            ["RegisterCandidate","P7",200],
+            ["RegisterCandidate","P8",150],
+            ["RegisterCandidate","P9",100],
+            ["RegisterCandidate","P10",200],
+            ["RegisterCandidate","P11",150],
+            ["RegisterCandidate","P12",100],
+            ["RegisterCandidate","P13",200],
+            ["RegisterCandidate","P14",150],
+            ["RegisterCandidate","P15",100],
+            ["RegisterCandidate","P16",200],
+            ["RegisterCandidate","P17",150],
+            ["RegisterCandidate","P18",150],
+            ["RegisterCandidate","P19",150],
+            ["RegisterCandidate","P20",150],
+            ["RegisterCandidate","P21",150],
+            ["RegisterCandidate","P22",150],
+            ["RegisterCandidate","P23",150],
+            ["RegisterCandidate","P24",150],
+            ["RegisterCandidate","P25",150],
+            ["RegisterCandidate","P26",150],
+            ["RegisterCandidate","P27",150],
+            ["RegisterCandidate","P28",150],
+            ["RegisterCandidate","P29",150],
+            ["AddSystemRewardOperator","StakeHub"]
+        ],
+        "1": [
+            ["GenerateBlock", 9],
+            ["StakeCore", "U0", "P0", 100000],
+            ["StakeCore", "U1", "P0", 300],
+            ["StakeCore", "U1", "P1", 150],
+            ["StakeCore", "U2", "P2", 15089]
+        ],
+        "2":[
+            ["UpdateCoreStakeGradeFlag", 1],
+            ["UpdateCoreStakeGrades", 0, 1, 5000, 5000, 9000, 9000 ,10000,10000],
+            ["UpdateBtcStakeGradeFlag", 1],
+            ["UpdateBtcStakeGrades", 0, 1, 3, 5000, 10, 8000, 30, 10000],
+            ["UpdateBtcLstStakeGradePercent", 9000],
+            ["StakeCore", "U0", "P0", 100000],
+            ["GenerateBlock", 10]
+        ],
+        "3":[
+            ["GenerateBlock", 5],
+            ["StakeCore", "U1", "P1", 500],
+            ["StakeCore", "U2", "P2", 1000],
+            ["TransferCore", "U1", "P0", "P1", 200]
+        ],
+        "4":[
+            ["GenerateBlock", 29],
+            ["UnstakeCore","U1","P0",100],
+            ["SlashValidator","P0",8],
+            ["SlashValidator","P1",50],
+            ["SlashValidator","P2",50]
+        ],
+        "5":[
+            ["GenerateBlock", 19],
+            ["UnstakeCore","U0","P0",20000],
+            ["CreateStakeLockTx","tx_001","U1","P1",2.5,10,"P2SH","CLTV_P2PK"],
+            ["ConfirmBtcTx", "tx_001", 60],
+            ["StakeBtc","tx_001", "U1"]
+        ],
+        "6":[
+            ["GenerateBlock", 19],
+            ["AddMargin","P0"],
+            ["RefuseDelegate", "P0"]
+        ],
+        "7":[
+            ["GenerateBlock", 10],
+            ["AcceptDelegate", "P0"],
+            ["StakeCore", "U1", "P0", 1000],
+            ["CreateLSTLockTx","tx_002","U1", 1.2,"P2WPKH"],
+            ["ConfirmBtcTx", "tx_002", 20],
+            ["AddWallet","tx_002"],
+            ["StakeLSTBtc","tx_002", "U1"],
+            ["CreateLSTLockTx","tx_003","U1", 1.2,"P2PKH"],
+            ["ConfirmBtcTx", "tx_003", 20],
+            ["AddWallet","tx_003"],
+            ["StakeLSTBtc","tx_003", "U1"]
+        ],
+        "8": [
+            ["GenerateBlock", 14],
+            ["CreateLSTLockTx","tx_004","U2", 12,"P2SH","P2PKH"],
+            ["ConfirmBtcTx", "tx_004", 20],
+            ["AddWallet","tx_004"],
+            ["StakeLSTBtc","tx_004", "U2"],
+            ["CreateLSTLockTx","tx_007","U1", 0.6,"P2TR_PUBKEY"],
+            ["ConfirmBtcTx", "tx_007", 20],
+            ["AddWallet","tx_007"],
+            ["StakeLSTBtc","tx_007", "U1"],
+            ["StakePower", "P0", 6, "U0", "U6","U5"],
+            ["ClaimReward","U0","U1","U2","U3","U4","U5","U6"]
+        ],
+        "9":[
+            ["GenerateBlock", 12],
+            ["CreateLSTLockTx","tx_005","U2", 12.33,"P2WSH","P2MS"],
+            ["ConfirmBtcTx", "tx_005", 20],
+            ["AddWallet","tx_005"],
+            ["StakeLSTBtc","tx_005", "U2"],
+            ["StakePower", "P1", 6, "U1", "U6","U5"],
+            ["BurnLSTBtcAndPayBtcToRedeemer", "tx_010", "U1", 0.5, "P2SH", "P2MS"],
+            ["ConfirmBtcTx", "tx_010", 100],
+            ["UnstakeLSTBtc","tx_010", "U1"]
+        ],
+        "10":[
+            ["GenerateBlock", 17],
+            ["CreateLSTLockTx","tx_006","U1", 0.6,"P2TR_SCRIPT"],
+            ["ConfirmBtcTx", "tx_006", 20],
+            ["AddWallet","tx_006"],
+            ["StakeLSTBtc","tx_006", "U1"]
+        ],
+        "11":[
+            ["GenerateBlock", 17],
+            ["BurnLSTBtcAndPayBtcToRedeemer", "tx_011", "U2", 6.66, "P2SH", "P2MS"],
+            ["ConfirmBtcTx", "tx_011", 100],
+            ["UnstakeLSTBtc","tx_011", "U1"]
+        ],
+        "12": [
+            ["GenerateBlock", 12]
+        ],
+        "13": [
+            ["GenerateBlock", 9],
+            ["StakeCore", "U2", "P3", 15089]
+        ],
+        "14":[
+            ["GenerateBlock", 19],
+            ["TransferCore", "U0", "P0", "P3", 200]
+        ],
+        "15":[
+            ["GenerateBlock", 10]
+        ],
+        "16":[
+            ["GenerateBlock", 9]
+        ],
+        "17":[
+            ["GenerateBlock", 9],
+            ["CreatePayment", "P2PKH"],
+            ["CreatePayment", "P2SH", "P2PKH"],
+            ["CreatePayment", "P2WPKH"],
+            ["CreatePayment", "P2WSH", "P2MS"],
+            ["CreatePayment", "P2TR_SCRIPT"]
+        ],
+        "18": [
+            ["GenerateBlock", 9],
+            ["TransferLSTBtc", "U2", "U4", 2]
+        ],
+        "19": [
+            ["GenerateBlock", 9],
+            ["RefuseDelegate", "P20"]
+        ],
+        "20": [
+            ["GenerateBlock", 9],
+            ["UnregisterCandidate", "P20"]
+        ],
+        "21": [
+            ["GenerateBlock", 9]
+        ],
+        "22": [
+            ["ClaimReward","U0","U2","U4"],
+            ["UnregisterCandidate","P2"]
+        ]
+    }
+}
