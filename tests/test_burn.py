@@ -83,7 +83,7 @@ def __add_balance(address, value):
 
 def test_update_param_failed_with_unknown_key(burn):
     __update_gov_address(burn)
-    with brownie.reverts("unknown param"):
+    with brownie.reverts("UnsupportedGovParam: unknown"):
         burn.updateParam("unknown", "0x0000000000000000000000000000000000000000000000000000000000000001")
 
 

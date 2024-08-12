@@ -56,7 +56,7 @@ def test_update_param_failed_with_address_which_is_not_gov(gov_hub):
 
 def test_update_param_failed_with_unknown_key(gov_hub):
     fake_gov()
-    with brownie.reverts("unknown param"):
+    with brownie.reverts("UnsupportedGovParam: jkxjfi"):
         gov_hub.updateParam("jkxjfi", "0x0000000000000000000000000000000000000000000000000000000000000001")
 
 

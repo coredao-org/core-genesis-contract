@@ -66,7 +66,7 @@ def __balance_check(account_delta=0, system_delta=0, burn_delta=0, foundation_de
 
 
 def test_update_param_failed_with_unknown_key(system_reward):
-    with brownie.reverts("unknown param"):
+    with brownie.reverts("UnsupportedGovParam: known"):
         system_reward.updateParam("known", "0x0000000000000000000000000000000000000000000000000000000000000001")
 
 

@@ -34,7 +34,7 @@ def set_up(validator_set, slash_indicator, system_reward, btc_light_client, rela
 
 
 def test_update_param_failed_with_unknown_key(relay_hub):
-    with brownie.reverts("unknown param"):
+    with brownie.reverts("UnsupportedGovParam: unknown"):
         relay_hub.updateParam("unknown", "0x0000000000000000000000000000000000000000000000000000000000000001")
 
 

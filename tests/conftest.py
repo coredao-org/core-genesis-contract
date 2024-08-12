@@ -145,7 +145,7 @@ def btc_lst_stake(accounts):
 
 @pytest.fixture(scope="module")
 def lst_token(accounts):
-    c = accounts[0].deploy(BitcoinLSTToken, 'STBtc', 'BTCLST')
+    c = accounts[0].deploy(BitcoinLSTToken)
     return c
 
 
