@@ -1440,7 +1440,6 @@ for h in block['tx']:
 
 
 def Hash(msg):
-    """SHA256^2)(msg) -> bytes"""
     return hashlib.sha256(hashlib.sha256(msg).digest()).digest()
 
 
@@ -1539,3 +1538,57 @@ def test_check_tx_proof_fail(btc_light_client):
         nodes = get_intermediate_nodes(txids, i)
         nodes = ['0x' + binascii.hexlify(node).decode('utf8') for node in nodes]
         assert not btc_light_client.checkTxProof(txids[i], 717700, 2, nodes, j)
+
+def test_check_tx_proof_and_get_time_success(btc_light_client):
+    chain_tip = btc_light_client.getChainTip()
+    idx = btc_light_client.getHeight(chain_tip) - btc_light_client.INIT_CHAIN_HEIGHT()
+
+    for _ in range(0, 6):
+        btc_light_client.storeBlockHeader(btc_block_data[idx])
+        idx += 1
+
+    for i in range(len(txids)):
+        nodes = get_intermediate_nodes(txids, i)
+        nodes = ['0x' + binascii.hexlify(node).decode('utf8') for node in nodes]
+        result, block_time = btc_light_client.checkTxProofAndGetTime(txids[i], 717700, 2, nodes, i)
+        assert result
+        assert block_time == json.loads(data)['time']
+
+
+def test_check_tx_proof_and_get_time_fail(btc_light_client):
+    chain_tip = btc_light_client.getChainTip()
+    idx = btc_light_client.getHeight(chain_tip) - btc_light_client.INIT_CHAIN_HEIGHT()
+
+    for _ in range(0, 6):
+        btc_light_client.storeBlockHeader(btc_block_data[idx])
+        idx += 1
+
+    for i in range(len(txids)):
+        j = i
+        while j == i:
+            j = random.randint(0, len(txids) - 1)
+        nodes = get_intermediate_nodes(txids, j)
+        nodes = ['0x' + binascii.hexlify(node).decode('utf8') for node in nodes]
+        result, block_time = btc_light_client.checkTxProofAndGetTime(txids[i], 717700, 2, nodes, i)
+        assert not result
+        assert block_time == 0
+
+    for i in range(len(txids)):
+        j = i
+        while j == i:
+            j = random.randint(0, len(txids) - 1)
+        nodes = get_intermediate_nodes(txids, i)
+        nodes = ['0x' + binascii.hexlify(node).decode('utf8') for node in nodes]
+        result, block_time = btc_light_client.checkTxProofAndGetTime(txids[j], 717700, 2, nodes, i)
+        assert not result
+        assert block_time == 0
+
+    for i in range(len(txids)):
+        j = i
+        while j == i:
+            j = random.randint(0, len(txids) - 1)
+        nodes = get_intermediate_nodes(txids, i)
+        nodes = ['0x' + binascii.hexlify(node).decode('utf8') for node in nodes]
+        result, block_time = btc_light_client.checkTxProofAndGetTime(txids[i], 717700, 2, nodes, j)
+        assert not result
+        assert block_time == 0

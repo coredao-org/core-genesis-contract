@@ -5,7 +5,7 @@ import brownie
 from eth_abi import encode
 from web3 import Web3
 from brownie import *
-from .utils import expect_event, get_tracker, random_address, padding_left
+from .utils import expect_event, get_tracker, random_address, padding_left, encode_args_with_signature
 
 account_tracker = None
 system_reward_tracker = None
@@ -71,12 +71,17 @@ def test_update_param_failed_with_unknown_key(system_reward):
 
 
 def test_update_param_incentive_balance_cap_with_unmatched_length(system_reward):
-    with brownie.reverts("length of incentiveBalanceCap mismatch"):
+    with brownie.reverts("MismatchParamLength: incentiveBalanceCap"):
         system_reward.updateParam("incentiveBalanceCap", "0x0000000000123")
 
 
 def test_update_param_incentive_balance_cap_with_value_out_of_range(system_reward):
-    with brownie.reverts("the incentiveBalanceCap out of range"):
+    uint256_max = 2 ** 256 - 1
+    error_msg = encode_args_with_signature(
+        "OutOfBounds(string,uint256,uint256,uint256)",
+        ['incentiveBalanceCap', 0, 1, uint256_max]
+    )
+    with brownie.reverts(error_msg):
         system_reward.updateParam("incentiveBalanceCap",
                                   "0x0000000000000000000000000000000000000000000000000000000000000000")
 
@@ -90,13 +95,20 @@ def test_update_param_incentive_balance_cap_success(system_reward):
     })
 
 
-@pytest.mark.parametrize("value,success", [(0, True), (1, True), (2, False), (int(math.pow(2, 256)) - 1, False)])
+@pytest.mark.parametrize("value,success", [(0, True), (1, True), (2, False), (6, False),
+                                           (int(math.pow(2, 256)) - 1, False)])
 def test_update_param_is_burn(system_reward, value, success):
     if success:
-        system_reward.updateParam("isBurn", padding_left(Web3.to_hex(value), 64))
+        system_reward.updateParam("isBurn", value)
+        assert system_reward.isBurn() == value
     else:
-        with brownie.reverts("the newIsBurn out of range"):
-            system_reward.updateParam("isBurn", padding_left(Web3.to_hex(value), 64))
+        if len(str(value)) > 1:
+            with brownie.reverts("MismatchParamLength: isBurn"):
+                system_reward.updateParam("isBurn", value)
+        else:
+            if value > 1:
+                with brownie.reverts(f"OutOfBounds: isBurn, {value}, 0, 1"):
+                    system_reward.updateParam("isBurn", value)
 
 
 def test_receive_rewards_with_value_0(system_reward):
@@ -132,7 +144,7 @@ def test_receive_rewards_success_with_balance_equal_to_incentive_balance_cap(sys
 @pytest.mark.parametrize("is_burn", [False, True])
 def test_receive_rewards_success_with_balance_more_than_incentive_balance_cap(system_reward, foundation, burn, is_burn):
     if is_burn:
-        system_reward.updateParam("isBurn", padding_left(Web3.to_hex(1), 64))
+        system_reward.updateParam("isBurn", 1)
 
     incentive_balance_cap = system_reward.incentiveBalanceCap()
     init_balance = incentive_balance_cap - Web3.to_wei(1, 'ether')

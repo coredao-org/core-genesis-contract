@@ -1,5 +1,3 @@
-import secrets
-
 from brownie import *
 from .utils import random_address
 
@@ -64,9 +62,13 @@ def get_current_round():
     return round_tag
 
 
-def set_last_round_tag(rount_tag):
-    CandidateHubMock[0].setRoundTag(rount_tag)
-    BitcoinStakeMock[0].setRoundTag(rount_tag)
+def set_round_tag(round_tag):
+    CandidateHubMock[0].setRoundTag(round_tag)
+    BitcoinStakeMock[0].setRoundTag(round_tag)
+    CoreAgentMock[0].setRoundTag(round_tag)
+    BitcoinLSTStakeMock[0].setRoundTag(round_tag)
+    BitcoinLSTStakeMock[0].setInitRound(round_tag)
+    PledgeAgentMock[0].setRoundTag(round_tag)
 
 
 def stake_hub_claim_reward(account):
@@ -80,16 +82,11 @@ def stake_hub_claim_reward(account):
 
 
 def claim_stake_and_relay_reward(account):
-    tx0 = stake_hub_claim_reward(account)
-    tx1 = claim_relayer_reward(account)
+    tx0 = None
+    if isinstance(account, list):
+        for a in account:
+            tx0 = stake_hub_claim_reward(a)
+    else:
+        tx0 = stake_hub_claim_reward(account)
     return tx0
 
-
-def claim_relayer_reward(account):
-    tx = None
-    if isinstance(account, list):
-        for i in account:
-            tx = StakeHubMock[0].claimRelayerReward({'from': i})
-    else:
-        tx = StakeHubMock[0].claimRelayerReward({'from': account})
-    return tx

@@ -9,6 +9,11 @@ def is_development() -> bool:
     return network.show_active() == "development"
 
 
+@pytest.fixture(scope="module", autouse=True)
+def shared_setup(module_isolation):
+    pass
+
+
 @pytest.fixture(autouse=True)
 def isolation(fn_isolation):
     pass
@@ -146,12 +151,13 @@ def btc_lst_stake(accounts):
 @pytest.fixture(scope="module")
 def lst_token(accounts):
     c = accounts[0].deploy(BitcoinLSTToken)
+    c.init()
     return c
 
 
 @pytest.fixture(scope="module")
 def hash_power_agent(accounts):
-    c = accounts[0].deploy(HashPowerAgent)
+    c = accounts[0].deploy(HashPowerAgentMock)
     c.init()
     return c
 
@@ -194,7 +200,7 @@ def set_system_contract_address(
         getattr(c, "updateContractAddr")(args)
 
     candidate_hub.setControlRoundTimeTag(True)
-    accounts[-20].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
+    accounts[-21].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
     # init after set system contract
     system_reward.init()
     btc_stake.init()

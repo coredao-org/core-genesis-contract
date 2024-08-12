@@ -101,11 +101,12 @@ contract CandidateHubMock is CandidateHub {
     return candidateSet[operateMap[k] - 1];
   }
 
- function getScoreMock(address[] memory candidates, uint256 round) external {
+ function getScoreMock(address[] memory candidates, uint256 round) external returns (uint256[] memory scores) {
     scores = IStakeHub(STAKE_HUB_ADDR).getHybridScore(
       candidates,
       round
     );
+     return scores;
   }
 
   function getScores() external view returns (uint256[] memory) {

@@ -29,3 +29,4 @@ abi/TypedMemView.abi
 .pytest_cache
 reports/
 tests/__pycache__/
+tests/scenario/__pycache__/
