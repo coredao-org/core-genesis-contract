@@ -9,6 +9,7 @@ contract BitcoinStakeMock is BitcoinStake {
 
     function developmentInit() external {
         minBtcLockRound = 1;
+        gradeActive = true;
     }
 
     function getDelegatorBtcMap(address delegator) external view returns (bytes32[] memory) {
@@ -23,6 +24,10 @@ contract BitcoinStakeMock is BitcoinStake {
         return (reward, unclaimedReward);
     }
 
+    function setRewardMap(address delegator, uint256 reward, uint256 unclaimedReward) external {
+        rewardMap[delegator].reward = reward;
+        rewardMap[delegator].unclaimedReward = unclaimedReward;
+    }
 
     function setRoundTag(uint value) external {
         roundTag = value;
@@ -44,13 +49,39 @@ contract BitcoinStakeMock is BitcoinStake {
         delete grades;
     }
 
+    function getGradesLength() external view returns (uint256) {
+        return grades.length;
+    }
 
-    function setIsActive(uint256 value) external {
+    function setBtcRewardMap(address delegator, uint256 reward, uint256 unclaimed, uint256 accStakedAmount) external {
+        rewardMap[delegator] = Reward(reward, unclaimed, accStakedAmount);
+    }
+
+    function setIsActive(bool value) external {
         gradeActive = value;
     }
 
-    function setAlreadyInit(bool value) external {
-        alreadyInit = value;
+    function setDelegatorMap(address delegator, bytes32 value) external {
+        delegatorMap[delegator].txids.push(value);
+    }
+
+    function getRound2expireInfoMap(uint256 round) external view returns (address[] memory candidateList, uint256[] memory amounts) {
+        ExpireInfo storage expireInfo = round2expireInfoMap[round];
+        address[] memory candidateList = expireInfo.candidateList;
+        amounts = new uint256[](candidateList.length);
+        for (uint256 i = 0; i < candidateList.length; i++) {
+            amounts[i] = expireInfo.amountMap[candidateList[i]];
+        }
+        return (candidateList, amounts);
+    }
+
+
+    function setCandidateMap(address validator, uint256 stakedAmount, uint256 realtimeAmount, uint256 [] memory value) external {
+        candidateMap[validator] = Candidate(stakedAmount, realtimeAmount, value);
+    }
+
+    function setAccuredRewardPerBTCMap(address validator, uint256 round, uint256 value) external {
+        accuredRewardPerBTCMap[validator][round] = value;
     }
 
     function getAgentAddrList(uint256 index) external view returns (address[] memory) {
@@ -61,6 +92,21 @@ contract BitcoinStakeMock is BitcoinStake {
             agentAddresses[i] = expireInfo.candidateList[i];
         }
         return agentAddresses;
+    }
+
+    function getContinuousRewardEndRounds(address candidate) external view returns (uint256[] memory) {
+        return candidateMap[candidate].continuousRewardEndRounds;
+    }
+
+    function calculateRewardMock(bytes32[] calldata txids) external returns (uint256 amount, uint256 accStakedAmount) {
+        uint256 reward;
+        uint256 stakedAmount;
+        bool expired;
+        for (uint256 i = txids.length; i != 0; i--) {
+            (reward, expired, stakedAmount) = _collectReward(txids[i - 1]);
+            amount += reward;
+            accStakedAmount += stakedAmount;
+        }
     }
 
 

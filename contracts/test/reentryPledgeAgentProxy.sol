@@ -3,9 +3,9 @@ pragma solidity 0.8.4;
 import "./BaseProxy.sol";
 
 interface IPledgeAgent {
-    function claimReward() external returns (uint256, bool);
+    function claimReward(address[] calldata agentList) external returns (uint256, bool);
 
-    function claimBtcReward() external returns (uint256, bool);
+    function claimBtcReward(bytes32[] calldata txidList) external returns (uint256, bool);
 
     function delegateCoin(address agent) external payable;
 
@@ -22,10 +22,16 @@ interface IPledgeAgent {
     function requiredCoinDeposit() external view returns (uint256);
 }
 
+interface IStakeHub {
+    function claimReward() external returns (uint256 [] memory, uint256);
+}
+
+
 contract ReentryPledgeAgentProxy is BaseProxy {
     event proxyDelegate(bool success, string data, address sender);
     event proxyClaim(bool success, string data, address sender);
-    event proxyClaimReentry(bool success, string data, address sender);
+    event proxyClaimReentry(bool success, uint256 sender);
+    event ClaimRewardReentry_(bool success, uint256[] rewards, uint256 debtAmount);
     event proxyBtcClaim(bool success, string data);
     event proxyUndelegate(bool success, string data);
     event proxyTransferBtc(bool success, string data);
@@ -61,12 +67,17 @@ contract ReentryPledgeAgentProxy is BaseProxy {
         (bool success, string memory _msg) = _call(payload);
     }
 
-    function claimReward() external payable {
+    function claimReward(address[] calldata agentList) external payable {
+        bytes memory payload = abi.encodeWithSignature("claimReward(address[])", agentList);
+        (bool success, string memory _msg) = _call(payload);
+
+    }
+
+    function claimRewardNew() external payable {
         bytes memory payload = abi.encodeWithSignature("claimReward()");
         (bool success, string memory _msg) = _callC(payload);
         emit proxyClaim(success, _msg, msg.sender);
     }
-
 }
 
 contract DelegateReentry is ReentryPledgeAgentProxy {
@@ -105,14 +116,37 @@ contract UndelegateReentry is ReentryPledgeAgentProxy {
 
 
 contract ClaimRewardReentry is ReentryPledgeAgentProxy {
+
     constructor(address _pledgeAgentAddress, address _stakeHub) ReentryPledgeAgentProxy(_pledgeAgentAddress, _stakeHub) {}
     receive() external payable {
         if (stakeHub.balance > 0) {
-            IPledgeAgent(stakeHub).claimReward();
+            (uint256[] memory rewards, uint256  debtAmount) = IStakeHub(stakeHub).claimReward();
+            emit ClaimRewardReentry_(true, rewards, debtAmount);
         }
-        emit proxyClaimReentry(true, '', msg.sender);
     }
 }
+
+
+contract OldClaimRewardReentry is ReentryPledgeAgentProxy {
+    constructor(address _pledgeAgentAddress, address _stakeHub) ReentryPledgeAgentProxy(_pledgeAgentAddress, _stakeHub) {}
+    address[] public agents;
+
+    function setAgents(address[] calldata _agents) external {
+        delete agents;
+        agents = new address[](_agents.length);
+        for (uint i = 0; i < _agents.length; i++) {
+            agents[i] = _agents[i];
+        }
+    }
+
+    receive() external payable {
+        if (impl.balance > 0) {
+            (uint256 reward,bool  success) = IPledgeAgent(impl).claimReward(agents);
+            emit proxyClaimReentry(success, reward);
+        }
+    }
+}
+
 
 contract ClaimBtcRewardReentry is ReentryPledgeAgentProxy {
     bytes32[]  public txidList;
@@ -120,6 +154,6 @@ contract ClaimBtcRewardReentry is ReentryPledgeAgentProxy {
     constructor(address _pledgeAgentAddress, address _stakeHub) ReentryPledgeAgentProxy(_pledgeAgentAddress, _stakeHub) {}
 
     receive() external payable {
-        IPledgeAgent(stakeHub).claimReward();
+        IStakeHub(stakeHub).claimReward();
     }
 }

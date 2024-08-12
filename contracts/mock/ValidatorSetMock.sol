@@ -27,7 +27,7 @@ contract ValidatorSetMock is ValidatorSet {
         SUBSIDY_REDUCE_INTERVAL = _internal;
     }
     function addRoundRewardMock(address[] memory agentList, uint256[] memory rewardList,uint roundTag)
-    external {
+    external payable {
         uint256 rewardSum = 0;
         for (uint256 i = 0; i < rewardList.length; i++) {
         	rewardSum += rewardList[i];

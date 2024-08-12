@@ -68,6 +68,11 @@ contract System {
     HASH_AGENT_ADDR = systemContractAddr.hashAgent;
     BTCLST_TOKEN_ADDR = systemContractAddr.btcLstToken;
   }
+  
+  function setAlreadyInit(bool value) external {
+        alreadyInit = value;
+    }
+    
   {% else %}
   address public constant VALIDATOR_CONTRACT_ADDR = 0x0000000000000000000000000000000000001000;
   address public constant SLASH_CONTRACT_ADDR = 0x0000000000000000000000000000000000001001;

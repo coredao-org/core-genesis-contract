@@ -31,7 +31,7 @@ def fake_gov():
         BitcoinAgentMock[0].address,
         BitcoinLSTStakeMock[0].address,
         CoreAgentMock[0].address,
-        HashPowerAgent[0].address,
+        HashPowerAgentMock[0].address,
         BitcoinLSTToken[0].address,
     ]
     args = encode(['address'] * len(contracts), [c for c in contracts])

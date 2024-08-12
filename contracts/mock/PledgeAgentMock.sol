@@ -3,7 +3,10 @@ pragma solidity 0.8.4;
 import "../PledgeAgent.sol";
 
 contract PledgeAgentMock is PledgeAgent {
-    event delegatedCoin(address indexed agent, address indexed delegator, uint256 amount, uint256 totalAmount);
+    int256 public constant CLAIM_ROUND_LIMIT = 500;
+    uint256 public constant BTC_UNIT_CONVERSION_MOCK = 5;
+
+    event delegatedCoinOld(address indexed agent, address indexed delegator, uint256 amount, uint256 totalAmount);
     event transferredCoinOld(
         address indexed sourceCandidate,
         address indexed targetCandidate,
@@ -11,8 +14,17 @@ contract PledgeAgentMock is PledgeAgent {
         uint256 amount,
         uint256 realAmount
     );
+    event transferredBtcOld(
+        bytes32 indexed txid,
+        address sourceAgent,
+        address targetAgent,
+        address delegator,
+        uint256 amount,
+        uint256 totalAmount
+    );
     event undelegatedCoinOld(address indexed candidate, address indexed delegator, uint256 amount);
     event roundReward(address indexed agent, uint256 coinReward, uint256 powerReward, uint256 btcReward);
+    event delegatedBtcOld(bytes32 indexed txid, address indexed agent, address indexed delegator, bytes script, uint256 btcvalue);
 
     error InactiveAgent(address candidate);
     error InactiveCandidate(address candidate);
@@ -22,6 +34,7 @@ contract PledgeAgentMock is PledgeAgent {
         requiredCoinDeposit = requiredCoinDeposit / 1e16;
         btcFactor = 2;
         minBtcLockRound = 3;
+        minBtcValue = 100;
         roundTag = 1;
     }
 
@@ -45,8 +58,14 @@ contract PledgeAgentMock is PledgeAgent {
         return agentsMap[agent].rewardSet.length;
     }
 
-    function getAgentAddrList(uint256 index) external view returns (address[] memory) {
-        BtcExpireInfo storage expireInfo = round2expireInfoMap[index];
+    function getAgent2valueMap(uint256 round, address agent) external view returns (uint256 value) {
+        BtcExpireInfo storage expireInfo = round2expireInfoMap[round];
+        value = expireInfo.agent2valueMap[agent];
+        return value;
+    }
+
+    function getAgentAddrList(uint256 round) external view returns (address[] memory) {
+        BtcExpireInfo storage expireInfo = round2expireInfoMap[round];
         uint256 length = expireInfo.agentAddrList.length;
         address[] memory agentAddresses = new address[](length);
         for (uint256 i = 0; i < length; i++) {
@@ -86,7 +105,7 @@ contract PledgeAgentMock is PledgeAgent {
             require(amount >= requiredCoinDeposit, "undelegate amount is too small");
             require(newDeposit >= requiredCoinDeposit + amount, "remaining amount is too small");
         }
-        uint256 rewardAmount = collectCoinReward(a, d);
+        uint256 rewardAmount = _collectCoinReward(a, d);
         a.totalDeposit -= amount;
         uint256 deposit = d.changeRound < roundTag ? newDeposit : d.deposit;
         newDeposit -= amount;
@@ -129,7 +148,7 @@ contract PledgeAgentMock is PledgeAgent {
         }
 
         if (rewardAmount != 0) {
-            distributeReward(payable(delegator));
+            distributeRewardMock(payable(delegator), rewardAmount);
         }
 
         return (amount, deductedInDeposit + deductedOutDeposit);
@@ -141,7 +160,7 @@ contract PledgeAgentMock is PledgeAgent {
         CoinDelegator storage d = a.cDelegatorMap[delegator];
         uint256 rewardAmount;
         if (d.changeRound != 0) {
-            rewardAmount = collectCoinReward(a, d);
+            rewardAmount = _collectCoinReward(a, d);
         }
         a.totalDeposit += deposit;
 
@@ -162,7 +181,7 @@ contract PledgeAgentMock is PledgeAgent {
         }
 
         if (rewardAmount != 0) {
-            distributeReward(payable(delegator));
+            distributeRewardMock(payable(delegator), rewardAmount);
         }
         return d.newDeposit;
     }
@@ -172,7 +191,7 @@ contract PledgeAgentMock is PledgeAgent {
             revert InactiveAgent(agent);
         }
         uint256 newDeposit = delegateCoinOld(agent, msg.sender, msg.value, 0);
-        emit delegatedCoin(agent, msg.sender, msg.value, newDeposit);
+        emit delegatedCoinOld(agent, msg.sender, msg.value, newDeposit);
     }
 
 
@@ -201,6 +220,73 @@ contract PledgeAgentMock is PledgeAgent {
         uint256 newDeposit = delegateCoinOld(targetAgent, msg.sender, deposit, deductedDeposit);
 
         emit transferredCoinOld(sourceAgent, targetAgent, msg.sender, deposit, newDeposit);
+    }
+
+
+    function addExpire(BtcReceipt storage br) internal {
+        BtcExpireInfo storage expireInfo = round2expireInfoMap[br.endRound];
+        if (expireInfo.agentExistMap[br.agent] == 0) {
+            expireInfo.agentAddrList.push(br.agent);
+            expireInfo.agentExistMap[br.agent] = 1;
+        }
+        expireInfo.agent2valueMap[br.agent] += br.value;
+    }
+
+
+    function delegateBtcMock(bytes32 txId, uint256 btcValue, address agent, address delegator, bytes memory script, uint32 lockTime, uint256 fee) external {
+        BtcReceipt storage br = btcReceiptMap[txId];
+        require(br.value == 0, "btc tx confirmed");
+        br.endRound = lockTime / ROUND_INTERVAL;
+        br.value = btcValue;
+        require(br.value >= (minBtcValue == 0 ? INIT_MIN_BTC_VALUE : minBtcValue), "staked value does not meet requirement");
+        br.delegator = delegator;
+        br.agent = agent;
+        if (!ICandidateHub(CANDIDATE_HUB_ADDR).isCandidateByOperate(br.agent)) {
+            revert InactiveAgent(br.agent);
+        }
+        emit delegatedBtcOld(txId, br.agent, br.delegator, script, btcValue);
+        if (fee != 0) {
+            br.fee = fee;
+            br.feeReceiver = payable(msg.sender);
+        }
+        Agent storage a = agentsMap[br.agent];
+        br.rewardIndex = a.rewardSet.length;
+        addExpire(br);
+        a.totalBtc += br.value;
+    }
+
+    /// @param targetAgent the new validator address to stake to
+    function transferBtcOld(bytes32 txid, address targetAgent) external {
+        BtcReceipt storage br = btcReceiptMap[txid];
+        require(br.value != 0, "btc tx not found");
+        require(br.delegator == msg.sender, "not the delegator of this btc receipt");
+        address agent = br.agent;
+        require(agent != targetAgent, "can not transfer to the same validator");
+        require(br.endRound > roundTag + 1, "insufficient locking rounds");
+        if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetAgent)) {
+            revert InactiveAgent(targetAgent);
+        }
+        (uint256 reward) = _collectBtcReward(txid);
+        Agent storage a = agentsMap[agent];
+        a.totalBtc -= br.value;
+        round2expireInfoMap[br.endRound].agent2valueMap[agent] -= br.value;
+
+        Reward storage r = a.rewardSet[a.rewardSet.length - 1];
+        if (r.round == roundTag && br.rewardIndex < a.rewardSet.length) {
+            r.coin -= br.value * stateMap[roundTag].btcFactor;
+        }
+
+        Agent storage ta = agentsMap[targetAgent];
+        br.agent = targetAgent;
+        br.rewardIndex = ta.rewardSet.length;
+        addExpire(br);
+        ta.totalBtc += br.value;
+
+        if (reward != 0) {
+            Address.sendValue(payable(msg.sender), reward);
+        }
+
+        emit transferredBtcOld(txid, agent, targetAgent, msg.sender, br.value, ta.totalBtc);
     }
 
     function distributePowerRewardOld(address candidate, address[] calldata miners) external onlyCandidate {
@@ -277,7 +363,7 @@ contract PledgeAgentMock is PledgeAgent {
             totalBtc += a.btc;
         }
 
-        uint256 bf = (btcFactor == 0 ? INIT_BTC_FACTOR : btcFactor) * BTC_UNIT_CONVERSION;
+        uint256 bf = (btcFactor == 0 ? INIT_BTC_FACTOR : btcFactor) * BTC_UNIT_CONVERSION_MOCK;
         uint256 pf = powerFactor;
 
         scores = new uint256[](candidateSize);
@@ -337,6 +423,127 @@ contract PledgeAgentMock is PledgeAgent {
             emit roundReward(agentList[i], coinReward, powerReward, btcReward);
         }
     }
+    /*********************** Internal methods ***************************/
+    function distributeRewardMock(address payable delegator, uint256 reward) internal {
+        Address.sendValue(delegator, reward);
+        emit claimedReward(delegator, msg.sender, reward, true);
+    }
 
+    function collectCoinRewardMock(Reward storage r, uint256 deposit) internal returns (uint256 rewardAmount) {
+        require(r.coin >= deposit, "reward is not enough");
+        uint256 curReward;
+        if (r.coin == deposit) {
+            curReward = r.remainReward;
+            r.coin = 0;
+        } else {
+            uint256 rsPower = stateMap[r.round].power;
+            curReward = (r.totalReward * deposit * rsPower) / r.score;
+            require(r.remainReward >= curReward, "there is not enough reward");
+            r.coin -= deposit;
+            r.remainReward -= curReward;
+        }
+        return curReward;
+    }
 
+    function collectCoinRewardMock(Agent storage a, CoinDelegator storage d, int256 roundLimit) internal returns (uint256 rewardAmount) {
+        uint256 changeRound = d.changeRound;
+        uint256 curRound = roundTag;
+        if (changeRound < curRound) {
+            d.transferInDeposit = 0;
+        }
+
+        uint256 rewardLength = a.rewardSet.length;
+        uint256 rewardIndex = d.rewardIndex;
+        if (rewardIndex >= rewardLength) {
+            return 0;
+        }
+        if (rewardIndex + uint256(roundLimit) < rewardLength) {
+            rewardLength = rewardIndex + uint256(roundLimit);
+        }
+
+        while (rewardIndex < rewardLength) {
+            Reward storage r = a.rewardSet[rewardIndex];
+            uint256 rRound = r.round;
+            if (rRound == curRound) {
+                break;
+            }
+            uint256 deposit = d.newDeposit;
+            // HARDFORK V-1.0.3  
+            // d.deposit and d.transferOutDeposit are both eligible for claiming rewards
+            // however, d.transferOutDeposit will be used to pay the DEBT for the delegator before that
+            // the rewards from the DEBT will be collected and sent to the system reward contract
+            if (rRound == changeRound) {
+                uint256 transferOutDeposit = d.transferOutDeposit;
+                uint256 debt = debtDepositMap[rRound][msg.sender];
+                if (transferOutDeposit > debt) {
+                    transferOutDeposit -= debt;
+                    debtDepositMap[rRound][msg.sender] = 0;
+                } else {
+                    debtDepositMap[rRound][msg.sender] -= transferOutDeposit;
+                    transferOutDeposit = 0;
+                }
+                if (transferOutDeposit != d.transferOutDeposit) {
+                    uint256 undelegateReward = collectCoinRewardMock(r, d.transferOutDeposit - transferOutDeposit);
+                    if (r.coin == 0) {
+                        delete a.rewardSet[rewardIndex];
+                    }
+                    ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{value: undelegateReward}();
+                }
+                deposit = d.deposit + transferOutDeposit;
+                d.deposit = d.newDeposit;
+                d.transferOutDeposit = 0;
+            }
+            if (deposit != 0) {
+                rewardAmount += collectCoinRewardMock(r, deposit);
+                if (r.coin == 0) {
+                    delete a.rewardSet[rewardIndex];
+                }
+            }
+            rewardIndex++;
+        }
+
+        // update index whenever claim happens
+        d.rewardIndex = rewardIndex;
+        return rewardAmount;
+    }
+
+    /// Claim reward for delegator
+    /// @param agentList The list of validators to claim rewards on, it can be empty
+    /// @return (Amount claimed, Are all rewards claimed)
+    function claimRewardMock(address[] calldata agentList) external returns (uint256, bool) {
+        // limit round count to control gas usage
+        int256 roundLimit = CLAIM_ROUND_LIMIT;
+        uint256 reward;
+        uint256 rewardSum = rewardMap[msg.sender];
+        if (rewardSum != 0) {
+            rewardMap[msg.sender] = 0;
+        }
+
+        uint256 agentSize = agentList.length;
+        for (uint256 i = 0; i < agentSize; ++i) {
+            Agent storage a = agentsMap[agentList[i]];
+            if (a.rewardSet.length == 0) {
+                continue;
+            }
+            CoinDelegator storage d = a.cDelegatorMap[msg.sender];
+            if (d.newDeposit == 0 && d.transferOutDeposit == 0) {
+                continue;
+            }
+            int256 roundCount = int256(a.rewardSet.length - d.rewardIndex);
+            reward = collectCoinRewardMock(a, d, roundLimit);
+            roundLimit -= roundCount;
+            rewardSum += reward;
+            if (d.newDeposit == 0 && d.transferOutDeposit == 0) {
+                delete a.cDelegatorMap[msg.sender];
+            }
+            // if there are rewards to be collected, leave them there
+            if (roundLimit < 0) {
+                break;
+            }
+        }
+        if (rewardSum != 0) {
+            distributeRewardMock(payable(msg.sender), rewardSum);
+        }
+        return (rewardSum, roundLimit >= 0);
+    }
 }
