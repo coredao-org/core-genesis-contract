@@ -366,6 +366,11 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     _afterMint(to, amount);
   }
 
+  /// Returns wallets array.
+  function getWallets() external view returns (WalletInfo[] memory) {
+    return wallets;
+  }
+
   /*********************** Governance ********************************/
   /// Update parameters through governance vote
   /// @param key The name of the parameter
