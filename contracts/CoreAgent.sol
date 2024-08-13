@@ -211,14 +211,14 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @return reward Amount claimed
   /// @return rewardUnclaimed Amount unclaimed
   function claimReward(address delegator) external override onlyStakeHub returns (uint256 reward, uint256 rewardUnclaimed) {
-    reward = calculateReward(delegator, true);
+    reward = calculateRewardInternal(delegator, true);
     return (reward, 0);
   }
 
   /// Calculate reward without clearing the cache.
   /// @param delegator the delegator address
   function calculateReward(address delegator) external returns (uint256) {
-    return calculateReward(delegator, false);
+    return calculateRewardInternal(delegator, false);
   }
 
   /*********************** Receive data from PledgeAgent ***************************/
@@ -238,7 +238,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       cd.changeRound = roundTag - 1;
       delegatorMap[delegator].candidates.push(candidate);
     } else if (changeRound != roundTag) {
-      uint256 reward = collectCoinReward(candidate, cd);
+      uint256 reward = collectRewardFromCandidate(candidate, cd);
       rewardMap[delegator] += reward;
     }
     if (round < roundTag) {
@@ -271,6 +271,9 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param delegator the delegator address
   /// @param amount the amount of CORE to unstake
   function proxyUnDelegate(address candidate, address delegator, uint256 amount) external onlyPledgeAgent {
+    if (amount == 0) {
+      amount = candidateMap[candidate].cDelegatorMap[delegator].stakedAmount;
+    }
     require(amount >= requiredCoinDeposit, "undelegate amount is too small");
     undelegateCoin(candidate, delegator, amount, false);
     Address.sendValue(payable(delegator), amount);
@@ -297,6 +300,11 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   }
 
   /*********************** Internal methods ***************************/
+  /// delegate CORE tokens
+  /// @param candidate the validator candidate to delegate to
+  /// @param delegator the delegator address
+  /// @param amount the amount of CORE 
+  /// @param isTransfer is called from transfer workflow
   function delegateCoin(address candidate, address delegator, uint256 amount, bool isTransfer) internal returns (uint256) {
     Candidate storage a = candidateMap[candidate];
     CoinDelegator storage cd = a.cDelegatorMap[delegator];
@@ -305,7 +313,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       cd.changeRound = roundTag;
       delegatorMap[delegator].candidates.push(candidate);
     } else if (changeRound != roundTag) {
-      uint256 reward = collectCoinReward(candidate, cd);
+      uint256 reward = collectRewardFromCandidate(candidate, cd);
       rewardMap[delegator] += reward;
     }
     a.realtimeAmount += amount;
@@ -317,17 +325,22 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     return cd.realtimeAmount;
   }
 
+  /// undelegate CORE tokens
+  /// @param candidate the validator candidate to delegate to
+  /// @param delegator the delegator address
+  /// @param amount the amount of CORE 
+  /// @param isTransfer is called from transfer workflow
   function undelegateCoin(address candidate, address delegator, uint256 amount, bool isTransfer) internal returns (uint256) {
     Candidate storage a = candidateMap[candidate];
     CoinDelegator storage cd = a.cDelegatorMap[delegator];
     uint256 changeRound = cd.changeRound;
     require(changeRound != 0, 'no delegator information found');
     if (changeRound != roundTag) {
-      uint256 reward = collectCoinReward(candidate, cd);
+      uint256 reward = collectRewardFromCandidate(candidate, cd);
       rewardMap[delegator] += reward;
     }
 
-    // design updates vs 1.0.3 hardfork
+    // design updates in 1.0.12 vs 1.0.3
     // to simplify the reward calculation for user transfers
     // a restriction is made that no more CORE tokens than the turnround snapshot value can be transferred to other validators 
     uint256 stakedAmount = cd.stakedAmount;
@@ -351,7 +364,11 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     return amount;
   }
 
-  function collectCoinReward(address candidate, CoinDelegator storage cd) internal returns (uint256 reward) {
+  /// collect reward from a validator candidate
+  /// @param candidate the validator candidate to collect rewards
+  /// @param cd the structure stores user CORE stake information
+  /// @return reward The amount of CORE collected
+  function collectRewardFromCandidate(address candidate, CoinDelegator storage cd) internal returns (uint256 reward) {
     uint256 stakedAmount = cd.stakedAmount;
     uint256 realtimeAmount = cd.realtimeAmount;
     uint256 transferredAmount = cd.transferredAmount;
@@ -368,6 +385,15 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     }
   }
 
+
+  /// collect rewards on a candidate with full parameters
+  /// @param candidate the candidate to collect reward from
+  /// @param stakedAmount CORE amount of last turn round snapshot
+  /// @param realtimeAmount realtime staked CORE amount
+  /// @param transferredAmount transferred in CORE amount, also eligible for rewards
+  /// @param changeRound the last round when the delegator acted
+  /// @return reward the amount of rewards collected
+  /// @return changed whether the changedRound value should be updated
   function collectReward(address candidate, uint256 stakedAmount, uint256 realtimeAmount, uint256 transferredAmount, uint256 changeRound) internal returns (uint256 reward, bool changed) {
     require(changeRound != 0, "invalid delegator");
     uint256 lastRoundTag = roundTag - 1;
@@ -396,6 +422,9 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     return (0, false);
   }
 
+  /// remove delegate record of a candidate/delegator pair
+  /// @param delegator the delegator address
+  /// @param candidate the validator candidate address
   function removeDelegation(address delegator, address candidate) internal {
     Delegator storage d = delegatorMap[delegator];
     uint256 l = d.candidates.length;
@@ -411,6 +440,10 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     delete candidateMap[candidate].cDelegatorMap[delegator];
   }
 
+  /// get accured rewards of a validator candidate on a given round
+  /// @param candidate validator candidate address
+  /// @param round the round to calculate rewards
+  /// @return reward the amount of rewards
   function getRoundAccuredReward(address candidate, uint256 round) internal returns (uint256 reward) {
     reward = accuredRewardMap[candidate][round];
     if (reward != 0) {
@@ -450,7 +483,12 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     return reward;
   }
 
-  function calculateReward(address delegator, bool clearRewardMap) internal returns (uint256 reward) {
+  /// calculate and collect reward for a delegator and either
+  /// update the corresponding record in rewardMap or clear rewardMap & return the value
+  /// @param delegator the delegator address
+  /// @param clearRewardMap clear or update rewardMap
+  /// @return reward the amount of rewards
+  function calculateRewardInternal(address delegator, bool clearRewardMap) internal returns (uint256 reward) {
     address[] storage candidates = delegatorMap[delegator].candidates;
     uint256 candidateSize = candidates.length;
     address candidate;
@@ -458,7 +496,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     for (uint256 i = candidateSize; i != 0; --i) {
       candidate = candidates[i - 1];
       CoinDelegator storage cd = candidateMap[candidate].cDelegatorMap[delegator];
-      reward = collectCoinReward(candidate, cd);
+      reward = collectRewardFromCandidate(candidate, cd);
       rewardSum += reward;
       if (cd.realtimeAmount == 0 && cd.transferredAmount == 0) {
         removeDelegation(delegator, candidate);

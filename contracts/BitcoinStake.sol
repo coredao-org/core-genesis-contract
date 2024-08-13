@@ -10,6 +10,7 @@ import "./lib/BytesLib.sol";
 import "./lib/Memory.sol";
 import "./lib/BitcoinHelper.sol";
 import "./lib/SatoshiPlusHelper.sol";
+import "./lib/RLPDecode.sol";
 import "./System.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
@@ -20,6 +21,9 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   using BitcoinHelper for *;
   using TypedMemView for *;
   using BytesLib for *;
+  using RLPDecode for bytes;
+  using RLPDecode for RLPDecode.Iterator;
+  using RLPDecode for RLPDecode.RLPItem;
 
   // This field records each btc staking tx, and it will never be cleared.
   // key: bitcoin tx id
@@ -35,7 +39,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   // It is initialized to 1.
   uint256 public roundTag;
 
-  // receiptMap keeps all deposite receipts of BTC on CORE
+  // receiptMap keeps all deposite receipts of BTC on Core
   // key: txid of bitcoin
   // value: DepositReceipt
   mapping(bytes32 => DepositReceipt) public receiptMap;
@@ -168,16 +172,11 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     require(script[0] == bytes1(uint8(0x04)) && script[5] == bytes1(uint8(0xb1)), "not a valid redeem script");
     bytes32 txid = btcTx.calculateTxId();
     BtcTx storage bt = btcTxMap[txid];
+    require(bt.amount == 0, "btc tx is already delegated.");
     uint32 lockTime = parseLockTime(script);
     {
       (bool txChecked, uint64 blockTimestamp) = ILightClient(LIGHT_CLIENT_ADDR).checkTxProofAndGetTime(txid, blockHeight, btcConfirmBlock, nodes, index);
       require(txChecked, "btc tx isn't confirmed");
-      // compatible for migrated data.
-      if (bt.amount > 0 && bt.blockTimestamp == 0) {
-        bt.blockTimestamp = blockTimestamp;
-        return;
-      }
-      require(bt.amount == 0, "btc tx is already delegated.");
       uint256 endRound = lockTime / SatoshiPlusHelper.ROUND_INTERVAL;
       require(endRound > roundTag + 1, "insufficient locking rounds");
       bt.lockTime = lockTime;
@@ -253,16 +252,14 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// @param rewardList List of reward amount
   function distributeReward(address[] calldata validators, uint256[] calldata rewardList) external override onlyBtcAgent {
     uint256 length = validators.length;
-
-    uint256 historyReward;
-    uint256 lastRewardRound;
     uint256 l;
     address validator;
     for (uint256 i = 0; i < length; i++) {
       if (rewardList[i] == 0) {
         continue;
       }
-      historyReward = 0;
+      uint256 historyReward;
+      uint256 lastRewardRound;
       validator = validators[i];
       mapping(uint256 => uint256) storage m = accuredRewardPerBTCMap[validator];
       Candidate storage c = candidateMap[validator];
@@ -318,7 +315,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// Start new round, this is called by the CandidateHub contract
   /// @param validators List of elected validators in this round
   /// @param round The new round tag
-  function setNewRound(address[] calldata validators, uint256 round) external override{
+  function setNewRound(address[] calldata validators, uint256 round) external override onlyBtcAgent {
     uint256 length = validators.length;
     address validator;
     for (uint256 i = 0; i < length; i++) {
@@ -330,7 +327,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
   /// Prepare for the new round
   /// @param round The new round tag
-  function prepare(uint256 round) external override {
+  function prepare(uint256 round) external override onlyBtcAgent {
     // the expired BTC staking values will be removed
     address candidate;
     for (uint256 r = roundTag + 1; r <= round; ++r) {
@@ -385,7 +382,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   }
 
   /// calculate rewards for a list of BTC stake transactions
-  /// TODO access control?
   /// @param txids list of BTC stake transactions
   /// @return amount total rewards of staked BTC transactions
   function calculateReward(bytes32[] calldata txids) external returns (uint256 amount) {
@@ -419,7 +415,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       dr.round = round;
       bt.amount = uint64(amount);
       bt.lockTime = uint32(lockTime);
-      // TODO set a default bt.blockTimestamp?
 
       // Set delegatorMap
       Delegator storage d = delegatorMap[delegator];
@@ -431,18 +426,22 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     }
   }
 
+   function getGrades() external view returns (LockLengthGrade[] memory) {
+    return grades;
+  }
+
   /*********************** Governance ********************************/
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
-    // TODO more details on how the grading binary array is designed and parsed
     if (Memory.compareStrings(key, "grades")) {
       uint256 lastLength = grades.length;
-      uint256 currentLength = value.indexUint(0, 1);
 
-      if(((currentLength << 2) | 1) == value.length) {
-        revert MismatchParamLength(key);
+      RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+      uint256 currentLength = items.length;
+      if (currentLength == 0) {
+         revert MismatchParamLength(key);
       }
 
       for (uint256 i = currentLength; i < lastLength; i++) {
@@ -451,13 +450,13 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       uint256 lockDuration;
       uint256 percentage;
       for (uint256 i = 0; i < currentLength; i++) {
-        uint256 startIndex = (i << 2) | 1;
-        lockDuration = value.indexUint(startIndex, 2);
+        RLPDecode.RLPItem[] memory itemArray = items[i].toList();
+        lockDuration = RLPDecode.toUint(itemArray[0]);
         // limit lockDuration 4000 rounds.
         if (lockDuration > 4000) {
           revert OutOfBounds('lockDuration', percentage, 0, 4000);
         }
-        percentage = value.indexUint(startIndex + 2, 2);
+        percentage = RLPDecode.toUint(itemArray[1]);
         if (percentage == 0 || percentage > SatoshiPlusHelper.DENOMINATOR) {
           revert OutOfBounds('percentage', percentage, 1, SatoshiPlusHelper.DENOMINATOR);
         }
@@ -474,6 +473,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
         require(grades[i-1].lockDuration < grades[i].lockDuration, "lockDuration disorder");
         require(grades[i-1].percentage < grades[i].percentage, "percentage disorder");
       }
+      require(grades[0].lockDuration == 0, "lowest lockDuration must be zero");
     } else if (Memory.compareStrings(key, "gradeActive")) {
       if (value.length != 32) {
         revert MismatchParamLength(key);
@@ -631,10 +631,10 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
   /// collect rewards for a given BTC stake transaction & time grading is applied
   /// @param txid the BTC stake transaction id
-  /// @param pop whether pop the record
+  /// @param clearUserRecord whether clear user's records
   /// @return reward reward of the BTC stake transaction
   /// @return expired whether the stake is expired
-  function collectReward(bytes32 txid, bool pop) internal returns (uint256 reward, bool expired) {
+  function collectReward(bytes32 txid, bool clearUserRecord) internal returns (uint256 reward, bool expired) {
     BtcTx storage bt = btcTxMap[txid];
     DepositReceipt storage dr = receiptMap[txid];
     uint256 drRound = dr.round;
@@ -672,7 +672,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     }
     // Remove txid and deposit receipt if asked
     if (unlockRound1 < roundTag) {
-      if (pop) {
+      if (clearUserRecord) {
         bytes32[] storage txids = delegatorMap[dr.delegator].txids;
         for (uint i = txids.length; i != 0; --i) {
           if (txids[i - 1] == txid) {

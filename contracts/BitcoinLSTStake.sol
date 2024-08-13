@@ -113,7 +113,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   struct Redeem {
     bytes32 hash; // it may be 20-byte-hash or 32-bytes-hash.
     uint32  addrType;
-    address delegator;
     uint64  amount;
   }
 
@@ -132,7 +131,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /*********************** events **************************/
   event delegated(bytes32 indexed txid, address indexed delegator, uint64 amount, uint256 fee);
   event redeemed(address indexed delegator, uint64 amount, uint64 utxoFee, bytes pkscript);
-  event undelegated(bytes32 indexed txid, uint32 outputIndex, address indexed delegator, uint64 amount, bytes pkscript);
+  event undelegated(bytes32 indexed txid, uint32 outputIndex, uint64 amount, bytes pkscript);
   event undelegatedOverflow(bytes32 indexed txid, uint32 outputIndex, uint64 expectAmount, uint64 actualAmount, bytes pkscript);
   event addedWallet(bytes32 indexed _hash, uint64 _type);
   event removedWallet(bytes32 indexed _hash, uint64 _type);
@@ -227,14 +226,14 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       uint256 index1 = redeemMap[key];
       if (index1 != 0) {
         Redeem storage rd = redeemRequests[index1 - 1];
-        emit undelegated(txid, i, rd.delegator, _amount, pkscript);
+        emit undelegated(txid, i, _amount, pkscript);
         if (rd.amount <= _amount) {
           if (rd.amount < _amount) {
             emit undelegatedOverflow(txid, i, rd.amount, _amount, pkscript);
           }
           delete redeemMap[key];
           if (index1 < redeemRequests.length) {
-            rd = redeemRequests[redeemRequests.length - 1];
+            redeemRequests[index1 - 1] = redeemRequests[redeemRequests.length - 1];
             pkscript = buildPkScript(rd.hash, rd.addrType);
             key = keccak256(abi.encodePacked(pkscript));
             redeemMap[key] = index1;
@@ -244,6 +243,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
           rd.amount -= _amount;
         }
       } else if (_amount != 0) {
+        /// TODO better to use a different error message, which would be easier for debugging
         emit undelegatedOverflow(txid, i, 0, _amount, pkscript);
       }
     }
@@ -323,7 +323,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// This method is called by LST holders.
   ///
   /// @param amount redeem amount
-  /// @param pkscript pkscript used in txout
+  /// @param pkscript pkscript to receive BTC assets
   function redeem(uint64 amount, bytes calldata pkscript) external nonReentrant {
     (bytes32 hash, uint32 addrType) = extractPkScriptAddr(pkscript);
     require(addrType != WTYPE_UNKNOWN, "invalid pkscript");
@@ -342,7 +342,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     bytes32 key = keccak256(abi.encodePacked(pkscript));
     uint256 index1 = redeemMap[key];
     if (index1 == 0) {
-      redeemRequests.push(Redeem(hash, addrType, msg.sender, amount));
+      redeemRequests.push(Redeem(hash, addrType, amount));
       redeemMap[key] = redeemRequests.length;
     } else {
       redeemRequests[index1 - 1].amount += amount;
@@ -364,6 +364,11 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     require(uint256(amount) == value, 'btc amount limit uint64');
     _afterBurn(from, amount);
     _afterMint(to, amount);
+  }
+
+  /// Returns wallets array.
+  function getWallets() external view returns (WalletInfo[] memory) {
+    return wallets;
   }
 
   /*********************** Governance ********************************/
@@ -473,12 +478,16 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       }
       // 34 OP_1 OP_DATA_20 <hash160>
       if (pkScript[0] == OP_1 && pkScript[1] == OP_DATA_32) {
-        return (pkScript.indexBytes32(2, 20), WTYPE_P2TAPROOT);
+        return (pkScript.indexBytes32(2, 32), WTYPE_P2TAPROOT);
       }
     }
     return (0, WTYPE_UNKNOWN);
   }
 
+  /// construct script from hash and address type
+  /// @param whash the hash used to build the script
+  /// @param addrType the BTC address type used to build the script
+  /// @return pkscript the script
   function buildPkScript(bytes32 whash, uint32 addrType) internal pure returns (bytes memory pkscript) {
     if (addrType == WTYPE_P2WSH || addrType == WTYPE_P2TAPROOT) {
       pkscript = new bytes(34);
@@ -489,7 +498,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
         pkscript[0] = OP_1;
       }
       assembly {
-        mstore(add(mload(pkscript), 0x22), mload(whash))
+        mstore(add(pkscript, 0x22), whash)
       }
       return pkscript;
     }
@@ -515,9 +524,9 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     unchecked {
       uint mask = 256 ** (32 - 20) - 1;
       assembly {
-        let srcpart := and(mload(whash), not(mask))
-        let destpart := and(add(mload(pkscript), startPos), mask)
-        mstore(add(mload(pkscript), startPos), or(destpart, srcpart))
+        let srcpart := and(shl(96, whash), not(mask))
+        let destpart := and(mload(add(pkscript, startPos)), mask)
+        mstore(add(pkscript, startPos), or(destpart, srcpart))
       }
     }
   }
@@ -594,7 +603,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     _updateUserRewards(to, false);
     userStakeInfo[to].realtimeAmount += value;
   }
-
 
   /// Parses the target output and the op_return of a transaction
   /// @dev  Finds the BTC amount that payload size is less than 80 bytes

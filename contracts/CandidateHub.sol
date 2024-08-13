@@ -93,7 +93,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     roundTag = block.timestamp / SatoshiPlusHelper.ROUND_INTERVAL;
     alreadyInit = true;
   }
-  
+
   /********************* ICandidateHub interface ****************************/
   /// Whether users can delegate on a validator candidate
   /// @param candidate The operator address of the validator candidate
@@ -171,17 +171,13 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /********************* External methods  ****************************/
   /// The `turn round` workflow
   /// @dev this method is called by Golang consensus engine at the end of a round
-  function turnRound() external onlyCoinbase onlyInit onlyZeroGasPrice {
+  function turnRound() public virtual onlyCoinbase onlyInit onlyZeroGasPrice {
     
     // distribute rewards for the about to end round
     IValidatorSet(VALIDATOR_CONTRACT_ADDR).distributeReward(roundTag);
 
     // update the system round tag; new round starts
-    
-    uint256 roundTimestamp = block.timestamp / SatoshiPlusHelper.ROUND_INTERVAL;
-    require(roundTimestamp > roundTag, "not allowed to turn round, wait for more time");
-    roundTag = roundTimestamp;
-    
+    nextRound();
 
     // reset validator flags for all candidates.
     uint256 candidateSize = candidateSet.length;
@@ -436,6 +432,12 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     return candidateList;
   }
 
+  function nextRound() internal virtual {
+    uint256 roundTimestamp = block.timestamp / SatoshiPlusHelper.ROUND_INTERVAL;
+    require(roundTimestamp > roundTag, "not allowed to turn round, wait for more time");
+    roundTag = roundTimestamp;
+  }
+
   /*********************** Param update ********************************/
   /// Update parameters through governance vote
   /// @param key The name of the parameter
@@ -497,11 +499,5 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @return true/false
   function isJailed(address operateAddr) external view returns (bool) {
     return jailMap[operateAddr] >= roundTag;
-  }
-
-  /// Get init validator count
-  /// @return count of init validator
-  function getInitValidatorCount() external override pure returns(uint256) {
-    return INIT_VALIDATOR_COUNT;
   }
 }
