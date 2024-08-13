@@ -13,8 +13,8 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
 
   uint256 public incentiveBalanceCap;
   uint256 public numOperator;
-  mapping(address => bool) operators;
-  bool isBurn;
+  mapping(address => bool) public operators;
+  bool public isBurn;
 
   /*********************** init **************************/
   function init() external onlyNotInit {

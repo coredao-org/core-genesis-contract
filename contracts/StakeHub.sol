@@ -34,7 +34,10 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   // key: candidate op address
   // value: score of each staked asset type
-  //        The first element represents total score of the validator.
+  //        0 - total score
+  //        1 - CORE score
+  //        2 - hash score
+  //        3 - BTC score
   mapping(address => uint256[]) public candidateScoresMap;
 
   // key: delegator address
@@ -55,7 +58,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   // key: contributor address, e.g. relayer's
   // value: rewards collected for contributing to the system
-  // TODO unused
   mapping(address => uint256) public payableNotes;
 
   // CORE grading applied to BTC stakers
@@ -112,7 +114,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     operators[BTC_AGENT_ADDR] = true;
     operators[BTC_STAKE_ADDR] = true;
     operators[BTCLST_STAKE_ADDR] = true;
-    // Default active btc grade.
+    // BTC grade is applied in 1.0.12
     gradeActive = MASK_STAKE_BTC;
 
     alreadyInit = true;
@@ -142,8 +144,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         uint256 totalScore = candidateScoresMap[validator][0];
         // only reach here if running a new chain from genesis
         if (totalScore == 0) {
-          if (i % assetSize == 0) {
-            burnReward += rewardList[j];// burnReward
+          if (i == 0) {
+            burnReward += rewardList[j];
           }
           rewards[j] = 0;
           continue;
@@ -179,43 +181,38 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     uint256 candidateSize = candidates.length;
     uint256 assetSize = assets.length;
 
-    uint256 hardcapSum;
     for (uint256 i = 0; i < assetSize; ++i) {
-      hardcapSum += assets[i].hardcap;
       IAgent(assets[i].agent).prepare(round);
     }
-    // score := asset's amount * factor.
-    // asset score & hardcaps are used to calculate discount for each asset
-    scores = new uint256[](candidateSize);
-    address candiate;
+
     uint256 factor0;
+    uint256[] memory amounts;
     uint256[] memory totalAmounts = new uint256[](assetSize);
+    scores = new uint256[](candidateSize);
     for (uint256 i = 0; i < assetSize; ++i) {
-      (uint256[] memory amounts, uint256 totalAmount) =
+      (amounts, totalAmounts[i]) =
         IAgent(assets[i].agent).getStakeAmounts(candidates, round);
-      totalAmounts[i] = totalAmount;
       uint256 factor = 1;
       if (i == 0) {
         factor0 = factor;
       } else if (totalAmounts[0] != 0 && totalAmounts[i] != 0) {
         factor = (factor0 * totalAmounts[0]) * assets[i].hardcap / assets[0].hardcap / totalAmounts[i];
       }
-      if (candidateScoresMap[candiate].length == 0) {
-        candidateScoresMap[candiate].push(0);
-      }
       uint score;
       for (uint256 j = 0; j < candidateSize; ++j) {
         score = amounts[j] * factor;
         scores[j] += score;
-        candiate = candidates[j];
-        // length should never be less than i
-        if (candidateScoresMap[candiate].length == i+1) {
-          candidateScoresMap[candiate].push(score);
+        uint256[] storage candidateScores = candidateScoresMap[candidates[j]];
+        if (candidateScores.length == 0) {
+          candidateScores.push(0);
+        }
+        if (candidateScores.length == i+1) {
+          candidateScores.push(score);
         } else {
-          candidateScoresMap[candiate][i+1] = score;
+          candidateScores[i+1] = score;
         }
       }
-      stateMap[assets[i].agent] = AssetState(totalAmount, factor);
+      stateMap[assets[i].agent] = AssetState(totalAmounts[i], factor);
     }
 
     for (uint256 j = 0; j < candidateSize; ++j) {
@@ -330,7 +327,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   /// Claim reward for relayer
   /// @return reward Amount claimed
-  /// TODO might also call system reward to send all rewards as a whole
   function claimRelayerReward() external returns (uint256 reward) {
     address relayer = msg.sender;
     reward = payableNotes[relayer];
@@ -349,21 +345,26 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     if (Memory.compareStrings(key, "grades")) {
       // TODO more details on how the grading binary array is designed and parsed
       uint256 lastLength = grades.length;
-      uint256 currentLength = value.indexUint(0, 1);
 
-      if (((currentLength << 2) | 1) == value.length) {
-        revert MismatchParamLength(key);
+      RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+      uint256 currentLength = items.length;
+      if (currentLength == 0) {
+         revert MismatchParamLength(key);
       }
 
       for (uint256 i = currentLength; i < lastLength; i++) {
         grades.pop();
       }
-      uint32 rewardRate;
-      uint32 percentage;
+
+      uint256 rewardRate;
+      uint256 percentage;
       for (uint256 i = 0; i < currentLength; i++) {
-        uint256 startIndex = (i << 2) | 1;
-        rewardRate = uint32(value.indexUint(startIndex, 2));
-        percentage = uint32(value.indexUint(startIndex + 2, 2));
+        RLPDecode.RLPItem[] memory itemArray = items[i].toList();
+        rewardRate = RLPDecode.toUint(itemArray[0]);
+        percentage = RLPDecode.toUint(itemArray[1]);
+        if (rewardRate > SatoshiPlusHelper.DENOMINATOR * 100) {
+          revert OutOfBounds('rewardRate', rewardRate, 0, SatoshiPlusHelper.DENOMINATOR * 100);
+        }
         if (i + 1 == currentLength) {
           if (percentage < SatoshiPlusHelper.DENOMINATOR || percentage > SatoshiPlusHelper.DENOMINATOR * 10) {
             revert OutOfBounds('last percentage', percentage, SatoshiPlusHelper.DENOMINATOR, SatoshiPlusHelper.DENOMINATOR * 10);
@@ -372,9 +373,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
           revert OutOfBounds('percentage', percentage, 1, SatoshiPlusHelper.DENOMINATOR);
         }
         if (i >= lastLength) {
-          grades.push(DualStakingGrade(rewardRate, percentage));
+          grades.push(DualStakingGrade(uint32(rewardRate), uint32(percentage)));
         } else {
-          grades[i] = DualStakingGrade(rewardRate, percentage);
+          grades[i] = DualStakingGrade(uint32(rewardRate), uint32(percentage));
         }
       }
       // check rewardRate & percentage in order.
@@ -382,6 +383,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         require(grades[i-1].rewardRate < grades[i].rewardRate, "rewardRate disorder");
         require(grades[i-1].percentage < grades[i].percentage, "percentage disorder");
       }
+      require(grades[0].rewardRate == 0, "lowest rewardRate must be zero");
     } else {
       if (value.length != 32) {
         revert MismatchParamLength(key);
@@ -448,6 +450,10 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     return assets;
   }
 
+  function getGrades() external view returns (DualStakingGrade[] memory) {
+    return grades;
+  }
+
   /*********************** Internal methods ********************************/
   function _initializeFromPledgeAgent() internal {
     // get stake summary of current round (snapshot values of last turn round)
@@ -458,7 +464,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
     uint256[] memory factors = new uint256[](3);
     factors[0] = 1;
-    // TODO INIT_HASH_FACTOR and INIT_BTC_FACTOR should be set more accurately before launch
     // HASH_UNIT_CONVERSION * 1e6
     factors[1] = 1e18 * 1e6;
     // BTC_UNIT_CONVERSION * 2e4
@@ -474,9 +479,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       totalAmounts[2] += btcs[i];
 
       candidateScoresMap[validator].push(cores[i] * factors[0] + hashs[i] * factors[1] + btcs[i] * factors[2]);
-      candidateScoresMap[validator].push(cores[i]);
-      candidateScoresMap[validator].push(hashs[i]);
-      candidateScoresMap[validator].push(btcs[i]);
+      candidateScoresMap[validator].push(cores[i] * factors[0]);
+      candidateScoresMap[validator].push(hashs[i] * factors[1]);
+      candidateScoresMap[validator].push(btcs[i] * factors[2]);
     }
 
     uint256 len = assets.length;
