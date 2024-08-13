@@ -478,7 +478,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       }
       // 34 OP_1 OP_DATA_20 <hash160>
       if (pkScript[0] == OP_1 && pkScript[1] == OP_DATA_32) {
-        return (pkScript.indexBytes32(2, 20), WTYPE_P2TAPROOT);
+        return (pkScript.indexBytes32(2, 32), WTYPE_P2TAPROOT);
       }
     }
     return (0, WTYPE_UNKNOWN);
