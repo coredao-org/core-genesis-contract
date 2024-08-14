@@ -18,12 +18,6 @@ import "./lib/SatoshiPlusHelper.sol";
 contract StakeHub is IStakeHub, System, IParamSubscriber {
   using BytesLib for *;
 
-  // TODO INIT_HASH_FACTOR and INIT_BTC_FACTOR should be set more accurately before launch
-  uint256 public constant HASH_UNIT_CONVERSION = 1e18;
-  uint256 public constant INIT_HASH_FACTOR = 1e6;
-  uint256 public constant BTC_UNIT_CONVERSION = 1e10;
-  uint256 public constant INIT_BTC_FACTOR = 1e4;
-
   uint256 public constant MASK_STAKE_CORE = 1;
   uint256 public constant MASK_STAKE_HASH = 2;
   uint256 public constant MASK_STAKE_BTC = 4;
@@ -35,12 +29,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   Asset[] public assets;
 
   // key: candidate op address
-  // value: amount of each staked asset type
-  mapping(address => uint256[]) public candidateAmountMap;
-
-  // key: candidate op address
-  // value: hybrid score of each candidate
-  mapping(address => uint256) public candidateScoreMap;
+  // value: score of each staked asset type
+  //        The first element represents total score of the validator.
+  mapping(address => uint256[]) public candidateScoresMap;
 
   // key: delegator address
   // value: MASK value of staked asset types
@@ -75,7 +66,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   struct Asset {
     string  name;
     address agent;
-    uint256 factor;
     uint32 hardcap;
     uint32 bonusRate;
   }
@@ -83,7 +73,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   struct AssetState {
     uint256 amount;
     uint256 factor;
-    uint32 discount;
   }
 
   struct Debt {
@@ -105,11 +94,10 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   event claimedRelayerReward(address indexed relayer, uint256 amount);
 
   function init() external onlyNotInit {
-    uint32 halfDenominator = uint32(SatoshiPlusHelper.DENOMINATOR / 2);
     // initialize list of supported assets
-    assets.push(Asset("CORE", CORE_AGENT_ADDR, 1, 6000, halfDenominator));
-    assets.push(Asset("HASHPOWER", HASH_AGENT_ADDR, HASH_UNIT_CONVERSION * INIT_HASH_FACTOR, 2000, 0));
-    assets.push(Asset("BTC", BTC_AGENT_ADDR, BTC_UNIT_CONVERSION * INIT_BTC_FACTOR, 4000, halfDenominator));
+    assets.push(Asset("CORE", CORE_AGENT_ADDR, 6000, 0));
+    assets.push(Asset("HASHPOWER", HASH_AGENT_ADDR, 2000, 0));
+    assets.push(Asset("BTC", BTC_AGENT_ADDR, 4000, uint32(SatoshiPlusHelper.DENOMINATOR)));
 
     _initializeFromPledgeAgent();
 
@@ -141,44 +129,36 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     uint256[] memory rewards = new uint256[](validatorSize);
 
     uint256 burnReward;
+    uint256 assetSize = assets.length;
     uint256 totalReward;
     uint256 usedBonus;
-    for (uint256 i = assets.length; i != 0;) {
-      --i;
-      AssetState memory cs = stateMap[assets[i].agent];
+    for (uint256 i = 0; i < assetSize; ++i) {
+      //Asset storage asset = assets[i];
       totalReward = 0;
-      for (uint256 j = 0; j < validatorSize; ++j) {
+      for (uint256 j = 0; j < validatorSize; ++ j) {
         address validator = validators[j];
+        uint256 totalScore = candidateScoresMap[validator][0];
         // only reach here if running a new chain from genesis
-        if (candidateScoreMap[validator] == 0) {
-          if (i == 0) {
-            burnReward += rewardList[j];
+        if (totalScore == 0) {
+          if (i % assetSize == 0) {
+            burnReward += rewardList[j];// burnReward
           }
           rewards[j] = 0;
           continue;
         }
-        uint256 r = rewardList[j] * candidateAmountMap[validator][i] * cs.factor / candidateScoreMap[validator];
-        // hardcap is applied to each pool, using the discount calculated in `getHybridScore()` step
-        rewards[j] = r * cs.discount / SatoshiPlusHelper.DENOMINATOR;
-        // TODO might add up with unclaimed rewards vs. burnt
-        burnReward += (r - rewards[j]);
+        rewards[j] = rewardList[j] * candidateScoresMap[validator][i+1] / totalScore;
         totalReward += rewards[j];
       }
       uint assetBonus = totalReward == 0 ? 0 : unclaimedReward * assets[i].bonusRate / SatoshiPlusHelper.DENOMINATOR;
-      emit roundReward(assets[i].name, roundTag, validators, rewards, assetBonus);
-      if (assetBonus != 0) {
-        // redistribute unclaimed rewards
+      if (totalReward != 0) {
         // added after hardcap to leave more rewards to users
         for (uint256 j = 0; j < validatorSize; ++j) {
-          if (rewards[j] == 0) {
-            continue;
-          }
-          uint256 bonus = rewards[j] * assetBonus / totalReward;
-          rewards[j] += bonus;
-          usedBonus += bonus;
+          uint256 r = rewards[j] * assetBonus / totalReward;
+          rewards[j] += r;
+          usedBonus += r;
         }
       }
-
+      emit roundReward(assets[i].name, roundTag, validators, rewards, assetBonus);
       IAgent(assets[i].agent).distributeReward(validators, rewards, roundTag);
     }
     unclaimedReward -= usedBonus;
@@ -207,42 +187,40 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     }
     // score := asset's amount * factor.
     // asset score & hardcaps are used to calculate discount for each asset
-    uint256[] memory assetScores = new uint256[](assetSize);
     scores = new uint256[](candidateSize);
     address candiate;
-    uint256 t;
+    uint256 factor0;
+    uint256[] memory totalAmounts = new uint256[](assetSize);
     for (uint256 i = 0; i < assetSize; ++i) {
       (uint256[] memory amounts, uint256 totalAmount) =
         IAgent(assets[i].agent).getStakeAmounts(candidates, round);
-      t = assets[i].factor;
-      assetScores[i] = totalAmount * t;
+      totalAmounts[i] = totalAmount;
+      uint256 factor = 1;
+      if (i == 0) {
+        factor0 = factor;
+      } else if (totalAmounts[0] != 0 && totalAmounts[i] != 0) {
+        factor = (factor0 * totalAmounts[0]) * assets[i].hardcap / assets[0].hardcap / totalAmounts[i];
+      }
+      if (candidateScoresMap[candiate].length == 0) {
+        candidateScoresMap[candiate].push(0);
+      }
+      uint score;
       for (uint256 j = 0; j < candidateSize; ++j) {
-        scores[j] += amounts[j] * t;
+        score = amounts[j] * factor;
+        scores[j] += score;
         candiate = candidates[j];
         // length should never be less than i
-        if (candidateAmountMap[candiate].length == i) {
-          candidateAmountMap[candiate].push(amounts[j]);
+        if (candidateScoresMap[candiate].length == i+1) {
+          candidateScoresMap[candiate].push(score);
         } else {
-          candidateAmountMap[candiate][i] = amounts[j];
+          candidateScoresMap[candiate][i+1] = score;
         }
       }
-      stateMap[assets[i].agent] = AssetState(totalAmount, t, uint32(SatoshiPlusHelper.DENOMINATOR));
+      stateMap[assets[i].agent] = AssetState(totalAmount, factor);
     }
 
     for (uint256 j = 0; j < candidateSize; ++j) {
-      candidateScoreMap[candidates[j]] = scores[j];
-    }
-
-    uint256 scoreSum = assetScores[0] + assetScores[1] + assetScores[2];
-    for (uint256 i = 0; i < assetSize; ++i) {
-      // stake_proportion := assetScores[i] / scoreSum
-      // hardcap_proportion := hardcap / hardcapSum
-      // let stake_proportion, hardcap_proportion both multiple hardcapSum * scoreSum
-      uint256 stake_proportion = assetScores[i] * hardcapSum;
-      uint256 hardcap_proportion = assets[i].hardcap * scoreSum;
-      if (stake_proportion > hardcap_proportion) {
-        stateMap[assets[i].agent].discount = uint32(hardcap_proportion * SatoshiPlusHelper.DENOMINATOR / stake_proportion);
-      }
+      candidateScoresMap[candidates[j]][0] = scores[j];
     }
   }
 
@@ -399,16 +377,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
           revert OutOfBounds(key, newValue, 0, 7);
         }
         gradeActive = newValue;
-      } else if (Memory.compareStrings(key, "hashFactor")) {
-        if (newValue == 0 || newValue > 1e8) {
-          revert OutOfBounds(key, newValue, 1, 1e8);
-        }
-        assets[1].factor = newValue * HASH_UNIT_CONVERSION;
-      } else if (Memory.compareStrings(key, "btcFactor")) {
-        if (newValue == 0 || newValue > 1e8) {
-          revert OutOfBounds(key, newValue, 1, 1e8);
-        }
-        assets[2].factor = newValue * BTC_UNIT_CONVERSION;
       } else if (!updateHardcap(key, newValue) && !updateBonusRate(key, newValue)) {
         revert UnsupportedGovParam(key);
       }
@@ -457,8 +425,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     return false;
   }
   /*********************** External methods ********************************/
-  function getCandidateAmounts(address candidate) external view returns (uint256[] memory) {
-    return candidateAmountMap[candidate];
+  function getCandidateScores(address candidate) external view returns (uint256[] memory) {
+    return candidateScoresMap[candidate];
   }
 
   function getAssets() external view returns (Asset[] memory) {
@@ -473,6 +441,13 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     require (success, "call PLEDGE_AGENT_ADDR.getStakeInfo() failed");
     (uint256[] memory cores, uint256[] memory hashs, uint256[] memory btcs) = abi.decode(data, (uint256[], uint256[], uint256[]));
 
+    uint256[] memory factors = new uint256[](3);
+    factors[0] = 1;
+    // TODO INIT_HASH_FACTOR and INIT_BTC_FACTOR should be set more accurately before launch
+    // HASH_UNIT_CONVERSION * 1e6
+    factors[1] = 1e18 * 1e6;
+    // BTC_UNIT_CONVERSION * 2e4
+    factors[2] = 1e10 * 2e4;
     // initialize hybrid score based on data migrated from PledgeAgent.getStakeInfo()
     uint256 validatorSize = validators.length;
     uint256[] memory totalAmounts = new uint256[](3);
@@ -483,16 +458,15 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       totalAmounts[1] += hashs[i];
       totalAmounts[2] += btcs[i];
 
-      candidateAmountMap[validator].push(cores[i]);
-      candidateAmountMap[validator].push(hashs[i]);
-      candidateAmountMap[validator].push(btcs[i]);
-
-      candidateScoreMap[validator] = cores[i] * assets[0].factor + hashs[i] * assets[1].factor + btcs[i] * assets[2].factor;
+      candidateScoresMap[validator].push(cores[i] * factors[0] + hashs[i] * factors[1] + btcs[i] * factors[2]);
+      candidateScoresMap[validator].push(cores[i]);
+      candidateScoresMap[validator].push(hashs[i]);
+      candidateScoresMap[validator].push(btcs[i]);
     }
 
     uint256 len = assets.length;
     for (uint256 j = 0; j < len; j++) {
-      stateMap[assets[j].agent] = AssetState(totalAmounts[j], assets[j].factor, uint32(SatoshiPlusHelper.DENOMINATOR));
+      stateMap[assets[j].agent] = AssetState(totalAmounts[j], factors[j]);
     }
 
     // get active candidates.
