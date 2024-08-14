@@ -25,6 +25,7 @@ contract BitcoinLSTToken is IBitcoinLSTToken, System, IParamSubscriber {
 
   /*********************** Init ********************************/
   function init() external onlyNotInit {
+    // TODO name and symbol TBD
     name = "CoreLSTBtc";
     symbol = "CLBTC";
     decimals = 18;

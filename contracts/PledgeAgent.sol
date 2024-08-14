@@ -99,7 +99,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   uint256 public minBtcValue;
 
   // NOT USED
-  // TODO 
+  // Depreated in V-1.0.12
   uint256 public delegateBtcGasPrice;
 
   // HARDFORK V-1.0.7
@@ -181,9 +181,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Delegate coin to a validator
   /// @param agent The operator address of validator
   /// HARDFORK V-1.0.12 Deprecated, the method is kept here for backward compatibility
-  /// @dev all TODOs in this method also apply to undelegateCoin() and transferCoin()
   function delegateCoin(address agent) external payable override {
-    // TODO should be moved to CoreAgent.delegateCoin() and make distributeReward() as the last step to avoid reentrant attack
     // This require can avoid reentrant risk.
     require(_moveCOREData(agent, msg.sender), 'No old data.');
     distributeReward(msg.sender);
@@ -248,7 +246,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   /// calculate reward for delegator
   /// the rewards will be collected to rewardMap after execution
-  /// TODO what's the purpose of this method?
   /// @param agentList The list of validators to calculate rewards
   /// @param delegator the delegator to calculate rewards
   function calculateReward(address[] calldata agentList, address delegator) external override returns (uint256) {
@@ -356,7 +353,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// At the round of N where 1.0.12 takes effect at block S
   /// All user staking actions happen on PledgeAgent when block number < S, and on StakeHub when block number >= S
   /// After this method is called, StakeHub obtains full staking data with a smooth transition
-  /// TODO should only be called by StakeHub
   /// @param candidates list of validator candidate addresses
   function moveCandidateData(address[] memory candidates) external {
     uint256 l = candidates.length;
@@ -410,7 +406,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   /// move historical CORE stake information from PledgeAgent to CoreAgent
   /// the record will be removed in PledgeAgent after move
-  /// TODO possible gas issues if too many rounds, need stress test to verify
   /// @param candidate the validator candidate address
   /// @param delegator the delegator address
   function _moveCOREData(address candidate, address delegator) internal returns(bool) {

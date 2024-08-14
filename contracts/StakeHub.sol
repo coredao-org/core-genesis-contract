@@ -60,7 +60,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   // key: contributor address, e.g. relayer's
   // value: rewards collected for contributing to the system
-  // TODO unused
   mapping(address => uint256) public payableNotes;
 
   // CORE grading applied to BTC stakers
@@ -107,6 +106,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   function init() external onlyNotInit {
     uint32 halfDenominator = uint32(SatoshiPlusHelper.DENOMINATOR / 2);
     // initialize list of supported assets
+    // TODO all reclaimed rewards should go to BTC pool as we will only apply grading to BTC staking in 1.0.12
     assets.push(Asset("CORE", CORE_AGENT_ADDR, 1, 6000, halfDenominator));
     assets.push(Asset("HASHPOWER", HASH_AGENT_ADDR, HASH_UNIT_CONVERSION * INIT_HASH_FACTOR, 2000, 0));
     assets.push(Asset("BTC", BTC_AGENT_ADDR, BTC_UNIT_CONVERSION * INIT_BTC_FACTOR, 4000, halfDenominator));
@@ -130,6 +130,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// beginning of turn round
   /// @param validators List of validator operator addresses
   /// @param rewardList List of reward amount
+  // TODO we might want a more fixed ratio between each pool and change the algorithm a bit
   function addRoundReward(
     address[] calldata validators,
     uint256[] calldata rewardList,
@@ -158,17 +159,13 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
           continue;
         }
         uint256 r = rewardList[j] * candidateAmountMap[validator][i] * cs.factor / candidateScoreMap[validator];
-        // hardcap is applied to each pool, using the discount calculated in `getHybridScore()` step
         rewards[j] = r * cs.discount / SatoshiPlusHelper.DENOMINATOR;
-        // TODO might add up with unclaimed rewards vs. burnt
         burnReward += (r - rewards[j]);
         totalReward += rewards[j];
       }
       uint assetBonus = totalReward == 0 ? 0 : unclaimedReward * assets[i].bonusRate / SatoshiPlusHelper.DENOMINATOR;
       emit roundReward(assets[i].name, roundTag, validators, rewards, assetBonus);
       if (assetBonus != 0) {
-        // redistribute unclaimed rewards
-        // added after hardcap to leave more rewards to users
         for (uint256 j = 0; j < validatorSize; ++j) {
           if (rewards[j] == 0) {
             continue;
@@ -341,7 +338,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   /// Claim reward for relayer
   /// @return reward Amount claimed
-  /// TODO might also call system reward to send all rewards as a whole
   function claimRelayerReward() external returns (uint256 reward) {
     address relayer = msg.sender;
     reward = payableNotes[relayer];

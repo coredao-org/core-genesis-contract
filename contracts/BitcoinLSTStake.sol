@@ -243,6 +243,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
           rd.amount -= _amount;
         }
       } else if (_amount != 0) {
+        /// TODO better to use a different error message, which would be easier for debugging
         emit undelegatedOverflow(txid, i, 0, _amount, pkscript);
       }
     }
@@ -483,6 +484,10 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     return (0, WTYPE_UNKNOWN);
   }
 
+  /// construct script from hash and address type
+  /// @param whash the hash used to build the script
+  /// @param addrType the BTC address type used to build the script
+  /// @return pkscript the script
   function buildPkScript(bytes32 whash, uint32 addrType) internal pure returns (bytes memory pkscript) {
     if (addrType == WTYPE_P2WSH || addrType == WTYPE_P2TAPROOT) {
       pkscript = new bytes(34);

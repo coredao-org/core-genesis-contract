@@ -385,7 +385,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   }
 
   /// calculate rewards for a list of BTC stake transactions
-  /// TODO access control?
   /// @param txids list of BTC stake transactions
   /// @return amount total rewards of staked BTC transactions
   function calculateReward(bytes32[] calldata txids) external returns (uint256 amount) {
@@ -419,7 +418,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       dr.round = round;
       bt.amount = uint64(amount);
       bt.lockTime = uint32(lockTime);
-      // TODO set a default bt.blockTimestamp?
 
       // Set delegatorMap
       Delegator storage d = delegatorMap[delegator];
@@ -454,6 +452,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
         uint256 startIndex = (i << 2) | 1;
         lockDuration = value.indexUint(startIndex, 2);
         // limit lockDuration 4000 rounds.
+        // TODO why limit to 4000 rounds?
         if (lockDuration > 4000) {
           revert OutOfBounds('lockDuration', percentage, 0, 4000);
         }
@@ -631,10 +630,10 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
   /// collect rewards for a given BTC stake transaction & time grading is applied
   /// @param txid the BTC stake transaction id
-  /// @param pop whether pop the record
+  /// @param clearUserRecord whether clear user's records
   /// @return reward reward of the BTC stake transaction
   /// @return expired whether the stake is expired
-  function collectReward(bytes32 txid, bool pop) internal returns (uint256 reward, bool expired) {
+  function collectReward(bytes32 txid, bool clearUserRecord) internal returns (uint256 reward, bool expired) {
     BtcTx storage bt = btcTxMap[txid];
     DepositReceipt storage dr = receiptMap[txid];
     uint256 drRound = dr.round;
@@ -672,7 +671,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     }
     // Remove txid and deposit receipt if asked
     if (unlockRound1 < roundTag) {
-      if (pop) {
+      if (clearUserRecord) {
         bytes32[] storage txids = delegatorMap[dr.delegator].txids;
         for (uint i = txids.length; i != 0; --i) {
           if (txids[i - 1] == txid) {

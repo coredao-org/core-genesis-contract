@@ -67,6 +67,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     IBitcoinStake(BTCLST_STAKE_ADDR).distributeReward(validators, rewards);
 
     for (uint256 i = 0; i < validatorSize; ++i) {
+      /// @dev could be 0-0
       rewards[i] = rewardList[i] - rewards[i];
     }
     IBitcoinStake(BTC_STAKE_ADDR).distributeReward(validators, rewards);
