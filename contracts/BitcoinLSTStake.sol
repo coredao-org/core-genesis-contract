@@ -113,7 +113,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   struct Redeem {
     bytes32 hash; // it may be 20-byte-hash or 32-bytes-hash.
     uint32  addrType;
-    address delegator;
     uint64  amount;
   }
 
@@ -132,7 +131,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /*********************** events **************************/
   event delegated(bytes32 indexed txid, address indexed delegator, uint64 amount, uint256 fee);
   event redeemed(address indexed delegator, uint64 amount, uint64 utxoFee, bytes pkscript);
-  event undelegated(bytes32 indexed txid, uint32 outputIndex, address indexed delegator, uint64 amount, bytes pkscript);
+  event undelegated(bytes32 indexed txid, uint32 outputIndex, uint64 amount, bytes pkscript);
   event undelegatedOverflow(bytes32 indexed txid, uint32 outputIndex, uint64 expectAmount, uint64 actualAmount, bytes pkscript);
   event addedWallet(bytes32 indexed _hash, uint64 _type);
   event removedWallet(bytes32 indexed _hash, uint64 _type);
@@ -227,7 +226,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       uint256 index1 = redeemMap[key];
       if (index1 != 0) {
         Redeem storage rd = redeemRequests[index1 - 1];
-        emit undelegated(txid, i, rd.delegator, _amount, pkscript);
+        emit undelegated(txid, i, _amount, pkscript);
         if (rd.amount <= _amount) {
           if (rd.amount < _amount) {
             emit undelegatedOverflow(txid, i, rd.amount, _amount, pkscript);
@@ -342,7 +341,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     bytes32 key = keccak256(abi.encodePacked(pkscript));
     uint256 index1 = redeemMap[key];
     if (index1 == 0) {
-      redeemRequests.push(Redeem(hash, addrType, msg.sender, amount));
+      redeemRequests.push(Redeem(hash, addrType, amount));
       redeemMap[key] = redeemRequests.length;
     } else {
       redeemRequests[index1 - 1].amount += amount;
