@@ -30,7 +30,10 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   // key: candidate op address
   // value: score of each staked asset type
-  //        The first element represents total score of the validator.
+  //        0 - total score
+  //        1 - CORE score
+  //        2 - hash score
+  //        3 - BTC score
   mapping(address => uint256[]) public candidateScoresMap;
 
   // key: delegator address
@@ -106,7 +109,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     operators[BTC_AGENT_ADDR] = true;
     operators[BTC_STAKE_ADDR] = true;
     operators[BTCLST_STAKE_ADDR] = true;
-    // Default active btc grade.
+    // BTC grade is applied in 1.0.12
     gradeActive = MASK_STAKE_BTC;
 
     alreadyInit = true;
@@ -132,15 +135,14 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     uint256 totalReward;
     uint256 usedBonus;
     for (uint256 i = 0; i < assetSize; ++i) {
-      //Asset storage asset = assets[i];
       totalReward = 0;
       for (uint256 j = 0; j < validatorSize; ++ j) {
         address validator = validators[j];
         uint256 totalScore = candidateScoresMap[validator][0];
         // only reach here if running a new chain from genesis
         if (totalScore == 0) {
-          if (i % assetSize == 0) {
-            burnReward += rewardList[j];// burnReward
+          if (i == 0) {
+            burnReward += rewardList[j];
           }
           rewards[j] = 0;
           continue;
@@ -149,9 +151,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         totalReward += rewards[j];
       }
       uint assetBonus = totalReward == 0 ? 0 : unclaimedReward * assets[i].bonusRate / SatoshiPlusHelper.DENOMINATOR;
-      if (totalReward != 0) {
-        // redistribute unclaimed rewards rewards
-        // added after hardcap to leave more rewards to users
+      if (totalReward != 0 && assetBonus != 0) {
+        // redistribute unclaimed rewards
         for (uint256 j = 0; j < validatorSize; ++j) {
           uint256 r = rewards[j] * assetBonus / totalReward;
           rewards[j] += r;
@@ -162,8 +163,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       IAgent(assets[i].agent).distributeReward(validators, rewards, roundTag);
     }
     unclaimedReward -= usedBonus;
-    // burn overflow reward after hardcap
-    ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: burnReward }();
+
+    // burn rewards after initial setup, should reach only if running a new chain from genesis
+    if(burnReward != 0) {
+      ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: burnReward }();
+    }
   }
 
   /// Calculate hybrid score for all candidates
@@ -180,13 +184,10 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     uint256 candidateSize = candidates.length;
     uint256 assetSize = assets.length;
 
-    uint256 hardcapSum;
     for (uint256 i = 0; i < assetSize; ++i) {
-      hardcapSum += assets[i].hardcap;
       IAgent(assets[i].agent).prepare(round);
     }
-    // score := asset's amount * factor.
-    // asset score & hardcaps are used to calculate discount for each asset
+
     scores = new uint256[](candidateSize);
     address candiate;
     uint256 factor0;
@@ -442,7 +443,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
     uint256[] memory factors = new uint256[](3);
     factors[0] = 1;
-    // TODO INIT_HASH_FACTOR and INIT_BTC_FACTOR should be set more accurately before launch
     // HASH_UNIT_CONVERSION * 1e6
     factors[1] = 1e18 * 1e6;
     // BTC_UNIT_CONVERSION * 2e4
@@ -458,9 +458,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       totalAmounts[2] += btcs[i];
 
       candidateScoresMap[validator].push(cores[i] * factors[0] + hashs[i] * factors[1] + btcs[i] * factors[2]);
-      candidateScoresMap[validator].push(cores[i]);
-      candidateScoresMap[validator].push(hashs[i]);
-      candidateScoresMap[validator].push(btcs[i]);
+      candidateScoresMap[validator].push(cores[i] * factors[0]);
+      candidateScoresMap[validator].push(hashs[i] * factors[1]);
+      candidateScoresMap[validator].push(btcs[i] * factors[2]);
     }
 
     uint256 len = assets.length;
