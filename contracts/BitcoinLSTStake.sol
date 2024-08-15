@@ -498,7 +498,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
         pkscript[0] = OP_1;
       }
       assembly {
-        mstore(add(mload(pkscript), 0x22), mload(whash))
+        mstore(add(pkscript, 0x22), whash)
       }
       return pkscript;
     }
@@ -524,9 +524,9 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     unchecked {
       uint mask = 256 ** (32 - 20) - 1;
       assembly {
-        let srcpart := and(mload(whash), not(mask))
-        let destpart := and(add(mload(pkscript), startPos), mask)
-        mstore(add(mload(pkscript), startPos), or(destpart, srcpart))
+        let srcpart := and(shl(96, whash), not(mask))
+        let destpart := and(mload(add(pkscript, startPos)), mask)
+        mstore(add(pkscript, startPos), or(destpart, srcpart))
       }
     }
   }
