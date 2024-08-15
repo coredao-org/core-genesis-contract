@@ -253,16 +253,14 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// @param rewardList List of reward amount
   function distributeReward(address[] calldata validators, uint256[] calldata rewardList) external override onlyBtcAgent {
     uint256 length = validators.length;
-
-    uint256 historyReward;
-    uint256 lastRewardRound;
     uint256 l;
     address validator;
     for (uint256 i = 0; i < length; i++) {
       if (rewardList[i] == 0) {
         continue;
       }
-      historyReward = 0;
+      uint256 historyReward;
+      uint256 lastRewardRound;
       validator = validators[i];
       mapping(uint256 => uint256) storage m = accuredRewardPerBTCMap[validator];
       Candidate storage c = candidateMap[validator];
