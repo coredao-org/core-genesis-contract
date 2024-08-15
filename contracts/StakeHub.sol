@@ -202,6 +202,18 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       hardcapSum += assets[i].hardcap;
       IAgent(assets[i].agent).prepare(round);
     }
+
+    uint256[] memory totalAmounts = new uint256[](assetSize); 
+    for (uint256 i = 0; i < assetSize; ++i) {
+      (uint256[] memory amounts, uint256 totalAmount) =
+        IAgent(assets[i].agent).getStakeAmounts(candidates, round);
+      totalAmounts[i] = totalAmount;
+
+      if(i != 0) {
+        assets[i].factor = (assets[i].hardcap / assets[0].hardcap) * (assets[0].factor * totalAmounts[0]) / totalAmounts[i] ;
+      }
+    }
+
     // score := asset's amount * factor.
     // asset score & hardcaps are used to calculate discount for each asset
     uint256[] memory assetScores = new uint256[](assetSize);
@@ -230,17 +242,17 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       candidateScoreMap[candidates[j]] = scores[j];
     }
 
-    uint256 scoreSum = assetScores[0] + assetScores[1] + assetScores[2];
-    for (uint256 i = 0; i < assetSize; ++i) {
-      // stake_proportion := assetScores[i] / scoreSum
-      // hardcap_proportion := hardcap / hardcapSum
-      // let stake_proportion, hardcap_proportion both multiple hardcapSum * scoreSum
-      uint256 stake_proportion = assetScores[i] * hardcapSum;
-      uint256 hardcap_proportion = assets[i].hardcap * scoreSum;
-      if (stake_proportion > hardcap_proportion) {
-        stateMap[assets[i].agent].discount = uint32(hardcap_proportion * SatoshiPlusHelper.DENOMINATOR / stake_proportion);
-      }
-    }
+    // uint256 scoreSum = assetScores[0] + assetScores[1] + assetScores[2];
+    // for (uint256 i = 0; i < assetSize; ++i) {
+    //   // stake_proportion := assetScores[i] / scoreSum
+    //   // hardcap_proportion := hardcap / hardcapSum
+    //   // let stake_proportion, hardcap_proportion both multiple hardcapSum * scoreSum
+    //   uint256 stake_proportion = assetScores[i] * hardcapSum;
+    //   uint256 hardcap_proportion = assets[i].hardcap * scoreSum;
+    //   if (stake_proportion > hardcap_proportion) {
+    //     stateMap[assets[i].agent].discount = uint32(hardcap_proportion * SatoshiPlusHelper.DENOMINATOR / stake_proportion);
+    //   }
+    // }
   }
 
   /// Start new round, this is called by the CandidateHub contract
