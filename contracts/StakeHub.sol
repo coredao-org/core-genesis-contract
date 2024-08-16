@@ -10,6 +10,7 @@ import "./System.sol";
 import "./lib/Address.sol";
 import "./lib/Memory.sol";
 import "./lib/BytesLib.sol";
+import "./lib/RLPDecode.sol";
 import "./lib/SatoshiPlusHelper.sol";
 
 /// This contract deals with overall hybrid score and reward distribution logics. 
@@ -17,6 +18,9 @@ import "./lib/SatoshiPlusHelper.sol";
 /// Under the neath it interacts with the new agent contracts to deal with CORE, BTC and hash staking separately. 
 contract StakeHub is IStakeHub, System, IParamSubscriber {
   using BytesLib for *;
+  using RLPDecode for bytes;
+  using RLPDecode for RLPDecode.Iterator;
+  using RLPDecode for RLPDecode.RLPItem;
 
   uint256 public constant MASK_STAKE_CORE = 1;
   uint256 public constant MASK_STAKE_HASH = 2;
@@ -70,6 +74,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     address agent;
     uint32 hardcap;
     uint32 bonusRate;
+    uint256 bonusAmount;
   }
 
   struct AssetState {
@@ -97,9 +102,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   function init() external onlyNotInit {
     // initialize list of supported assets
-    assets.push(Asset("CORE", CORE_AGENT_ADDR, 6000, 0));
-    assets.push(Asset("HASHPOWER", HASH_AGENT_ADDR, 2000, 0));
-    assets.push(Asset("BTC", BTC_AGENT_ADDR, 4000, uint32(SatoshiPlusHelper.DENOMINATOR)));
+    assets.push(Asset("CORE", CORE_AGENT_ADDR, 6000, 0, 0));
+    assets.push(Asset("HASHPOWER", HASH_AGENT_ADDR, 2000, 0, 0));
+    assets.push(Asset("BTC", BTC_AGENT_ADDR, 4000, uint32(SatoshiPlusHelper.DENOMINATOR), 0));
 
     _initializeFromPledgeAgent();
 
@@ -132,10 +137,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
     uint256 burnReward;
     uint256 assetSize = assets.length;
-    uint256 totalReward;
     uint256 usedBonus;
     for (uint256 i = 0; i < assetSize; ++i) {
-      totalReward = 0;
       for (uint256 j = 0; j < validatorSize; ++ j) {
         address validator = validators[j];
         uint256 totalScore = candidateScoresMap[validator][0];
@@ -148,16 +151,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
           continue;
         }
         rewards[j] = rewardList[j] * candidateScoresMap[validator][i+1] / totalScore;
-        totalReward += rewards[j];
       }
-      uint assetBonus = totalReward == 0 ? 0 : unclaimedReward * assets[i].bonusRate / SatoshiPlusHelper.DENOMINATOR;
-      if (totalReward != 0 && assetBonus != 0) {
-        // redistribute unclaimed rewards
-        for (uint256 j = 0; j < validatorSize; ++j) {
-          uint256 r = rewards[j] * assetBonus / totalReward;
-          rewards[j] += r;
-          usedBonus += r;
-        }
+      uint assetBonus = unclaimedReward * assets[i].bonusRate / SatoshiPlusHelper.DENOMINATOR;
+      if (assetBonus != 0) {
+        assets[i].bonusAmount += assetBonus;
+        usedBonus += assetBonus;
       }
       emit roundReward(assets[i].name, roundTag, validators, rewards, assetBonus);
       IAgent(assets[i].agent).distributeReward(validators, rewards, roundTag);
@@ -284,9 +282,21 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
             break;
           }
         }
-        uint256 rewardClaimed = rewards[i] * p / SatoshiPlusHelper.DENOMINATOR;
-        unclaimedRewards[i] += (rewards[i] - rewardClaimed);
-        rewards[i] = rewardClaimed;
+        uint256 pReward = rewards[i] * p / SatoshiPlusHelper.DENOMINATOR;
+        if (p < SatoshiPlusHelper.DENOMINATOR) {
+          unclaimedRewards[i] += (rewards[i] - pReward);
+          rewards[i] = pReward;
+        } else if (p > SatoshiPlusHelper.DENOMINATOR) {
+          uint256 bonus = pReward - rewards[i];
+          uint256 assetBonus = assets[i].bonusAmount;
+          if (bonus > assetBonus) {
+            bonus = assetBonus;
+            assets[i].bonusAmount = 0;
+          } else {
+            assets[i].bonusAmount -= bonus;
+          }
+          rewards[i] += bonus;
+        } 
       }
       totalReward += rewards[i];
       totalUnclaimedReward += unclaimedRewards[i];
@@ -351,7 +361,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         uint256 startIndex = (i << 2) | 1;
         rewardRate = uint32(value.indexUint(startIndex, 2));
         percentage = uint32(value.indexUint(startIndex + 2, 2));
-        if (percentage == 0 || percentage > SatoshiPlusHelper.DENOMINATOR) {
+        if (i + 1 == currentLength) {
+          if (percentage < SatoshiPlusHelper.DENOMINATOR || percentage > SatoshiPlusHelper.DENOMINATOR * 10) {
+            revert OutOfBounds('last percentage', percentage, SatoshiPlusHelper.DENOMINATOR, SatoshiPlusHelper.DENOMINATOR * 10);
+          }
+        } else if (percentage == 0 || percentage > SatoshiPlusHelper.DENOMINATOR) {
           revert OutOfBounds('percentage', percentage, 1, SatoshiPlusHelper.DENOMINATOR);
         }
         if (i >= lastLength) {
