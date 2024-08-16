@@ -188,36 +188,34 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       IAgent(assets[i].agent).prepare(round);
     }
 
-    scores = new uint256[](candidateSize);
-    address candiate;
     uint256 factor0;
+    uint256[] memory amounts;
     uint256[] memory totalAmounts = new uint256[](assetSize);
+    scores = new uint256[](candidateSize);
     for (uint256 i = 0; i < assetSize; ++i) {
-      (uint256[] memory amounts, uint256 totalAmount) =
+      (amounts, totalAmounts[i]) =
         IAgent(assets[i].agent).getStakeAmounts(candidates, round);
-      totalAmounts[i] = totalAmount;
       uint256 factor = 1;
       if (i == 0) {
         factor0 = factor;
       } else if (totalAmounts[0] != 0 && totalAmounts[i] != 0) {
         factor = (factor0 * totalAmounts[0]) * assets[i].hardcap / assets[0].hardcap / totalAmounts[i];
       }
-      if (candidateScoresMap[candiate].length == 0) {
-        candidateScoresMap[candiate].push(0);
-      }
       uint score;
       for (uint256 j = 0; j < candidateSize; ++j) {
         score = amounts[j] * factor;
         scores[j] += score;
-        candiate = candidates[j];
-        // length should never be less than i
-        if (candidateScoresMap[candiate].length == i+1) {
-          candidateScoresMap[candiate].push(score);
+        uint256[] storage candidateScores = candidateScoresMap[candidates[j]];
+        if (candidateScores.length == 0) {
+          candidateScores.push(0);
+        }
+        if (candidateScores.length == i+1) {
+          candidateScores.push(score);
         } else {
-          candidateScoresMap[candiate][i+1] = score;
+          candidateScores[i+1] = score;
         }
       }
-      stateMap[assets[i].agent] = AssetState(totalAmount, factor);
+      stateMap[assets[i].agent] = AssetState(totalAmounts[i], factor);
     }
 
     for (uint256 j = 0; j < candidateSize; ++j) {

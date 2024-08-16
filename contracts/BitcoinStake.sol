@@ -168,16 +168,11 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     require(script[0] == bytes1(uint8(0x04)) && script[5] == bytes1(uint8(0xb1)), "not a valid redeem script");
     bytes32 txid = btcTx.calculateTxId();
     BtcTx storage bt = btcTxMap[txid];
+    require(bt.amount == 0, "btc tx is already delegated.");
     uint32 lockTime = parseLockTime(script);
     {
       (bool txChecked, uint64 blockTimestamp) = ILightClient(LIGHT_CLIENT_ADDR).checkTxProofAndGetTime(txid, blockHeight, btcConfirmBlock, nodes, index);
       require(txChecked, "btc tx isn't confirmed");
-      // compatible for migrated data.
-      if (bt.amount > 0 && bt.blockTimestamp == 0) {
-        bt.blockTimestamp = blockTimestamp;
-        return;
-      }
-      require(bt.amount == 0, "btc tx is already delegated.");
       uint256 endRound = lockTime / SatoshiPlusHelper.ROUND_INTERVAL;
       require(endRound > roundTag + 1, "insufficient locking rounds");
       bt.lockTime = lockTime;
@@ -316,7 +311,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// Start new round, this is called by the CandidateHub contract
   /// @param validators List of elected validators in this round
   /// @param round The new round tag
-  function setNewRound(address[] calldata validators, uint256 round) external override{
+  function setNewRound(address[] calldata validators, uint256 round) external override onlyBtcAgent {
     uint256 length = validators.length;
     address validator;
     for (uint256 i = 0; i < length; i++) {
@@ -328,7 +323,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
   /// Prepare for the new round
   /// @param round The new round tag
-  function prepare(uint256 round) external override {
+  function prepare(uint256 round) external override onlyBtcAgent {
     // the expired BTC staking values will be removed
     address candidate;
     for (uint256 r = roundTag + 1; r <= round; ++r) {

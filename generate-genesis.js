@@ -25,7 +25,6 @@ require("./generate-system");
 require("./generate-validatorset");
 require("./generate-btclightclient");
 require("./generate-govhub");
-require("./generate-candidatehub");
 
 program.version("0.0.1")
 program.option(

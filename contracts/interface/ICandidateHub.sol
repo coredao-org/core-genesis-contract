@@ -7,5 +7,4 @@ interface ICandidateHub {
   function isCandidateByOperate(address operateAddr) external view returns(bool);
   function jailValidator(address operateAddr, uint256 round, uint256 fine) external;
   function getRoundTag() external view returns(uint256);
-  function getInitValidatorCount() external pure returns(uint256);
 }

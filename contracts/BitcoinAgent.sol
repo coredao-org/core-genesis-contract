@@ -43,7 +43,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /*********************** IAgent implementations ***************************/
   /// Prepare for the new round.
   /// @param round The new round tag
-  function prepare(uint256 round) external override {
+  function prepare(uint256 round) external override onlyStakeHub {
     IBitcoinStake(BTC_STAKE_ADDR).prepare(round);
     IBitcoinStake(BTCLST_STAKE_ADDR).prepare(round);
   }

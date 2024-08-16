@@ -18,6 +18,8 @@ import "../lib/Address.sol";
 import "../lib/SatoshiPlusHelper.sol";
 
 contract CandidateHubMock is CandidateHub {
+    bool public controlRoundTimeTag = false;
+    bool public turnroundFailed = false;
     uint256[] public scores;
     uint256 public totalPower;
     uint256 public totalCoin;
@@ -30,6 +32,9 @@ contract CandidateHubMock is CandidateHub {
         roundTag = 7;
     }
 
+    function setControlRoundTimeTag(bool value) external {
+        controlRoundTimeTag = value;
+    }
     function setRoundTag(uint value) external {
         roundTag = value;
     }
@@ -145,6 +150,20 @@ contract CandidateHubMock is CandidateHub {
     emit registered(operateAddr, consensusAddr, feeAddr, commissionThousandths, msg.value);
   }
     /********************* External methods  ****************************/
+
+    function turnRound() public virtual override onlyCoinbase onlyInit onlyZeroGasPrice {
+      require(!turnroundFailed, "turnRound failed");
+      super.turnRound();
+    }
+
+    function nextRound() internal virtual override {
+      if (controlRoundTimeTag) {
+        roundTag++;
+      } else {
+        super.nextRound();
+      }
+    }
+
   /// The `turn round` workflowf
   /// @dev this method is called by Golang consensus engine at the end of a round
   function turnRoundOld() external onlyCoinbase onlyInit onlyZeroGasPrice {
