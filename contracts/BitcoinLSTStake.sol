@@ -65,7 +65,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
   // key: roundtag
   // value: reward per BTC accumulated
-  mapping(uint256 => uint256) accuredRewardPerBTCMap;
+  mapping(uint256 => uint256) public accuredRewardPerBTCMap;
 
   // the number of blocks to mark a BTC staking transaction as confirmed
   uint32 public btcConfirmBlock;
@@ -93,7 +93,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
   // key: keccak256 of pkscript.
   // value: index+1 of redeemRequests.
-  mapping(bytes32 => uint256) redeemMap;
+  mapping(bytes32 => uint256) public redeemMap;
 
   // Fee paid in BTC to burn lst tokens
   uint64 public utxoFee;
@@ -108,6 +108,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   struct BtcTx {
     uint64 amount;
     uint32 outputIndex;
+    uint32 blockHeight;
   }
 
   struct Redeem {
@@ -173,6 +174,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     require(bt.amount == 0, "btc tx is already delegated.");
     bool txChecked = ILightClient(LIGHT_CLIENT_ADDR).checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index);
     require(txChecked, "btc tx isn't confirmed");
+    bt.blockHeight = blockHeight;
     checkWallet(script);
 
     address delegator;
@@ -197,7 +199,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
     _afterMint(delegator, btcAmount);
 
-    realtimeAmount += btcAmount;   
+    realtimeAmount += btcAmount;
   }
 
   /// Bitcoin LST undelegate, it is called by relayer
@@ -209,9 +211,29 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param index index of the tx in Merkle tree
   function undelegate(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index) external override nonReentrant {
     bytes32 txid = btcTx.calculateTxId();
+    require(btcTxMap[txid].blockHeight == 0, "btc tx is already undelegated.");
     bool txChecked = ILightClient(LIGHT_CLIENT_ADDR).checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index);
     require(txChecked, "btc tx not confirmed");
-    (,, bytes29 voutView,) = btcTx.extractTx();
+    btcTxMap[txid].blockHeight = blockHeight;
+
+    /// make sure the transaction is from whitelisted multisig wallets
+    /// by checking that at least one of the UTXOs spent in the transaction are from them
+    /// as all UTXOs of those multisig wallet are kept in `btcTxMap`
+    (,bytes29 _vinView, bytes29 voutView,) = btcTx.extractTx();
+    {
+      uint32 _numberOfInputs = uint32(_vinView.indexCompactInt(0));
+      bool found;
+      bytes32 _outpointHash;
+      uint32 _outpointIndex;
+      for (uint32 i = 0; i < _numberOfInputs; ++i) {
+        (_outpointHash, _outpointIndex) = _vinView.extractOutpoint(i);
+        if (btcTxMap[_outpointHash].amount != 0 && btcTxMap[_outpointHash].outputIndex == _outpointIndex) {
+          found = true;
+          break;
+        }
+      }
+      require(found, "input must from stake wallet.");
+    }
 
     // Finds total number of outputs
     uint32 _numberOfOutputs = uint32(voutView.indexCompactInt(0));
@@ -221,8 +243,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     for (uint32 i = 0; i < _numberOfOutputs; ++i) {
       (_amount, _pkScript) = voutView.parseOutputValueAndScript(i);
       bytes memory pkscript = _pkScript.clone();
-      // (hash, addrType) = extractPkScriptAddr(pkscript);
-      bytes32 key = keccak256(abi.encodePacked(pkscript));
+      bytes32 key = keccak256(pkscript);
       uint256 index1 = redeemMap[key];
       if (index1 != 0) {
         Redeem storage rd = redeemRequests[index1 - 1];
@@ -235,7 +256,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
           if (index1 < redeemRequests.length) {
             redeemRequests[index1 - 1] = redeemRequests[redeemRequests.length - 1];
             pkscript = buildPkScript(rd.hash, rd.addrType);
-            key = keccak256(abi.encodePacked(pkscript));
+            key = keccak256(pkscript);
             redeemMap[key] = index1;
           }
           redeemRequests.pop();
@@ -243,8 +264,12 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
           rd.amount -= _amount;
         }
       } else if (_amount != 0) {
-        /// TODO better to use a different error message, which would be easier for debugging
-        emit undelegatedOverflow(txid, i, 0, _amount, pkscript);
+        if (walletMap[key] == 0) {
+          emit undelegatedOverflow(txid, i, 0, _amount, pkscript);
+        } else {
+          btcTxMap[txid].amount = _amount;
+          btcTxMap[txid].outputIndex = i;
+        }
       }
     }
   }
@@ -339,7 +364,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     uint64 burnAmount = amount;
     amount -= utxoFee;
 
-    bytes32 key = keccak256(abi.encodePacked(pkscript));
+    bytes32 key = keccak256(pkscript);
     uint256 index1 = redeemMap[key];
     if (index1 == 0) {
       redeemRequests.push(Redeem(hash, addrType, amount));
@@ -408,7 +433,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// This method can only be called by `updateParam()` through governance vote
   /// @param pkscript public key script of the wallet
   function addWallet(bytes memory pkscript) internal {
-    bytes32 walletKey = keccak256(abi.encodePacked(pkscript));
+    bytes32 walletKey = keccak256(pkscript);
     uint256 index1 = walletMap[walletKey];
     if (index1 > 0) {
       if (wallets[index1 - 1].status != WALLET_ACTIVE) {
@@ -428,7 +453,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// This method can only be called by `updateParam()` through governance vote
   /// @param pkscript public key script of the wallet
   function removeWallet(bytes memory pkscript) internal {
-    bytes32 walletKey = keccak256(abi.encodePacked(pkscript));
+    bytes32 walletKey = keccak256(pkscript);
     uint256 index1 = walletMap[walletKey];
     require(index1 != 0, "Wallet not found");
     WalletInfo storage w = wallets[index1 - 1];
@@ -441,7 +466,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// check whether the BTC transaction aims for LST staking
   /// @param pkscript redeem script of the locked up output
   function checkWallet(bytes memory pkscript) internal view {
-    bytes32 walletKey = keccak256(abi.encodePacked(pkscript));
+    bytes32 walletKey = keccak256(pkscript);
     uint256 index1 = walletMap[walletKey];
     require(index1 != 0, "Wallet not found");
     require(wallets[index1 - 1].status == WALLET_ACTIVE, "wallet inactive");
@@ -635,8 +660,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       // Checks whether the output is an arbitarary data or not
       if(_arbitraryData == TypedMemView.NULL) {
         // Output is not an arbitrary data
-        if (keccak256(abi.encodePacked(_scriptPubkeyView.clone())) == keccak256(abi.encodePacked(_lockingScript))
-        ) {
+        if (keccak256(_scriptPubkeyView.clone()) == keccak256(_lockingScript)) {
           btcAmount = _outputView.value();
           outputIndex = uint32(index);
         }
