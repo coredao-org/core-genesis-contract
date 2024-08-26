@@ -25,10 +25,9 @@ contract BitcoinLSTToken is IBitcoinLSTToken, System, IParamSubscriber {
 
   /*********************** Init ********************************/
   function init() external onlyNotInit {
-    // TODO name and symbol TBD
-    name = "CoreLSTBtc";
-    symbol = "CLBTC";
-    decimals = 18;
+    name = "Core BTC LST";
+    symbol = "lstBTC";
+    decimals = 8;
     alreadyInit = true;
   }
 
@@ -275,7 +274,7 @@ contract BitcoinLSTToken is IBitcoinLSTToken, System, IParamSubscriber {
   /// Update parameters through governance vote
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
-  function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
+  function updateParam(string calldata key, bytes calldata value) external view override onlyInit onlyGov {
     revert UnsupportedGovParam(key);
   }
 }

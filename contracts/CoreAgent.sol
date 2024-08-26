@@ -242,7 +242,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       rewardMap[delegator] += reward;
     }
     if (round < roundTag) {
-      (uint256 reward,) = collectReward(candidate, stakedAmount, realtimeAmount,  transferredAmount, round);
+      (uint256 reward,) = collectReward(candidate, stakedAmount, realtimeAmount, transferredAmount, round);
       stakedAmount = realtimeAmount;
       rewardMap[delegator] += reward;
       cd.changeRound = roundTag;
@@ -291,6 +291,9 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     }
     if (sourceCandidate == targetCandidate) {
       revert SameCandidate(sourceCandidate);
+    }
+    if (amount == 0) {
+      amount = candidateMap[sourceCandidate].cDelegatorMap[delegator].stakedAmount;
     }
     require(amount >= requiredCoinDeposit, "transfer amount is too small");
     undelegateCoin(sourceCandidate, delegator, amount, true);
@@ -405,7 +408,6 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       if (transferredAmount != 0) {
         changeRoundReward = getRoundAccuredReward(candidate, changeRound);
         reward += transferredAmount * (changeRoundReward - lastChangeRoundReward);
-        transferredAmount = 0;
       }
 
       if (realtimeAmount != stakedAmount) {
