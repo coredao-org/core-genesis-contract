@@ -13,6 +13,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   uint256 public constant INCENTIVE_BALANCE_CAP = 1e25;
 
   uint256 public incentiveBalanceCap;
+  // Add STAKE_HUB_ADDR into operators via gov in v1.0.12
   uint256 public numOperator;
   mapping(address => bool) public operators;
   bool public isBurn;
@@ -107,6 +108,15 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
         revert OutOfBounds(key, newIsBurn, 0, 1);
       }
       isBurn = newIsBurn == 1;
+    } else if (Memory.compareStrings(key, "addOperator")) {
+      if (value.length != 20) {
+        revert MismatchParamLength(key);
+      }
+      address newOperator = value.toAddress(0);
+      if (!operators[newOperator]) {
+        operators[newOperator] = true;
+        numOperator++;
+      }
     } else {
       revert UnsupportedGovParam(key);
     }

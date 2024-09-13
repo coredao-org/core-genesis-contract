@@ -7,15 +7,38 @@ import "./interface/IParamSubscriber.sol";
 import "./lib/Memory.sol";
 import "./lib/SatoshiPlusHelper.sol";
 import "./System.sol";
+import "./lib/BytesLib.sol";
+import "./lib/RLPDecode.sol";
+import "./lib/SafeCast.sol";
 
 /// This contract handles BTC staking. 
 /// It interacts with BitcoinStake.sol and BitcoinLSTStake.sol for
 /// non-custodial BTC staking and LST BTC staking correspondingly. 
 contract BitcoinAgent is IAgent, System, IParamSubscriber {
+  using BytesLib for *;
+  using SafeCast for *;
+  using RLPDecode for bytes;
+  using RLPDecode for RLPDecode.Iterator;
+  using RLPDecode for RLPDecode.RLPItem;
+  using SafeCast for uint256;
+
+  uint256 public constant DEFAULT_CORE_BTC_CONVERSION = 1e10;
 
   // key: candidate
   // value: staked BTC amount
   mapping (address => StakeAmount) public candidateMap;
+
+  // CORE grading applied to BTC stakers
+  DualStakingGrade[] public grades;
+
+  // whether the CORE grading is enabled
+  bool public gradeActive;
+
+  // conversion rate between CORE and the asset
+  uint256 public assetWeight;
+
+  // the same grade percentage applies to all LST stakes
+  uint256 public lstGradePercentage;
 
   struct StakeAmount {
     // staked BTC amount from LST
@@ -24,12 +47,19 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     uint256 stakeAmount;
   }
 
+  struct DualStakingGrade {
+    uint32 stakeRate;
+    uint32 percentage;
+  }
+
   modifier onlyPledgeAgent() {
     require(msg.sender == PLEDGE_AGENT_ADDR, "the sender must be pledge agent contract");
     _;
   }
 
   function init() external onlyNotInit {
+    assetWeight = DEFAULT_CORE_BTC_CONVERSION;
+    lstGradePercentage = SatoshiPlusHelper.DENOMINATOR;
     alreadyInit = true;
   }
 
@@ -41,13 +71,6 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   }
 
   /*********************** IAgent implementations ***************************/
-  /// Prepare for the new round.
-  /// @param round The new round tag
-  function prepare(uint256 round) external override onlyStakeHub {
-    IBitcoinStake(BTC_STAKE_ADDR).prepare(round);
-    IBitcoinStake(BTCLST_STAKE_ADDR).prepare(round);
-  }
-
   /// Receive round rewards from StakeHub, which is triggered at the beginning of turn round.
   /// @param validators List of validator operator addresses
   /// @param rewardList List of reward amount
@@ -100,12 +123,42 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
 
   /// Claim reward for delegator
   /// @param delegator the delegator address
+  /// @param coreAmount the accumurated amount of staked CORE.
   /// @return reward Amount claimed
-  /// @return rewardUnclaimed Amount unclaimed after applying grading
-  function claimReward(address delegator) external override onlyStakeHub returns (uint256 reward, uint256 rewardUnclaimed) {
-    (uint256 btcReward, uint256 btcRewardUnclaimed) = IBitcoinStake(BTC_STAKE_ADDR).claimReward(delegator);
-    (uint256 btclstReward, uint256 btclstRewardUnclaimed) = IBitcoinStake(BTCLST_STAKE_ADDR).claimReward(delegator);
-    return (btcReward + btclstReward, btcRewardUnclaimed + btclstRewardUnclaimed);
+  /// @return floatReward floating reward amount
+  /// @return accStakedAmount accumulated stake amount (multipled by rounds), used for grading calculation
+  function claimReward(address delegator, uint256 coreAmount) external override onlyStakeHub returns (uint256 reward, int256 floatReward, uint256 accStakedAmount) {
+    (uint256 btcReward, uint256 btcRewardUnclaimed, uint256 btcAccStakedAmount) = IBitcoinStake(BTC_STAKE_ADDR).claimReward(delegator);
+    uint256 gradeLength = grades.length;
+    if (gradeActive && gradeLength != 0 && btcAccStakedAmount != 0) {
+      uint256 stakeRate = coreAmount / btcAccStakedAmount / assetWeight;
+      uint256 p = grades[0].percentage;
+      for (uint256 j = gradeLength - 1; j != 0; j--) {
+        if (stakeRate >= grades[j].stakeRate) {
+          p = grades[j].percentage;
+          break;
+        }
+      }
+      uint256 pReward = btcReward * p / SatoshiPlusHelper.DENOMINATOR;
+      floatReward = pReward.toInt256() - btcReward.toInt256();
+      btcReward = pReward;
+    }
+    if (btcRewardUnclaimed != 0) {
+      floatReward -= btcRewardUnclaimed.toInt256();
+    }
+
+    (uint256 btclstReward, , uint256 btclstAccStakedAmount) = IBitcoinStake(BTCLST_STAKE_ADDR).claimReward(delegator);
+    if (lstGradePercentage != SatoshiPlusHelper.DENOMINATOR) {
+      uint256 pLstReward = btclstReward * lstGradePercentage / SatoshiPlusHelper.DENOMINATOR;
+      floatReward += (pLstReward.toInt256() - btclstReward.toInt256());
+      btclstReward = pLstReward;
+    }
+    return (btcReward + btclstReward, floatReward, btcAccStakedAmount + btclstAccStakedAmount);
+  }
+
+  /*********************** External methods ********************************/
+  function getGrades() external view returns (DualStakingGrade[] memory) {
+    return grades;
   }
 
   /*********************** Governance ********************************/
@@ -113,6 +166,65 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
-    revert UnsupportedGovParam(key);
+    if (Memory.compareStrings(key, "grades")) {
+      uint256 lastLength = grades.length;
+
+      RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+      uint256 currentLength = items.length;
+      if (currentLength == 0) {
+         revert MismatchParamLength(key);
+      }
+
+      for (uint256 i = currentLength; i < lastLength; i++) {
+        grades.pop();
+      }
+
+      uint256 stakeRate;
+      uint256 percentage;
+      for (uint256 i = 0; i < currentLength; i++) {
+        RLPDecode.RLPItem[] memory itemArray = items[i].toList();
+        stakeRate = RLPDecode.toUint(itemArray[0]);
+        percentage = RLPDecode.toUint(itemArray[1]);
+        if (stakeRate > 1e8) {
+          revert OutOfBounds('stakeRate', stakeRate, 0, 1e8);
+        }
+        if (percentage > SatoshiPlusHelper.DENOMINATOR * 10) {
+          revert OutOfBounds('percentage', percentage, 0, SatoshiPlusHelper.DENOMINATOR * 10);
+        }
+        if (i >= lastLength) {
+          grades.push(DualStakingGrade(uint32(stakeRate), uint32(percentage)));
+        } else {
+          grades[i] = DualStakingGrade(uint32(stakeRate), uint32(percentage));
+        }
+      }
+      // check stakeRate & percentage in order.
+      for (uint256 i = 1; i < currentLength; i++) {
+        require(grades[i-1].stakeRate < grades[i].stakeRate, "stakeRate disorder");
+        require(grades[i-1].percentage < grades[i].percentage, "percentage disorder");
+      }
+      require(grades[0].stakeRate == 0, "lowest stakeRate must be zero");
+    } else if (Memory.compareStrings(key, "gradeActive")) {
+      if (value.length != 1) {
+        revert MismatchParamLength(key);
+      }
+      uint8 newGradeActive = value.toUint8(0);
+      if (newGradeActive > 1) {
+        revert OutOfBounds(key, newGradeActive, 0, 1);
+      }
+      gradeActive = newGradeActive == 1;
+    } else if (Memory.compareStrings(key, "lstGradePercentage")) {
+      if (value.length != 32) {
+        revert MismatchParamLength(key);
+      }
+      uint256 newPercentage = value.toUint256(0);
+      if (newPercentage == 0 || newPercentage > SatoshiPlusHelper.DENOMINATOR * 10) {
+        revert OutOfBounds(key, newPercentage, 1, SatoshiPlusHelper.DENOMINATOR * 10);
+      }
+      lstGradePercentage = newPercentage;
+    } else {
+        revert UnsupportedGovParam(key);
+    }
+
+    emit paramChange(key, value);
   }
 }

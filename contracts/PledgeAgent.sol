@@ -5,7 +5,6 @@ import "./interface/IPledgeAgent.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/ICandidateHub.sol";
 import "./interface/ISystemReward.sol";
-import "./interface/ILightClient.sol";
 import "./lib/Address.sol";
 import "./lib/BitcoinHelper.sol";
 import "./lib/BytesToTypes.sol";
@@ -168,6 +167,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   event transferredBtcFee(bytes32 indexed txid, address payable feeReceiver, uint256 fee);
   event failedTransferBtcFee(bytes32 indexed txid, address payable feeReceiver, uint256 fee);
   event btcPledgeExpired(bytes32 indexed txid, address indexed delegator);
+  event received(address indexed from, uint256 amount);
 
   function init() external onlyNotInit {
     requiredCoinDeposit = INIT_REQUIRED_COIN_DEPOSIT;
@@ -249,11 +249,16 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       _moveCOREData(agentList[i], msg.sender);
     }
     uint256 rewardSum = rewardMap[msg.sender];
-    distributeReward(msg.sender);
 
     (bool success, bytes memory data) = STAKE_HUB_ADDR.call(abi.encodeWithSignature("proxyClaimReward(address)", msg.sender));
     require (success, "call STAKE_HUB_ADDR.proxyClaimReward() failed");
     uint256 proxyRewardSum =  abi.decode(data, (uint256));
+
+    if (proxyRewardSum != 0) {
+      rewardMap[msg.sender] += proxyRewardSum;
+    }
+    
+    distributeReward(msg.sender);
 
     return (rewardSum + proxyRewardSum, true);
   }
@@ -705,6 +710,12 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       cores[i] = agent.coin;
       hashs[i] = agent.power / POWER_BLOCK_FACTOR;
       btcs[i] = agent.btc;
+    }
+  }
+
+  receive() external payable {
+    if (msg.value != 0) {
+      emit received(msg.sender, msg.value);
     }
   }
 }
