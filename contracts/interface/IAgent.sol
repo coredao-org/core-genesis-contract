@@ -10,10 +10,6 @@ interface IAgent {
   /// @param candidate Address of the candidate
   error SameCandidate(address candidate);
 
-  /// Do some preparement before new round.
-  /// @param round The new round tag
-  function prepare(uint256 round) external;
-
   /// Get stake amount
   /// @param candidates List of candidate operator addresses
   /// @param round The new round tag
@@ -34,7 +30,9 @@ interface IAgent {
 
   /// Claim reward for delegator
   /// @param delegator the delegator address
+  /// @param coreAmount the accumurated amount of staked CORE.
   /// @return reward Amount claimed
-  /// @return rewardUnclaimed Amount unclaimed
-  function claimReward(address delegator) external returns (uint256 reward, uint256 rewardUnclaimed);
+  /// @return floatReward floating reward amount
+  /// @return accStakedAmount accumulated stake amount (multipled by rounds), used for grading calculation
+  function claimReward(address delegator, uint256 coreAmount) external returns (uint256 reward, int256 floatReward, uint256 accStakedAmount);
 }

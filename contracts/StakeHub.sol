@@ -6,25 +6,21 @@ import "./interface/IStakeHub.sol";
 import "./interface/IAgent.sol";
 import "./interface/ISystemReward.sol";
 import "./interface/IValidatorSet.sol";
+import "./interface/IBitcoinStake.sol";
 import "./System.sol";
 import "./lib/Address.sol";
 import "./lib/Memory.sol";
 import "./lib/BytesLib.sol";
 import "./lib/RLPDecode.sol";
 import "./lib/SatoshiPlusHelper.sol";
+import "./lib/SafeCast.sol";
 
 /// This contract deals with overall hybrid score and reward distribution logics. 
 /// It replaces the existing role of PledgeAgent.sol to interact with CandidateHub.sol and other protocol contracts during the turnround process. 
-/// Under the neath it interacts with the new agent contracts to deal with CORE, BTC and hash staking separately. 
+/// Underneath it interacts with the new agent contracts to deal with CORE, BTC and hash staking separately. 
 contract StakeHub is IStakeHub, System, IParamSubscriber {
   using BytesLib for *;
-  using RLPDecode for bytes;
-  using RLPDecode for RLPDecode.Iterator;
-  using RLPDecode for RLPDecode.RLPItem;
-
-  uint256 public constant MASK_STAKE_CORE = 1;
-  uint256 public constant MASK_STAKE_HASH = 2;
-  uint256 public constant MASK_STAKE_BTC = 4;
+  using SafeCast for *;
 
   // Supported asset types
   //  - CORE
@@ -39,11 +35,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   //        2 - hash score
   //        3 - BTC score
   mapping(address => uint256[]) public candidateScoresMap;
-
-  // key: delegator address
-  // value: MASK value of staked asset types
-  // TODO unused
-  mapping(address => uint256) public delegatesMaskMap;
 
   // key: agent contract address 
   // value: asset information of the round
@@ -60,21 +51,14 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   // value: rewards collected for contributing to the system
   mapping(address => uint256) public payableNotes;
 
-  // CORE grading applied to BTC stakers
-  DualStakingGrade[] public grades;
-
-  // whether the CORE grading is enabled
-  uint256 public gradeActive;
-
-  // accumulated unclaimed rewards each round, will be redistributed at the beginning of the next round
-  uint256 public unclaimedReward;
+  // surplus of dual staking, unclaimble rewards increase surplus and extra rewards decrease it
+  // if the current surplus is not enough to pay the next extra rewards, system reward contract will be called to refill
+  uint256 public surplus;
 
   struct Asset {
     string  name;
     address agent;
     uint32 hardcap;
-    uint32 bonusRate;
-    uint256 bonusAmount;
   }
 
   struct AssetState {
@@ -90,15 +74,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     uint256 amount;
   }
 
-  struct DualStakingGrade {
-    uint32 rewardRate;
-    uint32 percentage; // [0 ~ DENOMINATOR]
-  }
-
   /*********************** events **************************/
-  event roundReward(string indexed name, uint256 round, address[] validator, uint256[] amount, uint256 bonus);
+  event roundReward(string indexed name, uint256 round, address[] validator, uint256[] amount);
   event claimedReward(address indexed delegator, uint256 amount);
   event claimedRelayerReward(address indexed relayer, uint256 amount);
+  event received(address indexed from, uint256 amount);
 
   modifier onlyPledgeAgent() {
     require(msg.sender == PLEDGE_AGENT_ADDR, "the sender must be pledge agent contract");
@@ -107,9 +87,10 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   function init() external onlyNotInit {
     // initialize list of supported assets
-    assets.push(Asset("CORE", CORE_AGENT_ADDR, 6000, 0, 0));
-    assets.push(Asset("HASHPOWER", HASH_AGENT_ADDR, 2000, 0, 0));
-    assets.push(Asset("BTC", BTC_AGENT_ADDR, 4000, uint32(SatoshiPlusHelper.DENOMINATOR), 0));
+    // TODO hardcaps should be set to proper values before 1.0.12 launch
+    assets.push(Asset("CORE", CORE_AGENT_ADDR, 6000));
+    assets.push(Asset("HASHPOWER", HASH_AGENT_ADDR, 2000));
+    assets.push(Asset("BTC", BTC_AGENT_ADDR, 4000));
 
     _initializeFromPledgeAgent();
 
@@ -119,10 +100,14 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     operators[BTC_AGENT_ADDR] = true;
     operators[BTC_STAKE_ADDR] = true;
     operators[BTCLST_STAKE_ADDR] = true;
-    // BTC grade is applied in 1.0.12
-    gradeActive = MASK_STAKE_BTC;
 
     alreadyInit = true;
+  }
+
+  receive() external payable {
+    if (msg.value != 0) {
+      emit received(msg.sender, msg.value);
+    }
   }
 
   /*********************** Interface implementations ***************************/
@@ -142,7 +127,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
     uint256 burnReward;
     uint256 assetSize = assets.length;
-    uint256 usedBonus;
     for (uint256 i = 0; i < assetSize; ++i) {
       for (uint256 j = 0; j < validatorSize; ++ j) {
         address validator = validators[j];
@@ -157,15 +141,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         }
         rewards[j] = rewardList[j] * candidateScoresMap[validator][i+1] / totalScore;
       }
-      uint assetBonus = unclaimedReward * assets[i].bonusRate / SatoshiPlusHelper.DENOMINATOR;
-      if (assetBonus != 0) {
-        assets[i].bonusAmount += assetBonus;
-        usedBonus += assetBonus;
-      }
-      emit roundReward(assets[i].name, roundTag, validators, rewards, assetBonus);
+      emit roundReward(assets[i].name, roundTag, validators, rewards);
       IAgent(assets[i].agent).distributeReward(validators, rewards, roundTag);
     }
-    unclaimedReward -= usedBonus;
     // burn rewards after initial setup, should reach only if running a new chain from genesis
     if (burnReward != 0) {
       ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: burnReward }();
@@ -183,12 +161,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     address[] calldata candidates,
     uint256 round
   ) external override onlyCandidate returns (uint256[] memory scores) {
+    IBitcoinStake(BTC_STAKE_ADDR).prepare(round);
     uint256 candidateSize = candidates.length;
     uint256 assetSize = assets.length;
-
-    for (uint256 i = 0; i < assetSize; ++i) {
-      IAgent(assets[i].agent).prepare(round);
-    }
 
     uint256 factor0;
     uint256[] memory amounts;
@@ -249,9 +224,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// @return debtAmount system debt paid
   function claimReward() external returns (uint256[] memory rewards, uint256 debtAmount) {
     address delegator = msg.sender;
-    (rewards, debtAmount,) = calculateReward(delegator);
+    (rewards, debtAmount) = calculateReward(delegator);
 
-    uint256 reward = 0;
+    uint256 reward;
     for (uint256 i = 0; i < rewards.length; i++) {
       reward += rewards[i];
     }
@@ -266,15 +241,14 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// @param delegator delegator address
   /// @return reward Amounts claimed
   function proxyClaimReward(address delegator) external onlyPledgeAgent returns (uint256 reward) {
-    (uint256[] memory rewards, uint256 debtAmount,) = calculateReward(delegator);
+    (uint256[] memory rewards, uint256 debtAmount) = calculateReward(delegator);
 
     for (uint256 i = 0; i < rewards.length; i++) {
       reward += rewards[i];
     }
     reward -= debtAmount;
     if (reward != 0) {
-      Address.sendValue(payable(delegator), reward);
-      emit claimedReward(delegator, reward);
+      Address.sendValue(payable(PLEDGE_AGENT_ADDR), reward);
     }
   }
 
@@ -282,48 +256,21 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// @param delegator delegator address
   /// @param rewards rewards on each type of staked assets
   /// @param debtAmount system debt paid
-  function calculateReward(address delegator) public returns (uint256[] memory rewards, uint256 debtAmount, int256[] memory bonuses) {
+  /// @return rewards Amounts claimed
+  /// @return debtAmount system debt paid
+  function calculateReward(address delegator) internal returns (uint256[] memory rewards, uint256 debtAmount) {
     uint256 assetSize = assets.length;
     rewards = new uint256[](assetSize);
-    bonuses = new int256[](assetSize);
-    uint256[] memory unclaimedRewards = new uint256[](assetSize);
-    uint256 gradeLength = grades.length;
-    uint256 totalReward;
-    uint256 totalUnclaimedReward;
-    for (uint256 i = 0; i < assetSize; ++i) {
-      (rewards[i], unclaimedRewards[i]) = IAgent(assets[i].agent).claimReward(delegator);
-      uint256 mask = (1 << i);
-      // apply CORE grading to rewards
-      if ((gradeActive & mask) == mask && gradeLength != 0 && rewards[i] != 0) {
-        uint256 rewardRate = rewards[0] * SatoshiPlusHelper.DENOMINATOR / rewards[i];
-        uint256 p = grades[0].percentage;
-        for (uint256 j = gradeLength - 1; j != 0; j--) {
-          if (rewardRate >= grades[j].rewardRate) {
-            p = grades[j].percentage;
-            break;
-          }
-        }
-        uint256 pReward = rewards[i] * p / SatoshiPlusHelper.DENOMINATOR;
-        if (p < SatoshiPlusHelper.DENOMINATOR) {
-          uint256 unclaimedReward = rewards[i] - pReward;
-          unclaimedRewards[i] += unclaimedReward;
-          rewards[i] = pReward;
-          bonuses[i] = -int256(unclaimedReward);
-        } else if (p > SatoshiPlusHelper.DENOMINATOR) {
-          uint256 bonus = pReward - rewards[i];
-          uint256 assetBonus = assets[i].bonusAmount;
-          if (bonus > assetBonus) {
-            bonus = assetBonus;
-            assets[i].bonusAmount = 0;
-          } else {
-            assets[i].bonusAmount -= bonus;
-          }
-          rewards[i] += bonus;
-          bonuses[i] = int256(bonus);
-        } 
-      }
+    int256 floatReward;
+    uint256 accStakedCoreAmount;
+    (rewards[0], floatReward, accStakedCoreAmount) = IAgent(assets[0].agent).claimReward(delegator, 0);
+
+    uint256 totalReward = rewards[0];
+    int256 totalFloatReward = floatReward;
+    for (uint256 i = 1; i < assetSize; ++i) {
+      (rewards[i], floatReward,) = IAgent(assets[i].agent).claimReward(delegator, accStakedCoreAmount);
       totalReward += rewards[i];
-      totalUnclaimedReward += unclaimedRewards[i];
+      totalFloatReward += floatReward;
     }
 
     // pay system debts from staking rewards
@@ -347,7 +294,13 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       }
     }
 
-    unclaimedReward += totalUnclaimedReward;
+    if (totalFloatReward > surplus.toInt256()) {
+      // move 10x from system reward as a buffer for the next claim calls
+      uint256 claimAmount = totalFloatReward.toUint256() * 10;
+      ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(STAKE_HUB_ADDR), claimAmount);
+      surplus += claimAmount;
+    }
+    surplus = (surplus.toInt256() - totalFloatReward).toUint256();
   }
 
   /// Claim reward for relayer
@@ -367,61 +320,12 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// @param key The name of the parameter
   /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
-    if (Memory.compareStrings(key, "grades")) {
-      // TODO more details on how the grading binary array is designed and parsed
-      uint256 lastLength = grades.length;
-
-      RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
-      uint256 currentLength = items.length;
-      if (currentLength == 0) {
-         revert MismatchParamLength(key);
-      }
-
-      for (uint256 i = currentLength; i < lastLength; i++) {
-        grades.pop();
-      }
-
-      uint256 rewardRate;
-      uint256 percentage;
-      for (uint256 i = 0; i < currentLength; i++) {
-        RLPDecode.RLPItem[] memory itemArray = items[i].toList();
-        rewardRate = RLPDecode.toUint(itemArray[0]);
-        percentage = RLPDecode.toUint(itemArray[1]);
-        if (rewardRate > SatoshiPlusHelper.DENOMINATOR * 100) {
-          revert OutOfBounds('rewardRate', rewardRate, 0, SatoshiPlusHelper.DENOMINATOR * 100);
-        }
-        if (i + 1 == currentLength) {
-          if (percentage < SatoshiPlusHelper.DENOMINATOR || percentage > SatoshiPlusHelper.DENOMINATOR * 10) {
-            revert OutOfBounds('last percentage', percentage, SatoshiPlusHelper.DENOMINATOR, SatoshiPlusHelper.DENOMINATOR * 10);
-          }
-        } else if (percentage == 0 || percentage > SatoshiPlusHelper.DENOMINATOR) {
-          revert OutOfBounds('percentage', percentage, 1, SatoshiPlusHelper.DENOMINATOR);
-        }
-        if (i >= lastLength) {
-          grades.push(DualStakingGrade(uint32(rewardRate), uint32(percentage)));
-        } else {
-          grades[i] = DualStakingGrade(uint32(rewardRate), uint32(percentage));
-        }
-      }
-      // check rewardRate & percentage in order.
-      for (uint256 i = 1; i < currentLength; i++) {
-        require(grades[i-1].rewardRate < grades[i].rewardRate, "rewardRate disorder");
-        require(grades[i-1].percentage < grades[i].percentage, "percentage disorder");
-      }
-      require(grades[0].rewardRate == 0, "lowest rewardRate must be zero");
-    } else {
-      if (value.length != 32) {
-        revert MismatchParamLength(key);
-      }
-      uint256 newValue = value.toUint256(0);
-      if (Memory.compareStrings(key, "gradeActive")) {
-        if (newValue > 7) {
-          revert OutOfBounds(key, newValue, 0, 7);
-        }
-        gradeActive = newValue;
-      } else if (!updateHardcap(key, newValue) && !updateBonusRate(key, newValue)) {
-        revert UnsupportedGovParam(key);
-      }
+    if (value.length != 32) {
+      revert MismatchParamLength(key);
+    }
+    uint256 newValue = value.toUint256(0);
+    if (!updateHardcap(key, newValue)) {
+      revert UnsupportedGovParam(key);
     }
   
     emit paramChange(key, value);
@@ -446,26 +350,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     return false;
   }
 
-  function updateBonusRate(string calldata key, uint256 newValue) internal returns(bool) {
-    uint256 indexplus;
-    if (Memory.compareStrings(key, "coreBonusRate")) {
-      indexplus = 1;
-    } else if(Memory.compareStrings(key, "hashBonusRate")) {
-      indexplus = 2;
-    } else if(Memory.compareStrings(key, "btcBonusRate")) {
-      indexplus = 3;
-    }
-    if (indexplus != 0) {
-      if (newValue > SatoshiPlusHelper.DENOMINATOR) {
-        revert OutOfBounds(key, newValue, 0, SatoshiPlusHelper.DENOMINATOR);
-      }
-      assets[indexplus - 1].bonusRate = uint32(newValue);
-      uint32 sum = assets[0].bonusRate+assets[1].bonusRate+assets[2].bonusRate;
-      require(sum <= SatoshiPlusHelper.DENOMINATOR, "the sum of bonus rates out of bound.");
-      return true;
-    }
-    return false;
-  }
   /*********************** External methods ********************************/
   function getCandidateScores(address candidate) external view returns (uint256[] memory) {
     return candidateScoresMap[candidate];
@@ -473,10 +357,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   function getAssets() external view returns (Asset[] memory) {
     return assets;
-  }
-
-  function getGrades() external view returns (DualStakingGrade[] memory) {
-    return grades;
   }
 
   /*********************** Internal methods ********************************/

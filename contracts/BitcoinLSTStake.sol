@@ -13,10 +13,11 @@ import "./lib/BitcoinHelper.sol";
 import "./lib/SatoshiPlusHelper.sol";
 import "./System.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 
 /// This contract handles LST BTC staking. 
 /// Relayers submit BTC stake/redeem transactions to Core chain here.
-contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuard {
+contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuard, Pausable {
   using BitcoinHelper for *;
   using TypedMemView for *;
   using BytesLib for *;
@@ -73,7 +74,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   // This field is used to store lst reward of delegators
   // key: delegator address
   // value: amount of CORE tokens claimable
-  mapping(address => uint256) public rewardMap;
+  mapping(address => Reward) public rewardMap;
 
   // the current round, it is updated in setNewRound.
   uint256 public roundTag;
@@ -97,13 +98,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
   // Fee paid in BTC to burn lst tokens
   uint64 public utxoFee;
-
-  // Time grading applied to BTC stakers
-  // There is no timelock set in the BTC lst stake transaction, as a result a same rate is set to apply to all
-  uint256 public percentage;
-
-  // whether the time grading is enabled
-  uint256 public gradeActive;
 
   struct BtcTx {
     uint64 amount;
@@ -129,6 +123,11 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     uint64 stakedAmount; // staked BTC amount when the last round snapshot is taken
   }
 
+  struct Reward {
+    uint256 reward;
+    uint256 accStakedAmount;
+  }
+
   /*********************** events **************************/
   event delegated(bytes32 indexed txid, address indexed delegator, uint64 amount, uint256 fee);
   event redeemed(address indexed delegator, uint64 amount, uint64 utxoFee, bytes pkscript);
@@ -149,8 +148,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     initRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
     roundTag = initRound;
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
-    percentage = SatoshiPlusHelper.DENOMINATOR / 2;
-    gradeActive = 1;
     alreadyInit = true;
   }
 
@@ -168,7 +165,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param nodes part of the Merkle tree from the tx to the root in LE form (called Merkle proof)
   /// @param index index of the tx in Merkle tree
   /// @param script it is a redeem script of the locked up output
-  function delegate(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index, bytes memory script) external override {
+  function delegate(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index, bytes memory script) external override whenNotPaused {
     bytes32 txid = btcTx.calculateTxId();
     BtcTx storage bt = btcTxMap[txid];
     require(bt.amount == 0, "btc tx is already delegated.");
@@ -211,7 +208,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param blockHeight block height of the transaction
   /// @param nodes part of the Merkle tree from the tx to the root in LE form (called Merkle proof)
   /// @param index index of the tx in Merkle tree
-  function undelegate(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index) external override nonReentrant {
+  function undelegate(bytes calldata btcTx, uint32 blockHeight, bytes32[] memory nodes, uint256 index) external override whenNotPaused nonReentrant {
     bytes32 txid = btcTx.calculateTxId();
     require(btcTxMap[txid].blockHeight == 0, "btc tx is already undelegated.");
     bool txChecked = ILightClient(LIGHT_CLIENT_ADDR).checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index);
@@ -323,16 +320,13 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param delegator the delegator address
   /// @return reward Amount claimed
   /// @return rewardUnclaimed Amount unclaimed
-  function claimReward(address delegator) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed) {
-    reward = _updateUserRewards(delegator, true);
-    // apply time grading
-    if (gradeActive == 1) {
-      uint256 rewardClaimed = reward * percentage / SatoshiPlusHelper.DENOMINATOR;
-      rewardUnclaimed = reward - rewardClaimed;
-      reward = rewardClaimed;
+  /// @return accStakedAmount accumulated stake amount (multipled by days), used for grading calculation
+  function claimReward(address delegator) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed, uint256 accStakedAmount) {
+    if (paused()) {
+      return (0, 0, 0);
     }
-    
-    return (reward, rewardUnclaimed);
+    (reward, accStakedAmount) = _updateUserRewards(delegator, true);
+    return (reward, 0, accStakedAmount);
   }
 
   /*********************** External implementations ***************************/
@@ -341,7 +335,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   ///
   /// @param amount redeem amount
   /// @param pkscript pkscript to receive BTC assets
-  function redeem(uint64 amount, bytes calldata pkscript) external nonReentrant {
+  function redeem(uint64 amount, bytes calldata pkscript) external whenNotPaused nonReentrant {
     (bytes32 hash, uint32 addrType) = extractPkScriptAddr(pkscript);
     require(addrType != WTYPE_UNKNOWN, "invalid pkscript");
 
@@ -376,7 +370,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param from ERC20 standard from address
   /// @param to ERC20 standard to address
   /// @param value the amount of tokens to transfer
-  function onTokenTransfer(address from, address to, uint256 value) external onlyBtcLSTToken {
+  function onTokenTransfer(address from, address to, uint256 value) external whenNotPaused onlyBtcLSTToken {
     uint64 amount = uint64(value);
     require(uint256(amount) == value, 'btc amount limit uint64');
     _afterBurn(from, amount);
@@ -397,25 +391,21 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       addWallet(value);
     } else if (Memory.compareStrings(key, "remove")) {
       removeWallet(value);
-    } else {
-      if (value.length != 32) {
+    } else if (Memory.compareStrings(key, "paused")) {
+      if (value.length != 1) {
         revert MismatchParamLength(key);
       }
-      if (Memory.compareStrings(key, "percentage")) {
-        uint256 newPercentage = value.toUint256(0);
-        if (newPercentage == 0 || newPercentage > SatoshiPlusHelper.DENOMINATOR) {
-          revert OutOfBounds(key, newPercentage, 1, SatoshiPlusHelper.DENOMINATOR);
-        }
-        percentage = newPercentage;
-      } else if (Memory.compareStrings(key, "gradeActive")) {
-        uint256 newActive = value.toUint256(0);
-        if (newActive > 1) {
-          revert OutOfBounds(key, newActive, 0, 1);
-        }
-        gradeActive = newActive;
-      } else {
-        revert UnsupportedGovParam(key);
+      uint8 newPaused = value.toUint8(0);
+      if (newPaused > 1) {
+        revert OutOfBounds(key, newPaused, 0, 1);
       }
+      if (newPaused == 1) {
+        _pause();
+      } else {
+        _unpause();
+      }
+    } else {
+      revert UnsupportedGovParam(key);
     }
     emit paramChange(key, value);
   }
@@ -452,6 +442,16 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     if (w.status != WALLET_INACTIVE) {
      w.status = WALLET_INACTIVE;
     }
+
+    bool hasActive = false;
+    for (uint i = 0; i < wallets.length; i++) {
+      if (wallets[i].status == WALLET_ACTIVE ) {
+        hasActive = true;
+        break;
+      }
+    }
+    require(hasActive, "Wallet empty");
+
     emit removedWallet(w.hash, w.addrType);
   }
 
@@ -567,17 +567,19 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param userAddress the user address to update
   /// @param claim whether the return amount of reward will be claimed
   /// @return reward amount of user reward updated/claimed
-  function _updateUserRewards(address userAddress, bool claim) internal returns (uint256 reward) {
+  /// @return accStakedAmount accumulated stake amount (multipled by days), used for grading calculation
+  function _updateUserRewards(address userAddress, bool claim) internal returns (uint256 reward, uint256 accStakedAmount) {
     UserStakeInfo storage user = userStakeInfo[userAddress];
     uint256 changeRound = user.changeRound;
     if (changeRound != 0 && changeRound < roundTag) {
       uint256 lastRoundTag = roundTag - 1;
       uint256 lastRoundReward = getRoundRewardPerBTC(lastRoundTag);
       reward = uint256(user.stakedAmount) * (lastRoundReward - getRoundRewardPerBTC(changeRound - 1)) / SatoshiPlusHelper.BTC_DECIMAL;
-
+      accStakedAmount = user.stakedAmount * (lastRoundTag - changeRound + 1);
       if (user.realtimeAmount != user.stakedAmount) {
         if (changeRound < lastRoundTag) {
           reward += (user.realtimeAmount - user.stakedAmount) * (lastRoundReward - getRoundRewardPerBTC(changeRound)) / SatoshiPlusHelper.BTC_DECIMAL;
+          accStakedAmount += (user.realtimeAmount - user.stakedAmount) * (lastRoundTag - changeRound);
         }
         user.stakedAmount = user.realtimeAmount;
       }
@@ -588,12 +590,14 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     // make sure the caller to send the rewards out
     // otherwise the rewards will be gone
     if (claim) {
-      if (rewardMap[userAddress] != 0) {
-        reward += rewardMap[userAddress];
-        rewardMap[userAddress] = 0;
+      if (rewardMap[userAddress].reward != 0) {
+        reward += rewardMap[userAddress].reward;
+        accStakedAmount += rewardMap[userAddress].accStakedAmount;
+        delete rewardMap[userAddress];
       }
     } else {
-      rewardMap[userAddress] += reward;
+      rewardMap[userAddress].reward += reward;
+      rewardMap[userAddress].accStakedAmount += accStakedAmount;
     }
   }
 
