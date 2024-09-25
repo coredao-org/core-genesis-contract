@@ -181,7 +181,6 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param candidate The operator address of validator
   /// @param amount The amount of CORE to undelegate
   function undelegateCoin(address candidate, uint256 amount) public {
-    require(amount >= requiredCoinDeposit, "undelegate amount is too small");
     undelegateCoin(candidate, msg.sender, amount, false);
     Address.sendValue(payable(msg.sender), amount);
     emit undelegatedCoin(candidate, msg.sender, amount);
@@ -198,7 +197,6 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     if (sourceCandidate == targetCandidate) {
       revert SameCandidate(sourceCandidate);
     }
-    require(amount >= requiredCoinDeposit, "transfer amount is too small");
     undelegateCoin(sourceCandidate, msg.sender, amount, true);
     uint256 newDeposit = delegateCoin(targetCandidate, msg.sender, amount, true);
 
@@ -291,7 +289,6 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     if (amount == 0) {
       amount = candidateMap[candidate].cDelegatorMap[delegator].stakedAmount;
     }
-    require(amount >= requiredCoinDeposit, "undelegate amount is too small");
     undelegateCoin(candidate, delegator, amount, false);
     Address.sendValue(payable(delegator), amount);
     emit undelegatedCoin(candidate, delegator, amount);
@@ -368,6 +365,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     uint256 stakedAmount = cd.stakedAmount;
     require(stakedAmount >= amount, "Not enough staked tokens");
     if (amount != stakedAmount) {
+      require(amount >= requiredCoinDeposit, "undelegate amount is too small");
       require(cd.realtimeAmount - amount >= requiredCoinDeposit, "remain amount is too small");
     }
 
