@@ -5,7 +5,7 @@ if [ ! -z "$name" ]; then
 else
   contracts=( "BtcLightClient" "Burn" "CandidateHub" "Foundation" "GovHub" \
     "PledgeAgent" "RelayerHub" "SlashIndicator" "SystemReward" "ValidatorSet" \
-    "BitcoinAgent" "BitcoinLSTStake" "BitcoinStake" "HashPowerAgent" "CoreAgent")
+    "BitcoinAgent" "BitcoinLSTStake" "BitcoinStake" "HashPowerAgent" "CoreAgent" "StakeHub" "BitcoinLSTToken")
 
   for e in ${contracts[@]}
   do

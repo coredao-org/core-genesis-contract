@@ -40,16 +40,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   // value: asset information of the round
   mapping(address => AssetState) public stateMap;
 
-  // key: delegator address
-  // value: system debts, e.g. transmitting fee of a BTC staking transaction
-  mapping(address => Debt) debts;
-
   // other smart contracts granted to interact with StakeHub
   mapping(address => bool) public operators;
-
-  // key: contributor address, e.g. relayer's
-  // value: rewards collected for contributing to the system
-  mapping(address => uint256) public payableNotes;
 
   // surplus of dual staking, unclaimble rewards increase surplus and extra rewards decrease it
   // if the current surplus is not enough to pay the next extra rewards, system reward contract will be called to refill
@@ -64,14 +56,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   struct AssetState {
     uint256 amount;
     uint256 factor;
-  }
-
-  struct Debt {
-    NotePayable[] notes;
-  }
-  struct NotePayable {
-    address contributor;
-    uint256 amount;
   }
 
   /*********************** events **************************/
@@ -210,27 +194,16 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     }
   }
 
-  /// add a system debt on a delegator
-  /// @param delegator the delegator to pay the debt
-  /// @param contributor the contributor to receive the fee
-  /// @param amount amount of CORE
-  function addNotePayable(address delegator, address contributor, uint256 amount) external override {
-    require(operators[msg.sender], 'only debt operators');
-    debts[delegator].notes.push(NotePayable(contributor, amount));
-  }
-
   /// Claim reward for delegator
   /// @return rewards Amounts claimed
-  /// @return debtAmount system debt paid
-  function claimReward() external returns (uint256[] memory rewards, uint256 debtAmount) {
+  function claimReward() external returns (uint256[] memory rewards) {
     address delegator = msg.sender;
-    (rewards, debtAmount) = calculateReward(delegator);
+    rewards = _calculateReward(delegator);
 
     uint256 reward;
     for (uint256 i = 0; i < rewards.length; i++) {
       reward += rewards[i];
     }
-    reward -= debtAmount;
     if (reward != 0) {
       Address.sendValue(payable(delegator), reward);
       emit claimedReward(delegator, reward);
@@ -241,12 +214,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// @param delegator delegator address
   /// @return reward Amounts claimed
   function proxyClaimReward(address delegator) external onlyPledgeAgent returns (uint256 reward) {
-    (uint256[] memory rewards, uint256 debtAmount) = calculateReward(delegator);
+    uint256[] memory rewards = _calculateReward(delegator);
 
     for (uint256 i = 0; i < rewards.length; i++) {
       reward += rewards[i];
     }
-    reward -= debtAmount;
     if (reward != 0) {
       Address.sendValue(payable(PLEDGE_AGENT_ADDR), reward);
     }
@@ -254,11 +226,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   /// Calculate reward for delegator
   /// @param delegator delegator address
-  /// @param rewards rewards on each type of staked assets
-  /// @param debtAmount system debt paid
   /// @return rewards Amounts claimed
-  /// @return debtAmount system debt paid
-  function calculateReward(address delegator) internal returns (uint256[] memory rewards, uint256 debtAmount) {
+  function _calculateReward(address delegator) internal returns (uint256[] memory rewards) {
     uint256 assetSize = assets.length;
     rewards = new uint256[](assetSize);
     int256 floatReward;
@@ -273,27 +242,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       totalFloatReward += floatReward;
     }
 
-    // pay system debts from staking rewards
-    if (totalReward != 0) {
-      Debt storage lb = debts[delegator];
-      uint256 lbamount;
-      for (uint256 i = lb.notes.length; i != 0; --i) {
-        lbamount = lb.notes[i-1].amount;
-        if (lbamount <= totalReward) {
-          payableNotes[lb.notes[i-1].contributor] += lbamount;
-          debtAmount += lbamount;
-          totalReward -= lbamount;
-          lb.notes.pop();
-        } else {
-          payableNotes[lb.notes[i-1].contributor] += totalReward;
-          debtAmount += totalReward;
-          lb.notes[i-1].amount -= totalReward;
-          totalReward = 0;
-          break;
-        }
-      }
-    }
-
     if (totalFloatReward > surplus.toInt256()) {
       // move 10x from system reward as a buffer for the next claim calls
       uint256 claimAmount = totalFloatReward.toUint256() * 10;
@@ -301,18 +249,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       surplus += claimAmount;
     }
     surplus = (surplus.toInt256() - totalFloatReward).toUint256();
-  }
-
-  /// Claim reward for relayer
-  /// @return reward Amount claimed
-  function claimRelayerReward() external returns (uint256 reward) {
-    address relayer = msg.sender;
-    reward = payableNotes[relayer];
-    if (reward != 0) {
-      payableNotes[relayer] = 0;
-      Address.sendValue(payable(relayer), reward);
-      emit claimedRelayerReward(relayer, reward);
-    }
   }
 
   /*********************** Governance ********************************/
@@ -324,14 +260,14 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       revert MismatchParamLength(key);
     }
     uint256 newValue = value.toUint256(0);
-    if (!updateHardcap(key, newValue)) {
+    if (!_updateHardcap(key, newValue)) {
       revert UnsupportedGovParam(key);
     }
   
     emit paramChange(key, value);
   }
 
-  function updateHardcap(string calldata key, uint256 newValue) internal returns(bool) {
+  function _updateHardcap(string calldata key, uint256 newValue) internal returns(bool) {
     uint256 indexplus;
     if (Memory.compareStrings(key, "coreHardcap")) {
       indexplus = 1;

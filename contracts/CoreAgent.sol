@@ -173,7 +173,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       revert InactiveCandidate(candidate);
     }
     require(msg.value >= requiredCoinDeposit, "delegate amount is too small");
-    uint256 realtimeAmount = delegateCoin(candidate, msg.sender, msg.value, false);
+    uint256 realtimeAmount = _delegateCoin(candidate, msg.sender, msg.value, false);
     emit delegatedCoin(candidate, msg.sender, msg.value, realtimeAmount);
   }
 
@@ -181,8 +181,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param candidate The operator address of validator
   /// @param amount The amount of CORE to undelegate
   function undelegateCoin(address candidate, uint256 amount) public {
-    require(amount >= requiredCoinDeposit, "undelegate amount is too small");
-    undelegateCoin(candidate, msg.sender, amount, false);
+    _undelegateCoin(candidate, msg.sender, amount, false);
     Address.sendValue(payable(msg.sender), amount);
     emit undelegatedCoin(candidate, msg.sender, amount);
   }
@@ -198,9 +197,8 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     if (sourceCandidate == targetCandidate) {
       revert SameCandidate(sourceCandidate);
     }
-    require(amount >= requiredCoinDeposit, "transfer amount is too small");
-    undelegateCoin(sourceCandidate, msg.sender, amount, true);
-    uint256 newDeposit = delegateCoin(targetCandidate, msg.sender, amount, true);
+    _undelegateCoin(sourceCandidate, msg.sender, amount, true);
+    uint256 newDeposit = _delegateCoin(targetCandidate, msg.sender, amount, true);
 
     emit transferredCoin(sourceCandidate, targetCandidate, msg.sender, amount, newDeposit);
   }
@@ -220,11 +218,11 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     for (uint256 i = candidateSize; i != 0; --i) {
       candidate = candidates[i - 1];
       CoinDelegator storage cd = candidateMap[candidate].cDelegatorMap[delegator];
-      (reward, accStakedAmount) = collectRewardFromCandidate(candidate, cd);
+      (reward, accStakedAmount) = _collectRewardFromCandidate(candidate, cd);
       rewardSum += reward;
       accStakedAmountSum += accStakedAmount;
       if (cd.realtimeAmount == 0 && cd.transferredAmount == 0) {
-        removeDelegation(delegator, candidate);
+        _removeDelegation(delegator, candidate);
       }
     }
 
@@ -250,15 +248,15 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     CoinDelegator storage cd = a.cDelegatorMap[delegator];
     uint256 changeRound = cd.changeRound;
     if (changeRound == 0) {
-      cd.changeRound = roundTag - 1;
+      cd.changeRound = roundTag;
       delegatorMap[delegator].candidates.push(candidate);
     } else if (changeRound != roundTag) {
-      (uint256 reward, uint256 accStakedAmount) = collectRewardFromCandidate(candidate, cd);
+      (uint256 reward, uint256 accStakedAmount) = _collectRewardFromCandidate(candidate, cd);
       rewardMap[delegator].reward += reward;
       rewardMap[delegator].accStakedAmount += accStakedAmount;
     }
     if (round < roundTag) {
-      (uint256 reward,,uint256 accStakedAmount) = collectReward(candidate, stakedAmount, realtimeAmount, transferredAmount, round);
+      (uint256 reward,,uint256 accStakedAmount) = _collectReward(candidate, stakedAmount, realtimeAmount, transferredAmount, round);
       stakedAmount = realtimeAmount;
       rewardMap[delegator].reward += reward;
       rewardMap[delegator].accStakedAmount += accStakedAmount;
@@ -279,7 +277,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       revert InactiveCandidate(candidate);
     }
     require(msg.value >= requiredCoinDeposit, "delegate amount is too small");
-    uint256 realtimeAmount = delegateCoin(candidate, delegator, msg.value, false);
+    uint256 realtimeAmount = _delegateCoin(candidate, delegator, msg.value, false);
     emit delegatedCoin(candidate, delegator, msg.value, realtimeAmount);
   }
 
@@ -291,8 +289,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     if (amount == 0) {
       amount = candidateMap[candidate].cDelegatorMap[delegator].stakedAmount;
     }
-    require(amount >= requiredCoinDeposit, "undelegate amount is too small");
-    undelegateCoin(candidate, delegator, amount, false);
+    _undelegateCoin(candidate, delegator, amount, false);
     Address.sendValue(payable(delegator), amount);
     emit undelegatedCoin(candidate, delegator, amount);
   }
@@ -312,9 +309,8 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     if (amount == 0) {
       amount = candidateMap[sourceCandidate].cDelegatorMap[delegator].stakedAmount;
     }
-    require(amount >= requiredCoinDeposit, "transfer amount is too small");
-    undelegateCoin(sourceCandidate, delegator, amount, true);
-    uint256 newDeposit = delegateCoin(targetCandidate, delegator, amount, true);
+    _undelegateCoin(sourceCandidate, delegator, amount, true);
+    uint256 newDeposit = _delegateCoin(targetCandidate, delegator, amount, true);
 
     emit transferredCoin(sourceCandidate, targetCandidate, delegator, amount, newDeposit);
   }
@@ -325,7 +321,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param delegator the delegator address
   /// @param amount the amount of CORE 
   /// @param isTransfer is called from transfer workflow
-  function delegateCoin(address candidate, address delegator, uint256 amount, bool isTransfer) internal returns (uint256) {
+  function _delegateCoin(address candidate, address delegator, uint256 amount, bool isTransfer) internal returns (uint256) {
     Candidate storage a = candidateMap[candidate];
     CoinDelegator storage cd = a.cDelegatorMap[delegator];
     uint256 changeRound = cd.changeRound;
@@ -333,7 +329,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       cd.changeRound = roundTag;
       delegatorMap[delegator].candidates.push(candidate);
     } else if (changeRound != roundTag) {
-      (uint256 reward, uint256 accStakedAmount) = collectRewardFromCandidate(candidate, cd);
+      (uint256 reward, uint256 accStakedAmount) = _collectRewardFromCandidate(candidate, cd);
       rewardMap[delegator].reward += reward;
       rewardMap[delegator].accStakedAmount += accStakedAmount;
     }
@@ -351,13 +347,13 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param delegator the delegator address
   /// @param amount the amount of CORE 
   /// @param isTransfer is called from transfer workflow
-  function undelegateCoin(address candidate, address delegator, uint256 amount, bool isTransfer) internal returns (uint256) {
+  function _undelegateCoin(address candidate, address delegator, uint256 amount, bool isTransfer) internal returns (uint256) {
     Candidate storage a = candidateMap[candidate];
     CoinDelegator storage cd = a.cDelegatorMap[delegator];
     uint256 changeRound = cd.changeRound;
     require(changeRound != 0, 'no delegator information found');
     if (changeRound != roundTag) {
-      (uint256 reward, uint256 accStakedAmount) = collectRewardFromCandidate(candidate, cd);
+      (uint256 reward, uint256 accStakedAmount) = _collectRewardFromCandidate(candidate, cd);
       rewardMap[delegator].reward += reward;
       rewardMap[delegator].accStakedAmount += accStakedAmount;
     }
@@ -368,6 +364,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     uint256 stakedAmount = cd.stakedAmount;
     require(stakedAmount >= amount, "Not enough staked tokens");
     if (amount != stakedAmount) {
+      require(amount >= requiredCoinDeposit, "undelegate amount is too small");
       require(cd.realtimeAmount - amount >= requiredCoinDeposit, "remain amount is too small");
     }
 
@@ -378,7 +375,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       delegatorMap[delegator].amount -= amount;
     }
     if (!isTransfer && cd.realtimeAmount == amount && cd.transferredAmount == 0) {
-      removeDelegation(delegator, candidate);
+      _removeDelegation(delegator, candidate);
     } else {
       cd.realtimeAmount -= amount;
       cd.stakedAmount -= amount;
@@ -391,12 +388,12 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param cd the structure stores user CORE stake information
   /// @return reward The amount of CORE collected
   /// @return accStakedAmount accumulated stake amount (multipled by days), used for grading calculation
-  function collectRewardFromCandidate(address candidate, CoinDelegator storage cd) internal returns (uint256 reward, uint256 accStakedAmount) {
+  function _collectRewardFromCandidate(address candidate, CoinDelegator storage cd) internal returns (uint256 reward, uint256 accStakedAmount) {
     uint256 stakedAmount = cd.stakedAmount;
     uint256 realtimeAmount = cd.realtimeAmount;
     uint256 transferredAmount = cd.transferredAmount;
     bool changed;
-    (reward, changed, accStakedAmount) = collectReward(candidate, stakedAmount, realtimeAmount, transferredAmount, cd.changeRound);
+    (reward, changed, accStakedAmount) = _collectReward(candidate, stakedAmount, realtimeAmount, transferredAmount, cd.changeRound);
     if (changed) {
       if (transferredAmount != 0) {
         cd.transferredAmount = 0;
@@ -418,18 +415,18 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @return reward the amount of rewards collected
   /// @return changed whether the changedRound value should be updated
   /// @return accStakedAmount accumulated stake amount (multipled by days), used for grading calculation
-  function collectReward(address candidate, uint256 stakedAmount, uint256 realtimeAmount, uint256 transferredAmount, uint256 changeRound) internal returns (uint256 reward, bool changed, uint256 accStakedAmount) {
+  function _collectReward(address candidate, uint256 stakedAmount, uint256 realtimeAmount, uint256 transferredAmount, uint256 changeRound) internal returns (uint256 reward, bool changed, uint256 accStakedAmount) {
     require(changeRound != 0, "invalid delegator");
     uint256 lastRoundTag = roundTag - 1;
     if (changeRound <= lastRoundTag) {
-      uint256 lastRoundReward = getRoundAccuredReward(candidate, lastRoundTag);
-      uint256 lastChangeRoundReward = getRoundAccuredReward(candidate, changeRound - 1);
+      uint256 lastRoundReward = _getRoundAccuredReward(candidate, lastRoundTag);
+      uint256 lastChangeRoundReward = _getRoundAccuredReward(candidate, changeRound - 1);
       uint256 changeRoundReward;
       reward = stakedAmount * (lastRoundReward - lastChangeRoundReward);
       accStakedAmount = stakedAmount * (lastRoundTag - changeRound + 1);
       
       if (transferredAmount != 0) {
-        changeRoundReward = getRoundAccuredReward(candidate, changeRound);
+        changeRoundReward = _getRoundAccuredReward(candidate, changeRound);
         reward += transferredAmount * (changeRoundReward - lastChangeRoundReward);
         accStakedAmount += transferredAmount;
       }
@@ -437,7 +434,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       if (realtimeAmount != stakedAmount) {
         if (changeRound < lastRoundTag) {
           if (changeRoundReward == 0) {
-            changeRoundReward = getRoundAccuredReward(candidate, changeRound);
+            changeRoundReward = _getRoundAccuredReward(candidate, changeRound);
           }
           reward += (realtimeAmount - stakedAmount) * (lastRoundReward - changeRoundReward);
           accStakedAmount += (realtimeAmount - stakedAmount) * (lastRoundTag - changeRound);
@@ -452,7 +449,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// remove delegate record of a candidate/delegator pair
   /// @param delegator the delegator address
   /// @param candidate the validator candidate address
-  function removeDelegation(address delegator, address candidate) internal {
+  function _removeDelegation(address delegator, address candidate) internal {
     Delegator storage d = delegatorMap[delegator];
     uint256 l = d.candidates.length;
     for (uint256 i = 0; i < l; ++i) {
@@ -471,7 +468,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param candidate validator candidate address
   /// @param round the round to calculate rewards
   /// @return reward the amount of rewards
-  function getRoundAccuredReward(address candidate, uint256 round) internal returns (uint256 reward) {
+  function _getRoundAccuredReward(address candidate, uint256 round) internal returns (uint256 reward) {
     reward = accuredRewardMap[candidate][round];
     if (reward != 0) {
       return reward;
