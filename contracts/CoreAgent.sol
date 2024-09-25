@@ -250,7 +250,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     CoinDelegator storage cd = a.cDelegatorMap[delegator];
     uint256 changeRound = cd.changeRound;
     if (changeRound == 0) {
-      cd.changeRound = roundTag - 1;
+      cd.changeRound = roundTag;
       delegatorMap[delegator].candidates.push(candidate);
     } else if (changeRound != roundTag) {
       (uint256 reward, uint256 accStakedAmount) = collectRewardFromCandidate(candidate, cd);
