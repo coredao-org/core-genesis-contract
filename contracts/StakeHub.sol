@@ -224,7 +224,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// @return debtAmount system debt paid
   function claimReward() external returns (uint256[] memory rewards, uint256 debtAmount) {
     address delegator = msg.sender;
-    (rewards, debtAmount) = calculateReward(delegator);
+    (rewards, debtAmount) = _calculateReward(delegator);
 
     uint256 reward;
     for (uint256 i = 0; i < rewards.length; i++) {
@@ -241,7 +241,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// @param delegator delegator address
   /// @return reward Amounts claimed
   function proxyClaimReward(address delegator) external onlyPledgeAgent returns (uint256 reward) {
-    (uint256[] memory rewards, uint256 debtAmount) = calculateReward(delegator);
+    (uint256[] memory rewards, uint256 debtAmount) = _calculateReward(delegator);
 
     for (uint256 i = 0; i < rewards.length; i++) {
       reward += rewards[i];
@@ -258,7 +258,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// @param debtAmount system debt paid
   /// @return rewards Amounts claimed
   /// @return debtAmount system debt paid
-  function calculateReward(address delegator) internal returns (uint256[] memory rewards, uint256 debtAmount) {
+  function _calculateReward(address delegator) internal returns (uint256[] memory rewards, uint256 debtAmount) {
     uint256 assetSize = assets.length;
     rewards = new uint256[](assetSize);
     int256 floatReward;
@@ -324,14 +324,14 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
       revert MismatchParamLength(key);
     }
     uint256 newValue = value.toUint256(0);
-    if (!updateHardcap(key, newValue)) {
+    if (!_updateHardcap(key, newValue)) {
       revert UnsupportedGovParam(key);
     }
   
     emit paramChange(key, value);
   }
 
-  function updateHardcap(string calldata key, uint256 newValue) internal returns(bool) {
+  function _updateHardcap(string calldata key, uint256 newValue) internal returns(bool) {
     uint256 indexplus;
     if (Memory.compareStrings(key, "coreHardcap")) {
       indexplus = 1;
