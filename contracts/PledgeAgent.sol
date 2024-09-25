@@ -193,7 +193,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// HARDFORK V-1.0.12 Deprecated, the method is kept here for backward compatibility
   function delegateCoin(address agent) external payable override noReentrant{
     _moveCOREData(agent, msg.sender);
-    distributeReward(msg.sender);
+    _distributeReward(msg.sender);
 
     (bool success, ) = CORE_AGENT_ADDR.call {value: msg.value} (abi.encodeWithSignature("proxyDelegate(address,address)", agent, msg.sender));
     require (success, "call CORE_AGENT_ADDR.proxyDelegate() failed");
@@ -212,7 +212,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// HARDFORK V-1.0.12 Deprecated, the method is kept here for backward compatibility
   function undelegateCoin(address agent, uint256 amount) public override noReentrant{
     _moveCOREData(agent, msg.sender);
-    distributeReward(msg.sender);
+    _distributeReward(msg.sender);
 
     (bool success, ) = CORE_AGENT_ADDR.call(abi.encodeWithSignature("proxyUnDelegate(address,address,uint256)", agent, msg.sender, amount));
     require (success, "call CORE_AGENT_ADDR.proxyUnDelegate() failed");
@@ -234,7 +234,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   function transferCoin(address sourceAgent, address targetAgent, uint256 amount) public override noReentrant{
     _moveCOREData(sourceAgent, msg.sender);
     _moveCOREData(targetAgent, msg.sender);
-    distributeReward(msg.sender);
+    _distributeReward(msg.sender);
 
     (bool success, ) = CORE_AGENT_ADDR.call(abi.encodeWithSignature("proxyTransfer(address,address,address,uint256)", sourceAgent, targetAgent, msg.sender, amount));
     require (success, "call CORE_AGENT_ADDR.proxyTransfer() failed");
@@ -258,7 +258,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       rewardMap[msg.sender] += proxyRewardSum;
     }
     
-    distributeReward(msg.sender);
+    _distributeReward(msg.sender);
 
     return (rewardSum + proxyRewardSum, true);
   }
@@ -288,7 +288,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       address delegator = br.delegator;
       require(delegator == msg.sender, "not the delegator of this btc receipt");
 
-      uint256 reward = collectBtcReward(txid);
+      uint256 reward = _collectBtcReward(txid);
       rewardSum += reward;
       if (br.value == 0) {
         emit btcPledgeExpired(txid, delegator);
@@ -297,7 +297,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
     if (rewardSum != 0) {
       rewardMap[msg.sender] += rewardSum;
-      distributeReward(msg.sender);
+      _distributeReward(msg.sender);
     }
     return rewardSum;
   }
@@ -338,7 +338,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     }
 
     // calculate and record rewards
-    uint256 rewardAmount = collectBtcReward(txid);
+    uint256 rewardAmount = _collectBtcReward(txid);
     rewardMap[delegator] += rewardAmount;
 
     // Clean round2expireInfoMap
@@ -434,7 +434,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /*********************** Internal methods ***************************/
   /// send rewards to delegator and clear the record in rewardMap
   /// @param delegator the delegator address
-  function distributeReward(address delegator) internal {
+  function _distributeReward(address delegator) internal {
     uint256 reward = rewardMap[delegator];
     if (reward != 0) {
       rewardMap[delegator] = 0;
@@ -451,7 +451,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     Agent storage a = agentsMap[candidate];
     CoinDelegator storage d = a.cDelegatorMap[delegator];
     if (d.changeRound != 0) {
-      uint256 reward = collectCoinReward(a, d);
+      uint256 reward = _collectCoinReward(a, d);
       if (reward != 0) {
         rewardMap[delegator] += reward;
       }
@@ -475,7 +475,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param r the reward map to collect
   /// @param deposit the amount of stake
   /// @return rewardAmount the amount of reward to claim
-  function collectFromRoundReward(Reward storage r, uint256 deposit) internal returns (uint256 rewardAmount) {
+  function _collectFromRoundReward(Reward storage r, uint256 deposit) internal returns (uint256 rewardAmount) {
     require(r.coin >= deposit, "reward is not enough");
     uint256 curReward;
     if (r.coin == deposit) {
@@ -495,7 +495,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param a the validator candidate
   /// @param d the delegator
   /// @return rewardAmount the amount of reward to claim
-  function collectCoinReward(Agent storage a, CoinDelegator storage d) internal returns (uint256 rewardAmount) {
+  function _collectCoinReward(Agent storage a, CoinDelegator storage d) internal returns (uint256 rewardAmount) {
     uint256 changeRound = d.changeRound;
     uint256 curRound = roundTag;
     if (changeRound < curRound) {
@@ -529,7 +529,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
           transferOutDeposit = 0;
         }
         if (transferOutDeposit != d.transferOutDeposit) {
-          uint256 undelegateReward = collectFromRoundReward(r, d.transferOutDeposit - transferOutDeposit);
+          uint256 undelegateReward = _collectFromRoundReward(r, d.transferOutDeposit - transferOutDeposit);
           if (r.coin == 0) {
             delete a.rewardSet[rewardIndex];
           }
@@ -540,7 +540,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         d.transferOutDeposit = 0;
       }
       if (deposit != 0) {
-        rewardAmount += collectFromRoundReward(r, deposit);
+        rewardAmount += _collectFromRoundReward(r, deposit);
         if (r.coin == 0) {
           delete a.rewardSet[rewardIndex];
         }
@@ -555,7 +555,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   /// calculate reward for a BTC stake transaction
   /// @param txid the BTC transaction id
-  function collectBtcReward(bytes32 txid) internal returns (uint256) {
+  function _collectBtcReward(bytes32 txid) internal returns (uint256) {
     uint256 curRound = roundTag;
     BtcReceipt storage br = btcReceiptMap[txid];
     uint256 reward = 0;
@@ -569,7 +569,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         break;
       }
       uint256 deposit = br.value * stateMap[rRound].btcFactor;
-      reward += collectFromRoundReward(r, deposit);
+      reward += _collectFromRoundReward(r, deposit);
       if (r.coin == 0) {
         delete a.rewardSet[rewardIndex];
       }

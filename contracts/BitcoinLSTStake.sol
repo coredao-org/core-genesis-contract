@@ -172,32 +172,27 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     bool txChecked = ILightClient(LIGHT_CLIENT_ADDR).checkTxProof(txid, blockHeight, btcConfirmBlock, nodes, index);
     require(txChecked, "btc tx isn't confirmed");
     bt.blockHeight = blockHeight;
-    checkWallet(script);
+    _checkWallet(script);
 
     (,bytes29 vinView, bytes29 voutView,) = btcTx.extractTx();
-    bool fromWallet = parseVin(vinView);
+    bool fromWallet = _parseVin(vinView);
     require(!fromWallet, "should not delegate from whitelisted multisig wallets");
     address delegator;
     {
       uint64 btcAmount;
       uint32 outputIndex;
-      uint256 fee;
-      (btcAmount, outputIndex, delegator, fee) = parseVout(voutView, script);
+      (btcAmount, outputIndex, delegator) = _parseVout(voutView, script);
       require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender) || msg.sender == delegator, "only delegator or relayer can submit the BTC transaction");
       bt.amount = btcAmount;
       bt.outputIndex = outputIndex;
       if (delegator != address(0)) {
         require(btcAmount >= utxoFee * 2, "btc amount is too small");
-        if (fee != 0) {
-          fee *= SatoshiPlusHelper.CORE_DECIMAL;
-          IStakeHub(STAKE_HUB_ADDR).addNotePayable(delegator, msg.sender, fee);
-        }
 
         IBitcoinLSTToken(BTCLST_TOKEN_ADDR).mint(delegator, btcAmount);
         _afterMint(delegator, btcAmount);
         realtimeAmount += btcAmount;
       }
-      emit delegated(txid, delegator, btcAmount, fee);
+      emit delegated(txid, delegator, btcAmount, 0);
     }
   }
 
@@ -220,7 +215,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     /// as all UTXOs of those multisig wallet are kept in `btcTxMap`
     (,bytes29 vinView, bytes29 voutView,) = btcTx.extractTx();
     {
-      bool fromWallet = parseVin(vinView);
+      bool fromWallet = _parseVin(vinView);
       require(fromWallet, "input must from stake wallet.");
     }
 
@@ -244,7 +239,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
           delete redeemMap[key];
           if (index1 < redeemRequests.length) {
             redeemRequests[index1 - 1] = redeemRequests[redeemRequests.length - 1];
-            pkscript = buildPkScript(rd.hash, rd.addrType);
+            pkscript = _buildPkScript(rd.hash, rd.addrType);
             key = keccak256(pkscript);
             redeemMap[key] = index1;
           }
@@ -336,7 +331,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param amount redeem amount
   /// @param pkscript pkscript to receive BTC assets
   function redeem(uint64 amount, bytes calldata pkscript) external whenNotPaused nonReentrant {
-    (bytes32 hash, uint32 addrType) = extractPkScriptAddr(pkscript);
+    (bytes32 hash, uint32 addrType) = _extractPkScriptAddr(pkscript);
     require(addrType != WTYPE_UNKNOWN, "invalid pkscript");
 
     UserStakeInfo storage user = userStakeInfo[msg.sender];
@@ -388,9 +383,9 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
     if (Memory.compareStrings(key, "add")) {
-      addWallet(value);
+      _addWallet(value);
     } else if (Memory.compareStrings(key, "remove")) {
-      removeWallet(value);
+      _removeWallet(value);
     } else if (Memory.compareStrings(key, "paused")) {
       if (value.length != 1) {
         revert MismatchParamLength(key);
@@ -414,7 +409,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// Add a new BTC wallet which holds the BTC assets for the LST product
   /// This method can only be called by `updateParam()` through governance vote
   /// @param pkscript public key script of the wallet
-  function addWallet(bytes memory pkscript) internal {
+  function _addWallet(bytes memory pkscript) internal {
     bytes32 walletKey = keccak256(pkscript);
     uint256 index1 = walletMap[walletKey];
     if (index1 > 0) {
@@ -422,7 +417,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
         wallets[index1 - 1].status = WALLET_ACTIVE;
       }
     } else {
-      (bytes32 _hash, uint32 _type) = extractPkScriptAddr(pkscript);
+      (bytes32 _hash, uint32 _type) = _extractPkScriptAddr(pkscript);
       require(_type != WTYPE_UNKNOWN, "Invalid BTC wallet");
       wallets.push(WalletInfo(_hash, _type, WALLET_ACTIVE));
       index1 = wallets.length;
@@ -434,7 +429,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// Remove a BTC wallet
   /// This method can only be called by `updateParam()` through governance vote
   /// @param pkscript public key script of the wallet
-  function removeWallet(bytes memory pkscript) internal {
+  function _removeWallet(bytes memory pkscript) internal {
     bytes32 walletKey = keccak256(pkscript);
     uint256 index1 = walletMap[walletKey];
     require(index1 != 0, "Wallet not found");
@@ -457,7 +452,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
   /// check whether the BTC transaction aims for LST staking
   /// @param pkscript redeem script of the locked up output
-  function checkWallet(bytes memory pkscript) internal view {
+  function _checkWallet(bytes memory pkscript) internal view {
     bytes32 walletKey = keccak256(pkscript);
     uint256 index1 = walletMap[walletKey];
     require(index1 != 0, "Wallet not found");
@@ -466,7 +461,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
   /// extract address information from pkscript
   /// @param pkScript pkscript used in txout
-  function extractPkScriptAddr(bytes memory pkScript) internal pure returns (bytes32 whash, uint32 addrType) {
+  function _extractPkScriptAddr(bytes memory pkScript) internal pure returns (bytes32 whash, uint32 addrType) {
     uint256 len = pkScript.length;
     if (len == 25) {
       // pay-to-pubkey-hash
@@ -505,7 +500,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param whash the hash used to build the script
   /// @param addrType the BTC address type used to build the script
   /// @return pkscript the script
-  function buildPkScript(bytes32 whash, uint32 addrType) internal pure returns (bytes memory pkscript) {
+  function _buildPkScript(bytes32 whash, uint32 addrType) internal pure returns (bytes memory pkscript) {
     if (addrType == WTYPE_P2WSH || addrType == WTYPE_P2TAPROOT) {
       pkscript = new bytes(34);
       pkscript[1] = OP_DATA_32;
@@ -550,7 +545,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
   /// get accrued reward for each unit of BTC of a given round
   /// @param round the round to retrieve reward value
-  function getRoundRewardPerBTC(uint256 round) internal view returns (uint256 reward) {
+  function _getRoundRewardPerBTC(uint256 round) internal view returns (uint256 reward) {
     if (round <= initRound) {
       return 0;
     }
@@ -573,12 +568,12 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     uint256 changeRound = user.changeRound;
     if (changeRound != 0 && changeRound < roundTag) {
       uint256 lastRoundTag = roundTag - 1;
-      uint256 lastRoundReward = getRoundRewardPerBTC(lastRoundTag);
-      reward = uint256(user.stakedAmount) * (lastRoundReward - getRoundRewardPerBTC(changeRound - 1)) / SatoshiPlusHelper.BTC_DECIMAL;
+      uint256 lastRoundReward = _getRoundRewardPerBTC(lastRoundTag);
+      reward = uint256(user.stakedAmount) * (lastRoundReward - _getRoundRewardPerBTC(changeRound - 1)) / SatoshiPlusHelper.BTC_DECIMAL;
       accStakedAmount = user.stakedAmount * (lastRoundTag - changeRound + 1);
       if (user.realtimeAmount != user.stakedAmount) {
         if (changeRound < lastRoundTag) {
-          reward += (user.realtimeAmount - user.stakedAmount) * (lastRoundReward - getRoundRewardPerBTC(changeRound)) / SatoshiPlusHelper.BTC_DECIMAL;
+          reward += (user.realtimeAmount - user.stakedAmount) * (lastRoundReward - _getRoundRewardPerBTC(changeRound)) / SatoshiPlusHelper.BTC_DECIMAL;
           accStakedAmount += (user.realtimeAmount - user.stakedAmount) * (lastRoundTag - changeRound);
         }
         user.stakedAmount = user.realtimeAmount;
@@ -626,9 +621,9 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   }
 
   /// Parses the target input
-  ///
+  /// @param _vinView the vin of Bitcoin transaction
   /// @return fromWallet whether the tx is from wallet.
-  function parseVin(bytes29 _vinView) internal view returns (bool fromWallet) {
+  function _parseVin(bytes29 _vinView) internal view returns (bool fromWallet) {
     _vinView.assertType(uint40(BitcoinHelper.BTCTypes.Vin));
     uint32 _numberOfInputs = uint32(_vinView.indexCompactInt(0));
     bytes32 _outpointHash;
@@ -645,15 +640,14 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// Parses the target output and the op_return of a transaction
   /// @dev  Finds the BTC amount that payload size is less than 80 bytes
   /// @param _voutView    The vout of a Bitcoin transaction
-  /// @param _lockingScript redeem script of the locked up output
+  /// @param _lockingScript Redeem script of the locked up output
   /// @return btcAmount   Amount of BTC to stake
   /// @return outputIndex The output index of target output.
-  /// @return delegator   The one who delegate the Bitcoin
-  /// @return fee         The value pay for relayer.
-  function parseVout(
+  /// @return delegator   The one who delegate the Bitcoin.
+  function _parseVout(
       bytes29 _voutView,
       bytes memory _lockingScript
-  ) internal view returns (uint64 btcAmount, uint32 outputIndex, address delegator, uint256 fee) {
+  ) internal view returns (uint64 btcAmount, uint32 outputIndex, address delegator) {
     _voutView.assertType(uint40(BitcoinHelper.BTCTypes.Vout));
     bytes29 _outputView;
     bytes29 _scriptPubkeyView;
@@ -677,7 +671,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
           outputIndex = uint32(index);
         }
       } else {
-        (delegator, fee) = parsePayloadAndCheckProtocol(_arbitraryData);
+        delegator = _parsePayloadAndCheckProtocol(_arbitraryData);
       }
     }
     require(btcAmount != 0, "staked value is zero");
@@ -685,13 +679,12 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
   /// parse the payload and do sanity check for SAT+ bytes
   /// @param payload the BTC transaction payload
-  function parsePayloadAndCheckProtocol(bytes29 payload) internal pure returns (address delegator, uint256 fee) {
+  function _parsePayloadAndCheckProtocol(bytes29 payload) internal pure returns (address delegator) {
     require(payload.len() >= 28, "payload length is too small");
     require(payload.indexUint(0, 4) == SatoshiPlusHelper.BTC_STAKE_MAGIC, "wrong magic");
     require(payload.indexUint(5, 2) == SatoshiPlusHelper.CHAINID, "wrong chain id");
     uint32 version = uint32(payload.indexUint(4, 1));
     require(version == SatoshiPlusHelper.BTCLST_STAKE_VERSION, "unsupported sat+ version in btc staking");
     delegator = payload.indexAddress(7);
-    fee = payload.indexUint(27, 1);
   }
 }
