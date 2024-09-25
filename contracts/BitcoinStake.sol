@@ -69,7 +69,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   LockLengthGrade[] public grades;
 
   // whether the time grading is enabled
-  uint256 public gradeActive;
+  bool public gradeActive;
 
   struct BtcTx {
     uint64 amount;
@@ -462,14 +462,14 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       }
       require(grades[0].lockDuration == 0, "lowest lockDuration must be zero");
     } else if (Memory.compareStrings(key, "gradeActive")) {
-      if (value.length != 32) {
+      if (value.length != 1) {
         revert MismatchParamLength(key);
       }
-      uint256 newActive = value.toUint256(0);
-      if (newActive > 1) {
-        revert OutOfBounds(key, newActive, 0, 1);
+      uint8 newGradeActive = value.toUint8(0);
+      if (newGradeActive > 1) {
+        revert OutOfBounds(key, newGradeActive, 0, 1);
       }
-      gradeActive = newActive;
+      gradeActive = newGradeActive == 1;
     } else {
       revert UnsupportedGovParam(key);
     }
@@ -636,7 +636,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
       // apply time grading to BTC rewards
       uint256 rewardUnclaimed = 0;
-      if (gradeActive == 1 && grades.length != 0) {
+      if (gradeActive && grades.length != 0) {
         uint64 lockDuration = bt.lockTime - bt.blockTimestamp;
         uint256 p = grades[0].percentage;
         for (uint256 j = grades.length - 1; j != 0; j--) {
