@@ -92,6 +92,9 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   // a list of lst redeem/burn request whose BTC payout transaction are in pending status
   Redeem[] public redeemRequests;
 
+  // limit of burn btc amount
+  uint256 public burnBTCLimit;
+
   // key: keccak256 of pkscript.
   // value: index+1 of redeemRequests.
   mapping(bytes32 => uint256) public redeemMap;
@@ -149,6 +152,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     roundTag = initRound;
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
     alreadyInit = true;
+    burnBTCLimit = 10 * SatoshiPlusHelper.BTC_DECIMAL;
   }
 
   /*********************** Interface implementations ***************************/
@@ -345,15 +349,20 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     uint64 burnAmount = amount;
     amount -= utxoFee;
 
+    uint64 totalAmount = 0;
     bytes32 key = keccak256(pkscript);
     uint256 index1 = redeemMap[key];
     if (index1 == 0) {
       redeemRequests.push(Redeem(hash, addrType, amount));
       redeemMap[key] = redeemRequests.length;
+      totalAmount = amount;
     } else {
       redeemRequests[index1 - 1].amount += amount;
+      totalAmount = redeemRequests[index1 - 1].amount;
     }
 
+    require(totalAmount <= burnBTCLimit, "The cumulative burn amount has reached the upper limit");
+    
     IBitcoinLSTToken(BTCLST_TOKEN_ADDR).burn(msg.sender, uint256(burnAmount));
     emit redeemed(msg.sender, amount, utxoFee, pkscript);
 
@@ -399,6 +408,12 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       } else {
         _unpause();
       }
+    } else if (Memory.compareStrings(key, "burnBTCLimit")) {
+      if (value.length != 32) {
+        revert MismatchParamLength(key);
+      }
+      uint256 newBurnBTCLimit = value.toUint256(0);
+      burnBTCLimit = newBurnBTCLimit;
     } else {
       revert UnsupportedGovParam(key);
     }
