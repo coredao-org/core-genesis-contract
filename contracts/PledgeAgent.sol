@@ -214,8 +214,10 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     _moveCOREData(agent, msg.sender);
     _distributeReward(msg.sender);
 
-    (bool success, ) = CORE_AGENT_ADDR.call(abi.encodeWithSignature("proxyUnDelegate(address,address,uint256)", agent, msg.sender, amount));
+    (bool success, bytes memory data) = CORE_AGENT_ADDR.call(abi.encodeWithSignature("proxyUnDelegate(address,address,uint256)", agent, msg.sender, amount));
     require (success, "call CORE_AGENT_ADDR.proxyUnDelegate() failed");
+    uint256 undelegateAmount =  abi.decode(data, (uint256));
+    Address.sendValue(payable(msg.sender), undelegateAmount);
   }
 
   /// Transfer coin stake to a new validator
@@ -397,7 +399,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       if (!agent.moved && (agent.totalDeposit != 0 || agent.coin != 0 || agent.totalBtc != 0 || agent.btc != 0)) {
         amounts[j] = agent.coin;
         realAmounts[j] = agent.totalDeposit;
-        agent.coin = 0;
         targetCandidates[j] = candidates[i];
         j++;
       }
@@ -413,7 +414,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
         amounts[j] = agent.btc;
         realAmounts[j] = agent.totalBtc;
         agent.moved = true;
-        agent.btc = 0;
         j++;
       }
     }
