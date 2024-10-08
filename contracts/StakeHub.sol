@@ -71,7 +71,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   function init() external onlyNotInit {
     // initialize list of supported assets
-    // TODO hardcaps should be set to proper values before 1.0.12 launch
     assets.push(Asset("CORE", CORE_AGENT_ADDR, 6000));
     assets.push(Asset("HASHPOWER", HASH_AGENT_ADDR, 2000));
     assets.push(Asset("BTC", BTC_AGENT_ADDR, 4000));
