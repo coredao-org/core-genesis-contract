@@ -299,7 +299,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     reward = rewardMap[delegator].reward;
     rewardUnclaimed = rewardMap[delegator].unclaimedReward;
     accStakedAmount = rewardMap[delegator].accStakedAmount;
-    if (reward != 0) {
+    if (reward != 0 || accStakedAmount != 0) {
       delete rewardMap[delegator];
     }
   }
