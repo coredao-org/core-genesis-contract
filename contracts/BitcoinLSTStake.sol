@@ -414,6 +414,15 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       }
       uint256 newBurnBTCLimit = value.toUint256(0);
       burnBTCLimit = newBurnBTCLimit;
+    } else if (Memory.compareStrings(key, "utxoFee")) {
+      if (value.length != 8) {
+        revert MismatchParamLength(key);
+      }
+      uint64 newUtxoFee = value.toUint64(0);
+      if (newUtxoFee < 1e3) {
+        revert OutOfBounds(key, newUtxoFee, 1e3, type(uint64).max);
+      }
+      utxoFee = newUtxoFee;
     } else {
       revert UnsupportedGovParam(key);
     }
