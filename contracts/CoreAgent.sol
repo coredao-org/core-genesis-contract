@@ -363,10 +363,6 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       rewardMap[delegator].accStakedAmount += accStakedAmount;
     }
 
-    // design updates in 1.0.12 vs 1.0.3
-    // to simplify the reward calculation for user transfers
-    // a restriction is made that no more CORE tokens than the turnround
-    // snapshot value can be transferred to other validators
     uint256 realtimeAmount = cd.realtimeAmount;
     require(realtimeAmount >= amount, "Not enough staked tokens");
     if (amount != realtimeAmount) {
