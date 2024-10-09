@@ -1,4 +1,5 @@
 pragma solidity 0.8.4;
+
 import "../ValidatorSet.sol";
 import "./interface/IPledgeAgentMock.sol";
 
@@ -6,7 +7,7 @@ contract ValidatorSetMock is ValidatorSet {
     function developmentInit() external {
         blockReward = blockReward / 1e14;
 
-        for (uint i=0; i<currentValidatorSet.length; i++) {
+        for (uint i = 0; i < currentValidatorSet.length; i++) {
             delete currentValidatorSetMap[currentValidatorSet[i].consensusAddress];
         }
         delete currentValidatorSet;
@@ -16,83 +17,86 @@ contract ValidatorSetMock is ValidatorSet {
         require(valid, "failed to parse init validatorSet");
         uint256 validatorSize = validatorSet.length;
         for (uint256 i = 0; i < validatorSize; i++) {
-          currentValidatorSet.push(validatorSet[i]);
-          currentValidatorSetMap[validatorSet[i].consensusAddress] = i + 1;
+            currentValidatorSet.push(validatorSet[i]);
+            currentValidatorSetMap[validatorSet[i].consensusAddress] = i + 1;
         }
     }
+
     function updateBlockReward(uint256 _blockReward) external {
         blockReward = _blockReward;
     }
+
     function updateSubsidyReduceInterval(uint256 _internal) external {
         SUBSIDY_REDUCE_INTERVAL = _internal;
     }
-    function addRoundRewardMock(address[] memory agentList, uint256[] memory rewardList,uint roundTag)
+
+    function addRoundRewardMock(address[] memory agentList, uint256[] memory rewardList, uint roundTag)
     external payable {
         uint256 rewardSum = 0;
         for (uint256 i = 0; i < rewardList.length; i++) {
-        	rewardSum += rewardList[i];
+            rewardSum += rewardList[i];
         }
-        IStakeHub(STAKE_HUB_ADDR).addRoundReward{ value: rewardSum }(agentList, rewardList,roundTag);
+        IStakeHub(STAKE_HUB_ADDR).addRoundReward{value: rewardSum}(agentList, rewardList, roundTag);
     }
 
     function jailValidator(address operateAddress, uint256 round, uint256 fine) external {
         ICandidateHub(CANDIDATE_HUB_ADDR).jailValidator(operateAddress, round, fine);
     }
 
-    function getValidatorByConsensus(address consensus) external view returns(Validator memory) {
+    function getValidatorByConsensus(address consensus) external view returns (Validator memory) {
         uint index = currentValidatorSetMap[consensus];
         require(index > 0, "no match validator");
-        return currentValidatorSet[index-1];
+        return currentValidatorSet[index - 1];
     }
 
     function setValidatorSetMap(address validator) external {
         currentValidatorSetMap[validator] = 1;
     }
     /// Distribute rewards to validators (and delegators through PledgeAgent)
-  /// @dev this method is called by the CandidateHub contract at the beginning of turn round
-  /// @dev this is where we deal with reward distribution logics
-  function distributeRewardOld() external  onlyCandidate returns (address[] memory operateAddressList) {
-    address payable feeAddress;
-    uint256 validatorReward;
+    /// @dev this method is called by the CandidateHub contract at the beginning of turn round
+    /// @dev this is where we deal with reward distribution logics
+    function distributeRewardOld() external onlyCandidate returns (address[] memory operateAddressList) {
+        address payable feeAddress;
+        uint256 validatorReward;
 
-    uint256 incentiveSum = 0;
-    uint256 validatorSize = currentValidatorSet.length;
-    for (uint256 i = 0; i < validatorSize; i++) {
-      Validator storage v = currentValidatorSet[i];
-      uint256 incentiveValue = (v.income * blockRewardIncentivePercent) / 100;
-      incentiveSum += incentiveValue;
-      v.income -= incentiveValue;
-    }
-    ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: incentiveSum }();
+        uint256 incentiveSum = 0;
+        uint256 validatorSize = currentValidatorSet.length;
+        for (uint256 i = 0; i < validatorSize; i++) {
+            Validator storage v = currentValidatorSet[i];
+            uint256 incentiveValue = (v.income * blockRewardIncentivePercent) / 100;
+            incentiveSum += incentiveValue;
+            v.income -= incentiveValue;
+        }
+        ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{value: incentiveSum}();
 
-    operateAddressList = new address[](validatorSize);
-    uint256[] memory rewardList = new uint256[](validatorSize);
-    uint256 rewardSum = 0;
-    uint256 tempIncome;
-    for (uint256 i = 0; i < validatorSize; i++) {
-      Validator storage v = currentValidatorSet[i];
-      operateAddressList[i] = v.operateAddress;
-      tempIncome = v.income;
-      if (tempIncome != 0) {
-        feeAddress = v.feeAddress;
-        validatorReward = (tempIncome * v.commissionThousandths) / 1000;
-        if (tempIncome > validatorReward) {
-          rewardList[i] = tempIncome - validatorReward;
-          rewardSum += rewardList[i];
+        operateAddressList = new address[](validatorSize);
+        uint256[] memory rewardList = new uint256[](validatorSize);
+        uint256 rewardSum = 0;
+        uint256 tempIncome;
+        for (uint256 i = 0; i < validatorSize; i++) {
+            Validator storage v = currentValidatorSet[i];
+            operateAddressList[i] = v.operateAddress;
+            tempIncome = v.income;
+            if (tempIncome != 0) {
+                feeAddress = v.feeAddress;
+                validatorReward = (tempIncome * v.commissionThousandths) / 1000;
+                if (tempIncome > validatorReward) {
+                    rewardList[i] = tempIncome - validatorReward;
+                    rewardSum += rewardList[i];
+                }
+
+                v.income = 0;
+                bool success = feeAddress.send(validatorReward);
+                if (success) {
+                    emit directTransfer(v.operateAddress, feeAddress, validatorReward, tempIncome);
+                } else {
+                    emit directTransferFail(v.operateAddress, feeAddress, validatorReward, tempIncome);
+                }
+            }
         }
 
-        v.income = 0;
-        bool success = feeAddress.send(validatorReward);
-        if (success) {
-          emit directTransfer(v.operateAddress, feeAddress, validatorReward, tempIncome);
-        } else {
-          emit directTransferFail(v.operateAddress, feeAddress, validatorReward, tempIncome);
-        }
-      }
+        IPledgeAgentMock(PLEDGE_AGENT_ADDR).addRoundRewardOld{value: rewardSum}(operateAddressList, rewardList);
+        totalInCome = 0;
+        return operateAddressList;
     }
-
-    IPledgeAgentMock(PLEDGE_AGENT_ADDR).addRoundRewardOld{ value: rewardSum }(operateAddressList, rewardList);
-    totalInCome = 0;
-    return operateAddressList;
-  } 
 }

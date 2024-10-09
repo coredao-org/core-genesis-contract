@@ -51,7 +51,7 @@ def set_up(min_init_delegate_value, core_agent, candidate_hub, btc_light_client,
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set):
-    accounts[-10].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture()

@@ -27,7 +27,7 @@ BTCLST_REDEEM_SCRIPT = "0xa914047b9ba09367c1b213b5ba2184fba3fababcdc0287"
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set):
-    accounts[-12].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -2734,7 +2734,7 @@ def __old_turn_round(miners: list = None, tx_fee=100, round_count=1):
     tx = None
     for _ in range(round_count):
         for miner in miners:
-            ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[-10]})
+            ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[99]})
         tx = CandidateHubMock[0].turnRoundOld()
         chain.sleep(1)
     return tx

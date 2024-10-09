@@ -124,7 +124,7 @@ class StateMachine:
         self.btc_lst_value = 300
         self.power_value = 20
         self.candidate_margin = self.candidate_hub.requiredMargin()
-        accounts[-2].transfer(self.validator_set.address, Web3.to_wei(100000, 'ether'))
+        accounts[99].transfer(self.validator_set.address, Web3.to_wei(100000, 'ether'))
 
     def setup(self):
         global N
@@ -138,7 +138,7 @@ class StateMachine:
         self.candidate_hub.setRoundTag(7)
         self.operators = []
         self.candidate_hub.setValidatorCount(21)
-        for operator in accounts[-30:-1]:
+        for operator in accounts[60:90]:
             register_candidate(consensus=operator, fee_address=operator, operator=operator,
                                margin=self.candidate_margin)
             self.operators.append(operator)

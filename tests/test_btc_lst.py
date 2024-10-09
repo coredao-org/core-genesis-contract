@@ -21,8 +21,8 @@ stake_manager = StakeManager()
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set, gov_hub):
-    accounts[-10].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
-    accounts[-10].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -268,6 +268,25 @@ def test_op_return_length_error_causes_failure(btc_lst_stake, lst_token):
         f'11eec300000000001976a914e1c5ba4d1fef0a3c7806603de565929684f9c2b188ac00000000')
     with brownie.reverts("payload length is too small"):
         btc_lst_stake.delegate(btc_tx, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
+
+
+def test_btc_lst_opreturn_too_long(btc_lst_stake, lst_token):
+    lock_script = '0x0014cdf3d02dd323c14bea0bed94962496c80c093344'
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    btc_lst_stake.updateParam('add', lock_script)
+    op_length0 = hex(33).replace('0x', '')
+    op_length1 = hex(31).replace('0x', '')
+    btc_tx = (
+        '01000000017943db896bfd8554e30717213a4de3fb8ac88669915eb08ccdb118faed8cf227020000006a47304402200255151b40013b656c752dd85ab6ea27487e8f5f658cb44b6db231609c3b416c02202a4e3682b64a2d0acae87a526968a7330d6e05f71e5190faae4efbc83a86da2701210270e4215fbe540cab09ac91c9586eba4fc797537859489f4a23d3e22356f1732'
+        'fffffffff03d00700'
+        '0000000000160014cdf3d02dd323c14bea0bed94962496c80c093344'
+        '0000000000000000'
+        f'{op_length0}6a{op_length1}5341542b0204589fb29aac15b9a4b7f17c3385939b007540f4d79101'
+        f'890001'
+        '8bd9c300000000001976a914e1c5ba4d1fef0a3c7806603de565929684f9c2b188ac00000000')
+
+    tx = btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[0]})
+    assert 'delegated' in tx.events
 
 
 def test_stake_failed_on_wrong_magic(btc_lst_stake, lst_token, set_candidate):
