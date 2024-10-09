@@ -15,8 +15,8 @@ TX_FEE = int(1e4)
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set, gov_hub):
-    accounts[-10].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
-    accounts[-10].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -141,6 +141,18 @@ def test_get_power_stake_amounts_success(hash_power_agent, set_candidate):
     assert power_amounts[0] == sum_stake_amounts
     assert power_amounts[1] == sum(sum_stake_amounts)
 
+
+@pytest.mark.parametrize("round_count", [0, 1, 2, 3])
+def test_power_valid_for_one_round(btc_stake, set_candidate, hash_power_agent, btc_lst_stake, round_count):
+    power_value = 1
+    operators, consensuses = set_candidate
+    delegate_power_success(operators[0], accounts[0], power_value)
+    turn_round()
+    turn_round(consensuses)
+    turn_round(consensuses, round_count=round_count)
+    update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
+    reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[0], 0).return_value
+    assert acc_staked_amount == power_value
 
 def test_power_claim_reward_success(hash_power_agent):
     validators = accounts[:3]

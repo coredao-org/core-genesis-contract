@@ -22,8 +22,8 @@ btc_script = get_btc_script()
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set, gov_hub):
-    accounts[-10].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
-    accounts[-10].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -532,6 +532,81 @@ def test_btc_delegate_no_amount_limit(btc_stake, set_candidate, delegate_btc_val
     assert tracker.delta() == FEE
 
 
+def test_undelegate_success(btc_stake, set_candidate):
+    operators, consensuses = set_candidate
+    block_height = 200
+    index = 3000
+    lock_script, btc_tx = __create_btc_stake_scrip_and_btc_tx(operators[0], accounts[0], BTC_VALUE)
+    btc_stake.delegate(btc_tx, block_height, [], index, lock_script)
+    turn_round(consensuses, round_count=2)
+    script, pay_address, _ = random_btc_lock_script()
+    btc_tx_info = {}
+    inputs = [build_input(get_transaction_txid(btc_tx))]
+    outputs = [build_output(BTC_VALUE // 2, pay_address)]
+    generate_btc_transaction_info(btc_tx_info, inputs, outputs)
+    btc_tx1 = build_btc_transaction(btc_tx_info)
+    tx = btc_stake.undelegate(btc_tx1, block_height, [], index)
+    expect_event(tx, 'undelegated', {
+        'outpointHash': get_transaction_txid(btc_tx),
+        'outpointIndex': 0,
+        'usedTxid': get_transaction_txid(btc_tx1)
+    })
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == TOTAL_REWARD - FEE
+    turn_round(consensuses)
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == TOTAL_REWARD - FEE
+
+
+@pytest.mark.parametrize("round_count", [0, 1, 2, 3])
+def test_btc_undelegate_no_reward_impact(btc_stake, set_candidate, round_count):
+    operators, consensuses = set_candidate
+    block_height = 200
+    index = 3000
+    lock_script, btc_tx = __create_btc_stake_scrip_and_btc_tx(operators[0], accounts[0], BTC_VALUE)
+    btc_stake.delegate(btc_tx, block_height, [], index, lock_script)
+    turn_round(consensuses)
+    script, pay_address, _ = random_btc_lock_script()
+    btc_tx_info = {}
+    inputs = [build_input(get_transaction_txid(btc_tx))]
+    outputs = [build_output(BTC_VALUE // 2, pay_address)]
+    generate_btc_transaction_info(btc_tx_info, inputs, outputs)
+    btc_tx1 = build_btc_transaction(btc_tx_info)
+    tx = btc_stake.undelegate(btc_tx1, block_height, [], index)
+    expect_event(tx, 'undelegated', {
+        'outpointHash': get_transaction_txid(btc_tx),
+        'outpointIndex': 0,
+        'usedTxid': get_transaction_txid(btc_tx1)
+    })
+    turn_round(consensuses, round_count=round_count)
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    actual_reward = TOTAL_REWARD * round_count
+    assert tracker.delta() == actual_reward
+
+
+def test_no_btc_tx_undelegated(btc_stake, set_candidate):
+    operators, consensuses = set_candidate
+    block_height = 200
+    index = 3000
+    lock_script, btc_tx = __create_btc_stake_scrip_and_btc_tx(operators[0], accounts[0], BTC_VALUE)
+    btc_stake.delegate(btc_tx, block_height, [], index, lock_script)
+    turn_round(consensuses)
+    script, pay_address, _ = random_btc_lock_script()
+    btc_tx_info = {}
+    inputs = [build_input(get_transaction_txid(btc_tx), 1)]
+    outputs = [build_output(BTC_VALUE // 2, pay_address)]
+    generate_btc_transaction_info(btc_tx_info, inputs, outputs)
+    btc_tx1 = build_btc_transaction(btc_tx_info)
+    with brownie.reverts(f"no btc tx undelegated."):
+        btc_stake.undelegate(btc_tx1, block_height, [], index)
+    turn_round(consensuses)
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == TOTAL_REWARD
+
+
 def test_btc_stake_distribute_reward_success(btc_stake, candidate_hub):
     validators = accounts[:3]
     amounts = [1000, 2000, 3000]
@@ -543,7 +618,7 @@ def test_btc_stake_distribute_reward_success(btc_stake, candidate_hub):
     btc_stake.distributeReward(validators, amounts)
     for index, v in enumerate(validators):
         reward = amounts[index] * Utils.BTC_DECIMAL // staked_amounts[index]
-        __check_accured_reward_per_btc(v, round_tag, reward)
+        __check_accrued_reward_per_btc(v, round_tag, reward)
 
 
 def test_distribute_reward_with_new_validator(btc_stake, candidate_hub):
@@ -559,7 +634,7 @@ def test_distribute_reward_with_new_validator(btc_stake, candidate_hub):
     btc_stake.distributeReward(validators, amounts)
     for index, v in enumerate(validators):
         reward = amounts[index] * Utils.BTC_DECIMAL // staked_amounts[index]
-        __check_accured_reward_per_btc(v, round_tag, reward)
+        __check_accrued_reward_per_btc(v, round_tag, reward)
     assert __get_continuous_reward_end_rounds(accounts[2])[0] == round_tag
 
 
@@ -572,17 +647,17 @@ def test_distribute_reward_with_existing_history(btc_stake, candidate_hub):
     history_reward1 = 120000
     update_system_contract_address(btc_stake, btc_agent=accounts[0])
     btc_stake.setCandidateMap(accounts[0], staked_amounts[0], staked_amounts[0], [round_tag - 6, round_tag - 3])
-    btc_stake.setAccuredRewardPerBTCMap(accounts[0], round_tag - 6, history_reward0)
-    btc_stake.setAccuredRewardPerBTCMap(accounts[0], round_tag - 3, history_reward1)
+    btc_stake.setAccruedRewardPerBTCMap(accounts[0], round_tag - 6, history_reward0)
+    btc_stake.setAccruedRewardPerBTCMap(accounts[0], round_tag - 3, history_reward1)
     btc_stake.setCandidateMap(accounts[1], staked_amounts[1], staked_amounts[1], [round_tag - 1, ])
     btc_stake.setCandidateMap(accounts[2], staked_amounts[2], staked_amounts[2], [])
     btc_stake.distributeReward(validators, amounts)
     account_reward0 = history_reward1 + amounts[0] * Utils.BTC_DECIMAL // staked_amounts[0]
-    __check_accured_reward_per_btc(accounts[0], round_tag, account_reward0)
+    __check_accrued_reward_per_btc(accounts[0], round_tag, account_reward0)
     for index, v in enumerate(validators[1:]):
         index = index + 1
         reward = amounts[index] * Utils.BTC_DECIMAL // staked_amounts[index]
-        __check_accured_reward_per_btc(v, round_tag, reward)
+        __check_accrued_reward_per_btc(v, round_tag, reward)
     assert __get_continuous_reward_end_rounds(accounts[2])[0] == round_tag
 
 
@@ -594,7 +669,7 @@ def test_distribute_reward_with_zero_amount(btc_stake, candidate_hub):
     btc_stake.distributeReward(validators, rewards)
     reward = 0
     for index, v in enumerate(validators[1:]):
-        __check_accured_reward_per_btc(v, round_tag, reward)
+        __check_accrued_reward_per_btc(v, round_tag, reward)
 
 
 def test_get_btc_stake_amounts_success(btc_stake, set_candidate):
@@ -1297,13 +1372,13 @@ def __get_delegator_btc_map(delegator):
     return data
 
 
-def __get_accured_reward_per_btc_map(validate, round_tag):
-    data = BTC_STAKE.accuredRewardPerBTCMap(validate, round_tag)
+def __get_accrued_reward_per_btc_map(validate, round_tag):
+    data = BTC_STAKE.accruedRewardPerBTCMap(validate, round_tag)
     return data
 
 
-def __check_accured_reward_per_btc(validate, round_tag, result: int):
-    reward = __get_accured_reward_per_btc_map(validate, round_tag)
+def __check_accrued_reward_per_btc(validate, round_tag, result: int):
+    reward = __get_accrued_reward_per_btc_map(validate, round_tag)
     assert reward == result
 
 

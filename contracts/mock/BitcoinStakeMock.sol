@@ -80,7 +80,7 @@ contract BitcoinStakeMock is BitcoinStake {
         candidateMap[validator] = Candidate(stakedAmount, realtimeAmount, value);
     }
 
-    function setaccruedRewardPerBTCMap(address validator, uint256 round, uint256 value) external {
+    function setAccruedRewardPerBTCMap(address validator, uint256 round, uint256 value) external {
         accruedRewardPerBTCMap[validator][round] = value;
     }
 

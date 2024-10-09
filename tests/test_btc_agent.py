@@ -7,7 +7,7 @@ from .constant import Utils
 from .delegate import delegate_btc_lst_success, delegate_btc_success, set_block_time_stamp, StakeManager, \
     RoundRewardManager
 from .utils import expect_event, padding_left, update_system_contract_address
-from .common import turn_round, get_current_round, register_candidate
+from .common import turn_round, get_current_round, register_candidate, set_round_tag
 
 TOTAL_REWARD = None
 TX_FEE = 100
@@ -43,9 +43,9 @@ def set_up(btc_stake, stake_hub, btc_agent, core_agent, btc_lst_stake, hash_powe
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set, gov_hub, system_reward):
-    accounts[-10].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
-    accounts[-10].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
-    accounts[-10].transfer(system_reward.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(system_reward.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture()
@@ -80,6 +80,13 @@ def test_initialize_from_pledge_agent_success(btc_agent):
         assert btc_agent.candidateMap(candidate)[1] == amounts[index]
 
 
+def test_only_pledge_agent_can_call(btc_agent):
+    candidates = accounts[:3]
+    amounts = [100, 200, 300]
+    with brownie.reverts("the sender must be pledge agent contract"):
+        btc_agent._initializeFromPledgeAgent(candidates, amounts)
+
+
 def test_distribute_reward_success(btc_agent, btc_stake, btc_lst_stake):
     history_reward = 200
     turn_round()
@@ -88,12 +95,16 @@ def test_distribute_reward_success(btc_agent, btc_stake, btc_lst_stake):
     btc_amount = 1000
     lst_btc_amount = 4000
     rewards = [10000, 20000, 30000]
+    set_round_tag(round_tag - 1)
+    round_tag += 2
+    btc_lst_stake.setRoundTag(round_tag)
+    btc_stake.setRoundTag(round_tag)
     update_system_contract_address(btc_agent, stake_hub=accounts[0])
     for c in candidates:
         btc_agent.setCandidateMap(c, lst_btc_amount, btc_amount)
-        btc_stake.setCandidateMap(c, btc_amount, btc_amount, [round_tag])
-        btc_stake.setAccuredRewardPerBTCMap(c, round_tag, history_reward)
-    btc_lst_stake.setAccuredRewardPerBTCMap(round_tag - 1, history_reward)
+        btc_stake.setCandidateMap(c, btc_amount, btc_amount, [round_tag - 1])
+        btc_stake.setAccruedRewardPerBTCMap(c, round_tag - 1, history_reward)
+    btc_lst_stake.setAccruedRewardPerBTCMap(round_tag - 1, history_reward)
     btc_lst_stake.setStakedAmount(lst_btc_amount)
     btc_agent.distributeReward(candidates, rewards, 0)
     btc_reward = sum(rewards)
@@ -101,9 +112,9 @@ def test_distribute_reward_success(btc_agent, btc_stake, btc_lst_stake):
         reward = rewards[index]
         lst_btc_reward = reward * lst_btc_amount / (lst_btc_amount + btc_amount)
         btc_reward -= lst_btc_reward
-        assert btc_stake.accuredRewardPerBTCMap(c,
+        assert btc_stake.accruedRewardPerBTCMap(c,
                                                 round_tag) == history_reward + lst_btc_reward * Utils.BTC_DECIMAL // lst_btc_amount
-    assert btc_lst_stake.getAccuredRewardPerBTCMap(
+    assert btc_lst_stake.getAccruedRewardPerBTCMap(
         round_tag) == history_reward + btc_reward * Utils.BTC_DECIMAL // btc_amount
 
 

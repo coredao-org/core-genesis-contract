@@ -11,26 +11,35 @@ addr_to_name = AccountMgr.addr_to_name
 def partion(items, count, key):
     assert isinstance(items, list)
 
-    if len(items) <= count:
-        return items
+    ## for debug
+    # print("################################################")
+    # availableCandidates_on_chain, scores_on_chain = CandidateHubMock[0].getAvailableCandidates()
+    # print(f"available_candidates_on_chain: count={len(availableCandidates_on_chain)}")
+    # i = 0
+    # for candidate in availableCandidates_on_chain:
+    #     print(f"    {addr_to_name(candidate)} {candidate} {scores_on_chain[i]}")
+    #     i+=1
 
+    # validators_on_chain = ValidatorSetMock[0].getValidatorOps()
+    # print(f"validators_on_chain:count={len(validators_on_chain)}")
+    # for validator in validators_on_chain:
+    #     print(f"    {addr_to_name(validator)} {validator}")
+
+    # print(f"available_candidates_off_chain:count={len(items)}")
     # for item in items:
-    #     print(f"validator_off_chain before sorted {addr_to_name(item.get_operator_addr())} item={item}")
+    #     print(f"    {addr_to_name(item.get_operator_addr())} item={item}")
+
+    if len(items) <= count:
+        print(f"available candidate partition: {len(items)}, {count}")
+        return items
 
     count = min(len(items), count)
     partion_range(items, 0, len(items) - 1, count, key)
 
-    # # for debug
-    # for item in items:
-    #     print(f"validator_off_chain {addr_to_name(item.get_operator_addr())} item={item}")
-
-    # availableCandidates = CandidateHubMock[0].getAvailableCandidates()
-    # for candidate in availableCandidates:
-    #     print(f"AC_on_chain {addr_to_name(candidate[0])} {candidate} ")
-
-    # validators = ValidatorSetMock[0].getValidatorOps()
-    # for validator in validators:
-    #     print(f"validator_on_chain {addr_to_name(validator)} {validator}")
+    # print(f"validator_off_chain:count={count}")
+    # for item in items[:count]:
+    #     print(f"    {addr_to_name(item.get_operator_addr())} item={item}")
+    # print("################################################")
 
     return items[:count]
 
@@ -256,7 +265,19 @@ class ChainHandler:
 
         validator_dict = {}
         for validator in validators:
-            validator_dict[validator.get_operator_addr()] = validator
+            addr = validator.get_operator_addr()
+            validator_dict[addr] = self.chain.get_candidate(addr)
+
+        ## for debug
+        # candidates_off_chain = self.chain.get_candidates()
+        # print(f"candidates_off_chain:count={len(candidates_off_chain)}")
+        # for candidate in candidates_off_chain.values():
+        #     print(f"    {addr_to_name(candidate.get_operator_addr())} {candidate}")
+
+        # candidates_on_chain = CandidateHubMock[0].getCandidates()
+        # print(f"candidate_on_chain:count={len(candidates_on_chain)}")
+        # for candidate in candidates_on_chain:
+        #     print(f"    {addr_to_name(candidate)}")
 
         return validator_dict
 
@@ -277,7 +298,8 @@ class ChainHandler:
         candidates = self.chain.get_candidates()
         validators = self.chain.get_validators()
         for candidate in candidates.values():
-            if validators.get(candidate.get_operator_addr()) is None:
+            addr = candidate.get_operator_addr()
+            if validators.get(addr) is None:
                 candidate.unset_vldt()
             else:
                 candidate.set_vldt()
@@ -632,14 +654,15 @@ class ChainHandler:
         realtime_amount = candidate_stake_state.get_delegator_realtime_amount(asset_name, delegator)
         transferred_amount = candidate_stake_state.get_delegator_transferred_amount(asset_name, delegator)
         if realtime_amount == 0 and transferred_amount == 0:
-            delegator_stake_state.rm_core_stake_candidate(delegator, delegatee)
-            candidate_stake_state.update_delegator_change_round(asset_name, delegator, 0)
+            if not is_transfer:
+                delegator_stake_state.rm_core_stake_candidate(delegator, delegatee)
+                candidate_stake_state.update_delegator_change_round(asset_name, delegator, 0)
 
         # update balance
         self.chain.add_balance(delegator, amount)
         self.chain.add_balance(CoreAgentMock[0], -amount)
-
-        self._deduct_transferred_amount_from_staked_candidates(delegator, amount - min(amount, stake_amount))
+        if not is_transfer:
+            self._deduct_transferred_amount_from_staked_candidates(delegator, amount - min(amount, stake_amount))
 
     def _deduct_transferred_amount_from_staked_candidates(self, delegator, amount):
         if amount <= 0:

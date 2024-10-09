@@ -412,6 +412,7 @@ class ChainState:
         self.candidates[operator_addr] = candidate
 
     def remove_candidate(self, operator_addr):
+        assert not self.candidates[operator_addr].is_removed()
         self.candidates[operator_addr].set_removed()
 
         # swap with last item, because quick sort is not stable
@@ -419,19 +420,26 @@ class ChainState:
         if candidate_count == 1:
             return
 
-        idx = 0
+        insert_idx = 0
         for addr in self.candidates.keys():
             if addr == operator_addr:
                 break
-            idx += 1
+            insert_idx += 1
 
-        if idx == candidate_count - 1:
+        swap_idx = candidate_count - 1
+        for candidate in reversed(self.candidates.values()):
+            if not candidate.is_removed():
+                break
+
+            swap_idx -= 1
+
+        if insert_idx == swap_idx:
             return
 
         items = list(self.candidates.items())
-        last_item = items[candidate_count - 1]
-        items[candidate_count - 1] = items[idx]
-        items[idx] = last_item
+        swap_item = items[swap_idx]
+        items[swap_idx] = items[insert_idx]
+        items[insert_idx] = swap_item
 
         self.candidates = dict(items)
 
@@ -675,7 +683,7 @@ class ChainState:
         if amount == 0:
             return
 
-        print(f"Pay to systemreward:{amount}")
+        # print(f"Pay to systemreward:{amount}")
         old_balance = self.get_balance(SystemRewardMock[0])
         if old_balance + amount <= self.incentive_balance_cap:
             self.add_balance(SystemRewardMock[0], amount)

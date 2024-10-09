@@ -17,6 +17,7 @@ get_consensus_addr = AccountMgr.get_consensus_addr
 get_fee_addr = AccountMgr.get_fee_addr
 get_delegator_addr = AccountMgr.get_delegator_addr
 get_contract_addr = AccountMgr.get_contract_addr
+addr_to_name = AccountMgr.addr_to_name
 
 
 class Task(ABC):
@@ -54,6 +55,22 @@ class Task(ABC):
 
     def notify_task_finish(self):
         self.handler.on_task_finish()
+
+    def pay_gas(self, tx_receipt):
+        gas_price = tx_receipt.gas_price
+        gas_used = tx_receipt.gas_used
+        if gas_price == 0 or gas_used == 0:
+            return
+
+        sender = tx_receipt.sender
+        balance = self.chain.get_balance(sender)
+        if balance == 0:
+            return
+
+        gas_fee = gas_price * gas_used
+        print(f"{addr_to_name(sender)} pay gas {gas_fee}")
+        self.chain.add_balance(sender, -gas_fee)
+
 
     def post_execute(self):
         pass
@@ -103,7 +120,7 @@ class RegisterCandidate(Task):
         super().execute()
         self.notify_task_ready()
 
-        CandidateHubMock[0].register(
+        tx_receipt = CandidateHubMock[0].register(
             self.consensus_addr,
             self.fee_addr,
             self.commission, {
@@ -112,6 +129,7 @@ class RegisterCandidate(Task):
             }
         )
 
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -126,13 +144,13 @@ class UnregisterCandidate(Task):
         super().execute()
         self.notify_task_ready()
 
-        candidate = self.chain.get_candidate(self.operator_addr)
-        CandidateHubMock[0].unregister(
+        tx_receipt = CandidateHubMock[0].unregister(
             {
                 'from': self.operator_addr
             }
         )
 
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -152,8 +170,9 @@ class SlashValidator(Task):
 
         for i in range(self.slash_count):
             self.notify_task_ready()
-            tx = SlashIndicatorMock[0].slash(self.consensus_addr)
-            self.block_number = tx.block_number
+            tx_receipt = SlashIndicatorMock[0].slash(self.consensus_addr)
+            self.block_number = tx_receipt.block_number
+            self.pay_gas(tx_receipt)
             self.notify_task_finish()
 
 
@@ -171,10 +190,11 @@ class AddMargin(Task):
         super().execute()
 
         self.notify_task_ready()
-        CandidateHubMock[0].addMargin({
+        tx_receipt = CandidateHubMock[0].addMargin({
             "value": self.amount,
             "from": self.operator_addr
         })
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -188,9 +208,10 @@ class RefuseDelegate(Task):
     def execute(self):
         super().execute()
         self.notify_task_ready()
-        CandidateHubMock[0].refuseDelegate({
+        tx_receipt = CandidateHubMock[0].refuseDelegate({
             "from": self.operator_addr
         })
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -204,9 +225,10 @@ class AcceptDelegate(Task):
     def execute(self):
         super().execute()
         self.notify_task_ready()
-        CandidateHubMock[0].acceptDelegate({
+        tx_receipt = CandidateHubMock[0].acceptDelegate({
             "from": self.operator_addr
         })
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -229,12 +251,12 @@ class GenerateBlock(Task):
             self.miner = miners[i % miner_count]
             self.tx_fee = int(random.uniform(0.01, 2) * constants.CORE_DECIMALS)
             self.notify_task_ready()
-            tx = ValidatorSetMock[0].deposit(
+            tx_receipt = ValidatorSetMock[0].deposit(
                 self.miner, {
                     "value": self.tx_fee,
                     "from": self.sponsor
                 })
-            self.block_number = tx.block_number
+            self.block_number = tx_receipt.block_number
             print(f"slash count: {i}")
             self.notify_task_finish()
 
@@ -254,8 +276,9 @@ class TurnRound(Task):
 
         for i in range(self.count):
             self.notify_task_ready()
-            CandidateHubMock[0].turnRound()
+            tx_receipt = CandidateHubMock[0].turnRound()
             self.round += 1
+            self.pay_gas(tx_receipt)
             self.notify_task_finish()
 
 
@@ -271,11 +294,12 @@ class StakeCore(Task):
     def execute(self):
         super().execute()
         self.notify_task_ready()
-        tx = CoreAgentMock[0].delegateCoin(
+        tx_receipt = CoreAgentMock[0].delegateCoin(
             self.delegatee, {
                 "value": self.amount,
                 "from": self.delegator
             })
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -291,11 +315,12 @@ class UnstakeCore(Task):
     def execute(self):
         super().execute()
         self.notify_task_ready()
-        tx = CoreAgentMock[0].undelegateCoin(
+        tx_receipt = CoreAgentMock[0].undelegateCoin(
             self.delegatee,
             self.amount, {
                 "from": self.delegator
             })
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -312,12 +337,13 @@ class TransferCore(Task):
     def execute(self):
         super().execute()
         self.notify_task_ready()
-        tx = CoreAgentMock[0].transferCoin(
+        tx_receipt = CoreAgentMock[0].transferCoin(
             self.from_delegatee,
             self.to_delegatee,
             self.amount, {
                 "from": self.delegator
             })
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -339,11 +365,12 @@ class StakePower(Task):
     def execute(self):
         super().execute()
         self.notify_task_ready()
-        BtcLightClientMock[0].setMiners(
+        tx_receipt = BtcLightClientMock[0].setMiners(
             self.power_round,
             self.delegatee,
             self.miners
         )
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -429,8 +456,9 @@ class ConfirmBtcTx(Task):
     def execute(self):
         super().execute()
         self.notify_task_ready()
-        BtcLightClientMock[0].setCheckResult(True, self.check_time)
+        tx_receipt = BtcLightClientMock[0].setCheckResult(True, self.check_time)
         self.tx_data.set_block_time(self.check_time)
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -457,7 +485,7 @@ class StakeBtc(Task):
 
         self.notify_task_ready()
         print(f"redeem_script={self.redeem_script.hex()}")
-        tx = BitcoinStakeMock[0].delegate(
+        tx_receipt = BitcoinStakeMock[0].delegate(
             self.tx.serialize().hex(),
             fake_block_height,
             fake_merkle_nodes,
@@ -465,8 +493,9 @@ class StakeBtc(Task):
             self.redeem_script, {
                 'from': self.relayer
             })
-        self.tx_data.set_block_number(tx.block_number)
+        self.tx_data.set_block_number(tx_receipt.block_number)
         self.tx_data.set_relayer(self.relayer)
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -486,11 +515,12 @@ class TransferBtc(Task):
         super().execute()
 
         self.notify_task_ready()
-        BitcoinStakeMock[0].transfer(
+        tx_receipt = BitcoinStakeMock[0].transfer(
             self.txid,
             self.to_delegatee, {
                 'from': self.delegator
             })
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -510,11 +540,12 @@ class AddWallet(Task):
         super().execute()
 
         self.notify_task_ready()
-        BitcoinLSTStakeMock[0].updateParam(
+        tx_receipt = BitcoinLSTStakeMock[0].updateParam(
             'add',
             self.script_pubkey,
             {'from': GovHubMock[0].address}
         )
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -543,15 +574,16 @@ class StakeLSTBtc(Task):
         fake_tx_index = 0
 
         if self.auto_add_wallet:
-            BitcoinLSTStakeMock[0].updateParam(
+            tx_receipt = BitcoinLSTStakeMock[0].updateParam(
                 'add',
                 self.script_pubkey,
                 {'from': GovHubMock[0].address}
             )
             time.sleep(1)
+            self.pay_gas(tx_receipt)
 
         self.notify_task_ready()
-        tx = BitcoinLSTStakeMock[0].delegate(
+        tx_receipt = BitcoinLSTStakeMock[0].delegate(
             self.tx.serialize().hex(),
             fake_block_height,
             fake_merkle_nodes,
@@ -560,8 +592,9 @@ class StakeLSTBtc(Task):
                 'from': self.relayer
             })
 
-        self.tx_data.set_block_number(tx.block_number)
+        self.tx_data.set_block_number(tx_receipt.block_number)
         self.tx_data.set_relayer(self.relayer)
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -579,11 +612,12 @@ class TransferLSTBtc(Task):
         super().execute()
 
         self.notify_task_ready()
-        BitcoinLSTToken[0].transfer(
+        tx_receipt = BitcoinLSTToken[0].transfer(
             self.to_delegator,
             self.amount,
             {'from': self.from_delegator}
         )
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -629,12 +663,13 @@ class BurnLSTBtcAndPayBtcToRedeemer(Task):
 
         self.notify_task_ready()
         self.create_redeemer_script_pubkey()
-        BitcoinLSTStakeMock[0].redeem(
+        tx_receipt = BitcoinLSTStakeMock[0].redeem(
             self.amount,
             self.script_pubkey, {
                 'from': self.delegator
             })
         self.pay_btc_to_redeemer()
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -659,7 +694,7 @@ class UnstakeLSTBtc(Task):
         fake_tx_index = 0
 
         self.notify_task_ready()
-        tx = BitcoinLSTStakeMock[0].undelegate(
+        tx_receipt = BitcoinLSTStakeMock[0].undelegate(
             self.tx.serialize().hex(),
             fake_block_height,
             fake_merkle_nodes,
@@ -667,7 +702,8 @@ class UnstakeLSTBtc(Task):
                 'from': self.relayer
             })
         self.tx_data.set_relayer(self.relayer)
-        self.tx_data.set_block_number(tx.block_number)
+        self.tx_data.set_block_number(tx_receipt.block_number)
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
@@ -688,7 +724,8 @@ class ClaimReward(Task):
         for account in self.accounts:
             self.account = account
             self.notify_task_ready()
-            tx = StakeHubMock[0].claimReward({'from': account})
+            tx_receipt = StakeHubMock[0].claimReward({'from': account})
+            self.pay_gas(tx_receipt)
             self.notify_task_finish()
 
 
@@ -713,11 +750,12 @@ class UpdateParams(Task):
     def execute(self):
         super().execute()
         self.notify_task_ready()
-        self.get_contract().updateParam(
+        tx_receipt = self.get_contract().updateParam(
             self.key,
             self.value,
             {'from': GovHubMock[0].address}
         )
+        self.pay_gas(tx_receipt)
         self.notify_task_finish()
 
 
