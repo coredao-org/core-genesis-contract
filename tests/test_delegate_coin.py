@@ -14,7 +14,7 @@ TX_FEE = 100
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set):
-    accounts[-11].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)
