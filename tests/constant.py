@@ -35,7 +35,7 @@ class Utils:
     YEAR = 360
     # calculate the BTC porter fee
     CORE_DECIMAL = 100
-    # accuredRewardMap the record is a reward of 1000000 cores per round
+    # accruedRewardMap the record is a reward of 1000000 cores per round
     CORE_STAKE_DECIMAL = 1000000
     BTC_DECIMAL = 100000000
 

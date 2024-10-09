@@ -20,8 +20,8 @@ REDEEM_SCRIPT = "0xa914047b9ba09367c1b213b5ba2184fba3fababcdc0287"
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set, gov_hub):
-    accounts[-10].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
-    accounts[-10].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -391,6 +391,7 @@ def test_additional_stake_redeem_then_transfer(validator_set, set_candidate):
     claim_stake_and_relay_reward(accounts[0])
     assert tracker0.delta() == actual_reward
     transfer_btc_lst_success(accounts[0], BTC_VALUE, accounts[0])
+    transfer_btc_lst_success(accounts[0], BTC_VALUE, accounts[2])
     turn_round(consensuses)
     claim_stake_and_relay_reward(accounts[0])
     actual_reward = TOTAL_REWARD * 3 // 4
@@ -506,7 +507,28 @@ def test_claim_reward_after_self_transfer(set_candidate):
     transfer_btc_lst_success(accounts[0], BTC_VALUE, accounts[0])
     turn_round(consensuses)
     transfer_btc_lst_success(accounts[0], BTC_VALUE, accounts[0])
-    turn_round(consensuses, round_count=2)
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    claim_stake_and_relay_reward(accounts[:2])
+    assert tracker0.delta() == TOTAL_REWARD * 3 // 2
+    transfer_btc_lst_success(accounts[0], BTC_VALUE // 2, accounts[1])
+    turn_round(consensuses)
+    claim_stake_and_relay_reward(accounts[:2])
+    assert tracker0.delta() == TOTAL_REWARD * 3 // 4
+
+
+def test_self_transfer(set_candidate, lst_token):
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round(consensuses)
+    tx = lst_token.transfer(accounts[0], BTC_VALUE, {"from": accounts[0]})
+    expect_event(tx, 'Transfer', {
+        'from': accounts[0],
+        'to': accounts[0],
+        'value': BTC_VALUE
+    })
+    turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     claim_stake_and_relay_reward(accounts[:2])
     assert tracker0.delta() == TOTAL_REWARD * 3 // 2
@@ -725,6 +747,33 @@ def test_claim_reward_after_turnround_failure(set_candidate, candidate_hub, stak
     turn_round(consensuses)
 
 
+def test_claim_reward_after_round_failure(set_candidate, candidate_hub, stake_hub, lst_token, btc_lst_stake):
+    operators, consensuses = set_candidate
+    block_times_tamp = 1723122315
+    set_last_round_tag(2, block_times_tamp)
+    chain.mine(timestamp=block_times_tamp)
+    turn_round()
+    candidate_hub.setControlRoundTimeTag(False)
+    block_time = block_times_tamp
+    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT, percentage=Utils.DENOMINATOR)
+    chain.mine(timestamp=block_time + Utils.ROUND_INTERVAL)
+    turn_round()
+    chain.mine(timestamp=block_time + Utils.ROUND_INTERVAL * 2)
+    turn_round(consensuses)
+    candidate_hub.setTurnroundFailed(True)
+    chain.mine(timestamp=block_time + Utils.ROUND_INTERVAL * 3)
+    with brownie.reverts("turnRound failed"):
+        turn_round(consensuses)
+    candidate_hub.setTurnroundFailed(False)
+    chain.mine(timestamp=block_time + Utils.ROUND_INTERVAL * 4)
+    turn_round(consensuses)
+    chain.mine(timestamp=block_time + Utils.ROUND_INTERVAL * 5)
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker0.delta() == TOTAL_REWARD * 3 * 4
+
+
 def test_retry_turnround_after_failure(set_candidate, candidate_hub, stake_hub, lst_token, btc_lst_stake):
     operators, consensuses = set_candidate
     block_times_tamp = 1723122315
@@ -748,6 +797,122 @@ def test_retry_turnround_after_failure(set_candidate, candidate_hub, stake_hub, 
     turn_round(consensuses)
     claim_stake_and_relay_reward(accounts[0])
     assert tracker0.delta() == TOTAL_REWARD * 6 // 2
+
+
+@pytest.mark.parametrize("tests", [
+    {'part': True, 'actual_reward0': [40635 // 4, 0], 'actual_reward1': [40635 // 4, 40635 // 4]},
+    {'part': False, 'actual_reward0': [0, 0], 'actual_reward1': [0, 40635 // 2]}
+])
+def test_claim_reward_after_btc_lst_approved_transfer(validator_set, lst_token, set_candidate, tests):
+    operators, consensuses = set_candidate
+    lst_amount = BTC_VALUE
+    turn_round()
+    delegate_btc_lst_success(accounts[0], lst_amount, LOCK_SCRIPT)
+    turn_round(consensuses)
+    lst_token.approve(accounts[2], lst_amount, {"from": accounts[0]})
+    if tests['part']:
+        lst_amount = lst_amount // 2
+    lst_token.transferFrom(accounts[0], accounts[1], lst_amount, {'from': accounts[2]})
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    tracker1 = get_tracker(accounts[1])
+    tracker2 = get_tracker(accounts[2])
+    claim_stake_and_relay_reward(accounts[:3])
+    assert tracker0.delta() == tests['actual_reward0'][0]
+    assert tracker1.delta() == tests['actual_reward0'][1]
+    assert tracker2.delta() == 0
+    turn_round(consensuses)
+    claim_stake_and_relay_reward(accounts[:3])
+    assert tracker0.delta() == tests['actual_reward1'][0]
+    assert tracker1.delta() == tests['actual_reward1'][1]
+    assert tracker2.delta() == 0
+
+
+def test_redeem_after_addition_in_current_round(validator_set, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round(consensuses)
+    delegate_btc_lst_success(accounts[0], BTC_VALUE * 2, LOCK_SCRIPT)
+    redeem_btc_lst_success(accounts[0], BTC_VALUE * 2, REDEEM_SCRIPT)
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    claim_stake_and_relay_reward(accounts[0])
+    assert tracker0.delta() == TOTAL_REWARD * 3 // 2
+    delegate_btc_lst_success(accounts[0], BTC_VALUE * 2, LOCK_SCRIPT)
+    redeem_btc_lst_success(accounts[0], BTC_VALUE * 2 + BTC_VALUE // 2, REDEEM_SCRIPT)
+    turn_round(consensuses)
+    claim_stake_and_relay_reward(accounts[0])
+    assert tracker0.delta() == TOTAL_REWARD * 3 // 4
+    delegate_btc_lst_success(accounts[0], BTC_VALUE * 2, LOCK_SCRIPT)
+    redeem_btc_lst_success(accounts[0], BTC_VALUE * 2 + BTC_VALUE // 2, REDEEM_SCRIPT)
+    turn_round(consensuses)
+    claim_stake_and_relay_reward(accounts[0])
+    assert tracker0.delta() == 0
+
+
+def test_transfer_after_addition_in_current_round(validator_set, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT, Utils.DENOMINATOR)
+    turn_round(consensuses)
+    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT, Utils.DENOMINATOR)
+    transfer_btc_lst_success(accounts[0], BTC_VALUE, accounts[1])
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    claim_stake_and_relay_reward(accounts[0])
+    assert tracker0.delta() == TOTAL_REWARD * 3
+    delegate_btc_lst_success(accounts[0], BTC_VALUE * 2, LOCK_SCRIPT, Utils.DENOMINATOR)
+    transfer_btc_lst_success(accounts[0], BTC_VALUE * 2 + BTC_VALUE // 2, accounts[1])
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    claim_stake_and_relay_reward(accounts[0])
+    assert tracker0.delta() == TOTAL_REWARD * 3 // 4
+    delegate_btc_lst_success(accounts[0], BTC_VALUE * 3, LOCK_SCRIPT, Utils.DENOMINATOR)
+    transfer_btc_lst_success(accounts[0], BTC_VALUE * 3 + BTC_VALUE // 2, accounts[1])
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    tracker1 = get_tracker(accounts[1])
+    claim_stake_and_relay_reward(accounts[:2])
+    assert tracker0.delta() == 0
+    tracker1.update_height()
+    turn_round(consensuses)
+    claim_stake_and_relay_reward(accounts[:2])
+    assert tracker0.delta() == 0
+    assert tracker1.delta() == TOTAL_REWARD * 3
+
+
+def test_immediate_transfer_after_stake(validator_set, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT, Utils.DENOMINATOR)
+    delegate_btc_lst_success(accounts[1], BTC_VALUE, LOCK_SCRIPT, Utils.DENOMINATOR)
+    transfer_btc_lst_success(accounts[0], BTC_VALUE, accounts[1])
+    turn_round(consensuses, round_count=2)
+    tracker0 = get_tracker(accounts[0])
+    tracker1 = get_tracker(accounts[1])
+    claim_stake_and_relay_reward(accounts[:2])
+    assert tracker0.delta() == 0
+    assert tracker1.delta() == TOTAL_REWARD * 3
+
+
+def test_multiple_btc_lst_transfers(validator_set, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_btc_lst_success(accounts[0], BTC_VALUE * 2, LOCK_SCRIPT, Utils.DENOMINATOR)
+    delegate_btc_lst_success(accounts[1], BTC_VALUE * 2, LOCK_SCRIPT, Utils.DENOMINATOR)
+    turn_round(consensuses)
+    transfer_btc_lst_success(accounts[0], BTC_VALUE, accounts[1])
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    tracker1 = get_tracker(accounts[1])
+    claim_stake_and_relay_reward(accounts[:2])
+    assert tracker0.delta() == TOTAL_REWARD * 3 // 2 // 2
+    assert tracker1.delta() == TOTAL_REWARD * 3 // 2
+    turn_round(consensuses)
+    claim_stake_and_relay_reward(accounts[:2])
+    assert tracker0.delta() == TOTAL_REWARD * 3 // 4
+    assert tracker1.delta() == TOTAL_REWARD * 3 * 3 // 4
 
 
 def __get_redeem_requests(index):

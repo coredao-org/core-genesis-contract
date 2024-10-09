@@ -22,8 +22,8 @@ btc_script = get_btc_script()
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set, gov_hub):
-    accounts[-10].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
-    accounts[-10].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -1173,8 +1173,8 @@ def __get_delegator_btc_map(delegator):
     return data
 
 
-def __get_accured_reward_per_btc_map(validate, round):
-    BTC_STAKE.accuredRewardPerBTCMap(validate, round)
+def __get_accrued_reward_per_btc_map(validate, round):
+    BTC_STAKE.accruedRewardPerBTCMap(validate, round)
 
 
 def __check_candidate_map_info(candidate, result: dict):

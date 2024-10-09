@@ -25,9 +25,9 @@ stake_manager = StakeManager()
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set, gov_hub, system_reward):
-    accounts[-10].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
-    accounts[-10].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
-    accounts[-10].transfer(system_reward.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(system_reward.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)
