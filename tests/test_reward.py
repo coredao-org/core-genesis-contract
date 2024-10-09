@@ -104,7 +104,7 @@ class StateMachine:
     hash_value = strategy('uint', min_value=1, max_value=100)
     btc_amount = strategy('uint', min_value=1e8, max_value=1000e8)
     is_turn_round = strategy('bool')
-    operate_count = strategy('uint', min_value=10, max_value=40)
+    operate_count = strategy('uint', min_value=10, max_value=20)
 
     def __init__(self, candidate_hub, pledge_agent, validator_set, btc_light_client, slash_indicator,
                  stake_hub, btc_stake, btc_lst_stake, core_agent, relay_hub, gov_hub):
@@ -124,24 +124,23 @@ class StateMachine:
         self.btc_lst_value = 300
         self.power_value = 20
         self.candidate_margin = self.candidate_hub.requiredMargin()
-        accounts[-2].transfer(self.validator_set.address, Web3.to_wei(100000, 'ether'))
+        accounts[99].transfer(self.validator_set.address, Web3.to_wei(100000, 'ether'))
+        self.operators = []
+        for operator in accounts[60:90]:
+            register_candidate(consensus=operator, fee_address=operator, operator=operator,
+                               margin=self.candidate_margin)
+            self.operators.append(operator)
 
     def setup(self):
         global N
         N += 1
         print(f"Scenario {N}")
         random.seed(time.time_ns())
-        self.agents: Dict[str, Agent] = {}
         self.delegate = {}
         self.candidate_hub.setControlRoundTimeTag(True)
         self.btc_light_client.setCheckResult(True, 0)
         self.candidate_hub.setRoundTag(7)
-        self.operators = []
         self.candidate_hub.setValidatorCount(21)
-        for operator in accounts[-30:-1]:
-            register_candidate(consensus=operator, fee_address=operator, operator=operator,
-                               margin=self.candidate_margin)
-            self.operators.append(operator)
         old_turn_round()
 
     def initialize(self, core_amount, hash_value, btc_amount, is_turn_round, operate_count):
@@ -412,5 +411,5 @@ def test_stateful(state_machine, candidate_hub, pledge_agent, validator_set, btc
         core_agent,
         relay_hub,
         gov_hub,
-        settings={"max_examples": 10, "stateful_step_count": 2}
+        settings={"max_examples": 200, "stateful_step_count": 30}
     )

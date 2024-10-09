@@ -1018,7 +1018,9 @@ class GenerateBlock(TaskBuilder):
     def self_build(self, task_generator):
         data_center = task_generator.get_data_center()
         candidate_count = data_center.get_candidate_count()
-        assert candidate_count > 0
+        # assert candidate_count > 0
+        if candidate_count == 0:
+            return
 
         block_count_per_validator = random.randint(1, constants.MAX_BLOCK_COUNT_PER_VALIDATOR)
         block_count = block_count_per_validator * candidate_count
@@ -1059,6 +1061,9 @@ class UpdateCoreStakeGrades(TaskBuilder):
         grade_count = random.randint(constants.MIN_GRADE_COUNT, constants.MAX_GRADE_COUNT)
         level_step = constants.PERCENT_DECIMALS // (grade_count - 1)
         percent_step = level_step
+
+        if level_step == 0:
+            return
 
         min_level = 0
         min_percent = random.randint(1, percent_step - 1)
@@ -1118,6 +1123,9 @@ class UpdateBtcStakeGrades(TaskBuilder):
 
         level_step = max_level // grade_count
         percent_step = max_percent // grade_count
+
+        if level_step == 0 or percent_step == 0:
+            return
 
         level = 0
         percent = 1

@@ -22,8 +22,8 @@ btc_script = get_btc_script()
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set, gov_hub):
-    accounts[-10].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
-    accounts[-10].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -530,6 +530,81 @@ def test_btc_delegate_no_amount_limit(btc_stake, set_candidate, delegate_btc_val
     assert "claimedReward" in tx.events
     assert tracker.delta() == TOTAL_REWARD - FEE
     assert tracker.delta() == FEE
+
+
+def test_undelegate_success(btc_stake, set_candidate):
+    operators, consensuses = set_candidate
+    block_height = 200
+    index = 3000
+    lock_script, btc_tx = __create_btc_stake_scrip_and_btc_tx(operators[0], accounts[0], BTC_VALUE)
+    btc_stake.delegate(btc_tx, block_height, [], index, lock_script)
+    turn_round(consensuses, round_count=2)
+    script, pay_address, _ = random_btc_lock_script()
+    btc_tx_info = {}
+    inputs = [build_input(get_transaction_txid(btc_tx))]
+    outputs = [build_output(BTC_VALUE // 2, pay_address)]
+    generate_btc_transaction_info(btc_tx_info, inputs, outputs)
+    btc_tx1 = build_btc_transaction(btc_tx_info)
+    tx = btc_stake.undelegate(btc_tx1, block_height, [], index)
+    expect_event(tx, 'undelegated', {
+        'outpointHash': get_transaction_txid(btc_tx),
+        'outpointIndex': 0,
+        'usedTxid': get_transaction_txid(btc_tx1)
+    })
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == TOTAL_REWARD - FEE
+    turn_round(consensuses)
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == TOTAL_REWARD - FEE
+
+
+@pytest.mark.parametrize("round_count", [0, 1, 2, 3])
+def test_btc_undelegate_no_reward_impact(btc_stake, set_candidate, round_count):
+    operators, consensuses = set_candidate
+    block_height = 200
+    index = 3000
+    lock_script, btc_tx = __create_btc_stake_scrip_and_btc_tx(operators[0], accounts[0], BTC_VALUE)
+    btc_stake.delegate(btc_tx, block_height, [], index, lock_script)
+    turn_round(consensuses)
+    script, pay_address, _ = random_btc_lock_script()
+    btc_tx_info = {}
+    inputs = [build_input(get_transaction_txid(btc_tx))]
+    outputs = [build_output(BTC_VALUE // 2, pay_address)]
+    generate_btc_transaction_info(btc_tx_info, inputs, outputs)
+    btc_tx1 = build_btc_transaction(btc_tx_info)
+    tx = btc_stake.undelegate(btc_tx1, block_height, [], index)
+    expect_event(tx, 'undelegated', {
+        'outpointHash': get_transaction_txid(btc_tx),
+        'outpointIndex': 0,
+        'usedTxid': get_transaction_txid(btc_tx1)
+    })
+    turn_round(consensuses, round_count=round_count)
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    actual_reward = TOTAL_REWARD * round_count
+    assert tracker.delta() == actual_reward
+
+
+def test_no_btc_tx_undelegated(btc_stake, set_candidate):
+    operators, consensuses = set_candidate
+    block_height = 200
+    index = 3000
+    lock_script, btc_tx = __create_btc_stake_scrip_and_btc_tx(operators[0], accounts[0], BTC_VALUE)
+    btc_stake.delegate(btc_tx, block_height, [], index, lock_script)
+    turn_round(consensuses)
+    script, pay_address, _ = random_btc_lock_script()
+    btc_tx_info = {}
+    inputs = [build_input(get_transaction_txid(btc_tx), 1)]
+    outputs = [build_output(BTC_VALUE // 2, pay_address)]
+    generate_btc_transaction_info(btc_tx_info, inputs, outputs)
+    btc_tx1 = build_btc_transaction(btc_tx_info)
+    with brownie.reverts(f"no btc tx undelegated."):
+        btc_stake.undelegate(btc_tx1, block_height, [], index)
+    turn_round(consensuses)
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == TOTAL_REWARD
 
 
 def test_btc_stake_distribute_reward_success(btc_stake, candidate_hub):

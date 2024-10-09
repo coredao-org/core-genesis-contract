@@ -21,8 +21,8 @@ stake_manager = StakeManager()
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set, gov_hub):
-    accounts[-10].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
-    accounts[-10].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -268,6 +268,25 @@ def test_op_return_length_error_causes_failure(btc_lst_stake, lst_token):
         f'11eec300000000001976a914e1c5ba4d1fef0a3c7806603de565929684f9c2b188ac00000000')
     with brownie.reverts("payload length is too small"):
         btc_lst_stake.delegate(btc_tx, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
+
+
+def test_btc_lst_opreturn_too_long(btc_lst_stake, lst_token):
+    lock_script = '0x0014cdf3d02dd323c14bea0bed94962496c80c093344'
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    btc_lst_stake.updateParam('add', lock_script)
+    op_length0 = hex(33).replace('0x', '')
+    op_length1 = hex(31).replace('0x', '')
+    btc_tx = (
+        '01000000017943db896bfd8554e30717213a4de3fb8ac88669915eb08ccdb118faed8cf227020000006a47304402200255151b40013b656c752dd85ab6ea27487e8f5f658cb44b6db231609c3b416c02202a4e3682b64a2d0acae87a526968a7330d6e05f71e5190faae4efbc83a86da2701210270e4215fbe540cab09ac91c9586eba4fc797537859489f4a23d3e22356f1732'
+        'fffffffff03d00700'
+        '0000000000160014cdf3d02dd323c14bea0bed94962496c80c093344'
+        '0000000000000000'
+        f'{op_length0}6a{op_length1}5341542b0204589fb29aac15b9a4b7f17c3385939b007540f4d79101'
+        f'890001'
+        '8bd9c300000000001976a914e1c5ba4d1fef0a3c7806603de565929684f9c2b188ac00000000')
+
+    tx = btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[0]})
+    assert 'delegated' in tx.events
 
 
 def test_stake_failed_on_wrong_magic(btc_lst_stake, lst_token, set_candidate):
@@ -636,6 +655,85 @@ def test_stake_with_inactive_wallet_address(btc_lst_stake, lst_token, set_candid
     stake_manager.remove_wallet(REDEEM_SCRIPT)
     with brownie.reverts("wallet inactive"):
         delegate_btc_lst_success(accounts[0], BTC_VALUE, REDEEM_SCRIPT)
+
+
+@pytest.mark.parametrize("utxo_fee", [1000, 3000, 5000, 100000])
+def test_stake_after_utxo_fee_update(btc_lst_stake, utxo_fee):
+    btc_amount = 6001
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(utxo_fee)), 16)
+    btc_lst_stake.updateParam('utxoFee', hex_value)
+    btc_tx, lock_script = __create_btc_lst_delegate(accounts[0], btc_amount)
+    if btc_amount >= utxo_fee * 2:
+        tx = btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
+        assert 'delegated' in tx.events
+    else:
+        with brownie.reverts("btc amount is too small"):
+            btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
+
+
+def test_lst_not_minted(btc_lst_stake):
+    btc_value = 10000
+    btc_amount = 6000
+    # BTCLST staking transactions have been generated
+    btc_tx, lock_script = __create_btc_lst_delegate(accounts[0], btc_amount)
+    failed_tx_id = get_transaction_txid(btc_tx)
+    valid_tx_id = delegate_btc_lst_success(accounts[1], btc_value, lock_script)
+    #  The staking failed
+    user_address = random_btc_lst_lock_script()
+    # Scenario 1
+    #  input must from stake wallet.
+    redeem_btc_tx = btc_delegate.build_btc_lst(
+        set_outputs([btc_amount, user_address]),
+        set_inputs([failed_tx_id, 0])
+    )
+    # Because this ratio is not in the scope of our record
+    with brownie.reverts("input must from stake wallet."):
+        btc_lst_stake.undelegate(redeem_btc_tx, 0, [], 0)
+
+    # Scenario 2
+    new_lock_script = random_btc_lst_lock_script()
+    stake_manager.add_wallet(new_lock_script)
+    # Transfer to another MultiSig wallet address
+    transfer_tx = btc_delegate.build_btc_lst(
+        set_outputs([btc_amount, new_lock_script]),
+        set_inputs([failed_tx_id, 0], [valid_tx_id, 0])
+    )
+    with brownie.reverts("should not delegate from whitelisted multisig wallets"):
+        btc_lst_stake.delegate(transfer_tx, 1, [], 0, new_lock_script, {"from": accounts[1]})
+
+    # Scenario 3
+    new_lock_script = random_btc_lst_lock_script()
+    stake_manager.add_wallet(new_lock_script)
+    # Transfer to another MultiSig wallet address
+    # UTXOs must be picked
+    transfer_to_wallet_tx = btc_delegate.build_btc_lst(
+        set_outputs([btc_amount // 3, new_lock_script]),
+        set_inputs([failed_tx_id, 0])
+    )
+    to_wallet_tx_id = get_transaction_txid(transfer_to_wallet_tx)
+    tx = btc_lst_stake.delegate(transfer_to_wallet_tx, 1, [], 0, new_lock_script, {"from": accounts[1]})
+    print('fdsafa', tx.events)
+    new_tx_id = delegate_btc_lst_success(accounts[1], btc_value, new_lock_script)
+    # MultiSig wallet B transfers money directly to the user
+    transfer_to_user_tx = btc_delegate.build_btc_lst(
+        set_outputs([btc_amount, user_address], [btc_value, new_lock_script]),
+        set_inputs([to_wallet_tx_id, 0], [new_tx_id, 0])
+    )
+    to_user_tx_id = get_transaction_txid(transfer_to_user_tx)
+    tx = btc_lst_stake.undelegate(transfer_to_user_tx, 1, [], 1)
+    __check_btc_lst_tx_map_info(to_user_tx_id, {
+        'amount': btc_value,
+        'outputIndex': 1,
+        'blockHeight': 1,
+    })
+    expect_event(tx, 'undelegatedOverflow', {
+        'txid': to_user_tx_id,
+        'outputIndex': 0,
+        'expectAmount': 0,
+        'actualAmount': btc_amount,
+        'pkscript': user_address,
+    })
 
 
 def test_lst_btc_undelegate_success(btc_lst_stake, lst_token, set_candidate):
@@ -2082,6 +2180,7 @@ def __check_redeem_requests(redeem_index, result: dict):
 
 def __get_btc_lst_tx_map_info(tx_id):
     data = BTC_LST_STAKE.btcTxMap(tx_id)
+    print('__get_btc_lst_tx_map_info>>>>>', data)
     return data
 
 
