@@ -43,6 +43,12 @@ class ChainChecker:
             assert_result(f"{addr_to_name(operator_addr)}_commission", commission, commission_on_chain)
             assert_result(f"{addr_to_name(operator_addr)}_status", status, status_on_chain)
 
+    def check_validator_set(self):
+        validators = self.chain.get_validators()
+        operator_addr_list = validators.keys()
+        operator_addr_list_on_chain = ValidatorSetMock[0].getValidatorOps()
+        assert_result(f"validator_set", list(operator_addr_list), list(operator_addr_list_on_chain))
+
     def check_validator_incomes(self):
         validators = self.chain.get_validators()
         operator_addr_list = ValidatorSetMock[0].getValidatorOps()

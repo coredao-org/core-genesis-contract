@@ -1,0 +1,104 @@
+{
+    
+    "init_round": 20010,
+    "round_tasks": {
+        "0": [
+            ["SponsorFund", "SystemReward", 40000000],
+            ["SponsorFund","ValidatorSet",10000000],
+            ["RegisterCandidate","P0",100],
+            ["RegisterCandidate","P1",200],
+            ["RegisterCandidate","P2",150],
+            ["RegisterCandidate","P3",100],
+            ["RegisterCandidate","P4",200],
+            ["AddSystemRewardOperator","StakeHub"]
+        ],
+        "1": [
+            ["GenerateBlock", 10],
+            ["UpdateCoreStakeGradeFlag", 1],
+            ["UpdateCoreStakeGrades", 0, 1, 5000, 5000, 9000, 9000 ,11000,20000],
+            ["UpdateBtcStakeGradeFlag", 1],
+            ["UpdateBtcStakeGrades", 0, 1, 3, 5000, 10, 8000, 30, 10000],
+            ["UpdateBtcLstStakeGradePercent", 10000],
+            ["StakeCore", "U0", "P0", 2000],
+            ["StakeCore", "U1", "P1", 3000],
+            ["StakeCore", "U2", "P2", 3000],
+            ["StakeCore", "U3", "P3", 3000],
+            ["StakeCore", "U4", "P4", 3000],
+            ["StakeCore", "U4", "P0", 1000],
+            ["StakeCore", "U3", "P1", 2000],
+            ["StakeCore", "U2", "P2", 2000],
+            ["StakeCore", "U1", "P3", 2000],
+            ["StakeCore", "U0", "P4", 2000],
+            ["CreateStakeLockTx","tx_001","U1","P1",10,40,"P2SH","CLTV_P2PK"],
+            ["CreateStakeLockTx","tx_002","U2","P2",22,20,"P2WSH","CLTV_P2PK"],
+            ["CreateStakeLockTx","tx_003","U3","P3",11,30,"P2SH","CLTV_P2PK"],
+            ["CreateStakeLockTx","tx_004","U3","P1",1,60,"P2SH","CLTV_P2PKH"],
+            ["CreateStakeLockTx","tx_005","U2","P2",2,110,"P2WSH","CLTV_P2PKH"],
+            ["CreateStakeLockTx","tx_006","U1","P3",3,340,"P2WSH","CLTV_P2PK"],
+            ["CreateStakeLockTx","tx_007","U4","P4",2,130,"P2SH","CLTV_P2PK"],
+            ["CreateStakeLockTx","tx_008","U6","P1",11,20,"P2WSH","CLTV_P2PK"],
+            ["CreateStakeLockTx","tx_009","U6","P2",100,7,"P2SH","CLTV_P2PK"],
+            ["ConfirmBtcTx", "tx_001", 60],
+            ["StakeBtc","tx_001", "U1"],
+            ["ConfirmBtcTx", "tx_002", 60],
+            ["StakeBtc","tx_002", "U2"],
+            ["ConfirmBtcTx", "tx_003", 60],
+            ["StakeBtc","tx_003", "U3"],
+            ["ConfirmBtcTx", "tx_004", 60],
+            ["StakeBtc","tx_004", "U3"],
+            [ "ConfirmBtcTx", "tx_005", 60],
+            ["StakeBtc","tx_005", "U2"]
+        ],
+        "2":[
+            ["GenerateBlock", 10],
+            ["ConfirmBtcTx", "tx_006", 60],
+            ["StakeBtc","tx_006", "U1"],
+            ["ConfirmBtcTx", "tx_007", 60],
+            ["StakeBtc","tx_007", "U4"],
+            ["TransferBtc", "tx_004", "U3", "P2"],
+            ["ConfirmBtcTx", "tx_008", 60],
+            ["StakeBtc","tx_008", "U6"],
+            ["ConfirmBtcTx", "tx_009", 60],
+            ["StakeBtc","tx_009", "U6"],
+            ["TransferCore", "U4", "P0", "P2", 500],
+            ["StakeCore", "U0", "P0", 1000000],
+            ["StakePower", "P1", 6, "U1", "U3","U2"]
+        ],
+        "3":[
+            ["GenerateBlock", 10],
+            ["TransferCore", "U0", "P0", "P2", 1000],
+            ["TransferCore", "U1", "P1", "P0", 500],
+            ["UnstakeCore","U0","P0",10000],
+            ["ClaimReward","U0","U1","U2","U3","U4","U5","U6"],
+            ["StakePower", "P2", 6, "U1", "U3","U2"],
+            ["StakePower", "P1", 6, "U4", "U5"]
+        ],
+        "4":[
+            ["GenerateBlock", 5],
+            ["CreateStakeLockTx","tx_0010","U2","P2",100,7,"P2SH","CLTV_P2PK"],
+            ["ConfirmBtcTx", "tx_0010", 60],
+            ["StakeBtc","tx_0010", "U2"],
+            ["TransferBtc", "tx_006", "U1", "P4"],
+            ["StakeCore", "U3", "P2", 100000],
+            ["StakeCore", "U0", "P0", 100000],
+            ["TransferCore", "U0", "P0", "P4", 60000],
+            ["UnstakeCore","U0","P4",40000],
+            ["ClaimReward","U0","U1","U2","U3","U4","U5","U6"]
+        ],
+       "5":[
+            ["GenerateBlock", 5],
+            ["TransferCore", "U0", "P0", "P4", 20000],
+            ["TransferCore", "U0", "P4", "P1", 40000],
+            ["UnstakeCore","U0","P1",30000],
+            ["TransferBtc", "tx_006", "U1", "P2"],
+            ["TransferBtc", "tx_001", "U1", "P3"],
+            ["ClaimReward","U0","U1","U2","U3","U4","U5","U6"]
+       ],
+      "6":[
+            ["GenerateBlock", 5],
+            ["TransferCore", "U3", "P2", "P1", 40000],
+            ["UnstakeCore","U3","P2",1000],
+            ["ClaimReward","U0","U1","U2","U3","U4","U5","U6"]
+       ]
+    }
+}
