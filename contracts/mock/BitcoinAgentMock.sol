@@ -7,6 +7,7 @@ contract BitcoinAgentMock is BitcoinAgent {
     function setCandidateMap(address agent, uint256 value, uint256 value1) external {
         candidateMap[agent] = StakeAmount(value, value1);
     }
+
     function setPercentage(uint256 value) external {
         lstGradePercentage = value;
     }
@@ -28,7 +29,7 @@ contract BitcoinAgentMock is BitcoinAgent {
     function setAssetWeight(uint256 value) external {
         assetWeight = value;
     }
-    
+
     function getGradesLength() external view returns (uint256) {
         return grades.length;
     }
@@ -36,7 +37,7 @@ contract BitcoinAgentMock is BitcoinAgent {
     function popLpRates() external {
         delete grades;
     }
-    
+
     function setIsActive(bool value) external {
         gradeActive = value;
     }
