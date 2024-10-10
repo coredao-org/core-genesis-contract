@@ -55,7 +55,9 @@ class RegisterCandidate(TaskHandler):
         super().on_task_ready()
         self.chain.init_balance(CandidateHubMock[0])
         self.chain.init_balance(self.task.fee_addr)
+        self.checker.check_balance(self.task.fee_addr)
         self.chain.init_balance(self.task.operator_addr)
+        self.checker.check_balance(self.task.operator_addr)
 
     def on_task_finish(self):
         super().on_task_finish()
@@ -69,9 +71,9 @@ class RegisterCandidate(TaskHandler):
         self.check_state()
 
     def check_state(self):
+        self.checker.check_candidate(self.task.operator_addr)
         self.checker.check_balance(CandidateHubMock[0])
         self.checker.check_balance(self.task.operator_addr)
-        self.checker.check_candidate(self.task.operator_addr)
 
 
 class UnregisterCandidate(TaskHandler):

@@ -1018,7 +1018,9 @@ class GenerateBlock(TaskBuilder):
     def self_build(self, task_generator):
         data_center = task_generator.get_data_center()
         candidate_count = data_center.get_candidate_count()
-        assert candidate_count > 0
+        # assert candidate_count > 0
+        if candidate_count == 0:
+            return
 
         block_count_per_validator = random.randint(1, constants.MAX_BLOCK_COUNT_PER_VALIDATOR)
         block_count = block_count_per_validator * candidate_count
