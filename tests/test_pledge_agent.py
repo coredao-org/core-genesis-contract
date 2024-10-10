@@ -485,7 +485,7 @@ def test_move_transferred_btc(pledge_agent, btc_stake, set_candidate):
     tx_id = random_btc_tx_id()
     pledge_agent.delegateBtcMock(tx_id, btc_value, operators[0], accounts[0], script, LOCK_TIME, fee)
     __old_turn_round()
-    old_trannsfer_btc_success(tx_id, operators[1])
+    old_transfer_btc_success(tx_id, operators[1])
     __old_turn_round(consensuses, round_count=2)
     __init_hybrid_score_mock()
     update_system_contract_address(pledge_agent, btc_stake=accounts[0])
@@ -864,7 +864,7 @@ def test_move2_core_agent_execution_success(pledge_agent, validator_set, stake_h
     real_amount = delegate_amount
     transferred_amount = 0
     if operate == 'delegate':
-        old_delegate_coin_success(operators[0], accounts[0],MIN_INIT_DELEGATE_VALUE, old=False)
+        old_delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE, old=False)
         staked_amount = delegate_amount
         real_amount = MIN_INIT_DELEGATE_VALUE * 6
         change_round = core_agent.roundTag()
@@ -1235,7 +1235,7 @@ def test_claim_btc_reward_correct(pledge_agent, validator_set, stake_hub, tests,
             tx_id = old_delegate_btc_success(btc_value, operators[0], accounts[0])
             tx_ids.insert(0, tx_id)
         elif d == 'tr':
-            old_trannsfer_btc_success(tx_ids[0], operators[2])
+            old_transfer_btc_success(tx_ids[0], operators[2])
     __init_hybrid_score_mock()
     __move_btc_data(tx_ids)
     turn_round(consensuses, round_count=round_count)
@@ -1281,7 +1281,7 @@ def test_claim_reward_after_multiple_stake_migrations(pledge_agent, validator_se
             tx_id = old_delegate_btc_success(btc_value, operators[0], accounts[0])
             tx_ids.insert(0, tx_id)
         elif d == 'tr':
-            old_trannsfer_btc_success(tx_ids[0], operators[2])
+            old_transfer_btc_success(tx_ids[0], operators[2])
     for d in tests['delegator']:
         if d == 'de':
             old_delegate_coin_success(operators[0], accounts[1], delegate_amount)
@@ -1327,7 +1327,7 @@ def test_cancel_claim_reward_after_transfer(pledge_agent, validator_set, stake_h
             tx_id = old_delegate_btc_success(btc_value, operators[0], accounts[0])
             tx_ids.insert(0, tx_id)
         elif d == 'tr':
-            old_trannsfer_btc_success(tx_ids[0], operators[2])
+            old_transfer_btc_success(tx_ids[0], operators[2])
     for d in tests['delegator']:
         if d == 'de':
             old_delegate_coin_success(operators[2], accounts[1], delegate_amount)
@@ -1538,8 +1538,8 @@ def test_refuse_validator_data_migration(pledge_agent, btc_agent, candidate_hub,
     __old_turn_round(consensuses, round_count=2)
     candidate_hub.refuseDelegate({'from': operators[0]})
     __init_hybrid_score_mock()
-    __check_old_reward(operators, accounts[1], 0)
-    __check_old_reward(operators, accounts[0], 0)
+    __check_old_reward(operators, accounts[1], TOTAL_REWARD + TOTAL_REWARD // 2)
+    __check_old_reward(operators, accounts[0], TOTAL_REWARD - TOTAL_REWARD // 2)
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[1])
@@ -1564,8 +1564,8 @@ def test_non_validator_stake_data_migration(pledge_agent, btc_agent, candidate_h
     candidate_hub.refuseDelegate({'from': operators[0]})
     __old_turn_round(consensuses, round_count=round_count)
     __init_hybrid_score_mock()
-    __check_old_reward(operators, accounts[1], 0)
-    __check_old_reward(operators, accounts[0], 0)
+    __check_old_reward(operators, accounts[1])
+    __check_old_reward(operators, accounts[0])
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[1])
@@ -1608,8 +1608,8 @@ def test_slash_validator_during_data_migration(pledge_agent, btc_agent, slash_in
     assert event_name in tx.events
     __old_turn_round(consensuses, round_count=round_count)
     __init_hybrid_score_mock()
-    __check_old_reward(operators, accounts[1], 0)
-    __check_old_reward(operators, accounts[0], 0)
+    __check_old_reward(operators, accounts[1])
+    __check_old_reward(operators, accounts[0])
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[1])
@@ -1620,6 +1620,79 @@ def test_slash_validator_during_data_migration(pledge_agent, btc_agent, slash_in
     stake_hub_claim_reward(accounts[:2])
     assert tracker0.delta() == actual_reward
     assert tracker1.delta() == actual_reward
+
+
+@pytest.mark.parametrize('round_count', [0, 1])
+def test_major_offense_validators_before_data_migration(pledge_agent, validator_set, btc_agent, slash_indicator,
+                                                        candidate_hub,
+                                                        stake_hub,
+                                                        set_candidate, round_count):
+    operators, consensuses = set_candidate
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 4
+    __old_turn_round()
+    old_delegate_coin_success(operators[0], accounts[0], delegate_amount)
+    __old_turn_round(consensuses)
+    old_delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    __old_turn_round(consensuses, round_count=1)
+    slash_threshold = slash_indicator.felonyThreshold()
+    actual_reward = 0
+    for count in range(slash_threshold):
+        slash_indicator.slash(consensuses[0])
+    __old_turn_round(consensuses, round_count=round_count)
+    __init_hybrid_score_mock()
+    __check_old_reward(operators, accounts[1])
+    __check_old_reward(operators, accounts[0])
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    tracker1 = get_tracker(accounts[1])
+    stake_hub_claim_reward(accounts[:2])
+    assert tracker0.delta() == actual_reward
+    assert tracker1.delta() == actual_reward
+    required_margin = candidate_hub.requiredMargin()
+    candidate_hub.addMargin({'value': required_margin, 'from': operators[0]})
+    assert len(validator_set.getValidators()) == 2
+    turn_round(consensuses)
+    validator_length = 3
+    if round_count == 0:
+        validator_length = 2
+    assert len(validator_set.getValidators()) == validator_length
+    turn_round(consensuses)
+    stake_hub_claim_reward(accounts[:2])
+    if round_count > 0:
+        actual_reward = TOTAL_REWARD // 2
+    assert tracker0.delta() == actual_reward
+    assert tracker1.delta() == actual_reward
+
+
+def test_major_offense_validator_penalty_sufficient(validator_set, slash_indicator, candidate_hub, set_candidate):
+    operators, consensuses = set_candidate
+    required_margin = candidate_hub.requiredMargin()
+    candidate_hub.addMargin({'value': required_margin, 'from': operators[0]})
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 4
+    __old_turn_round()
+    old_delegate_coin_success(operators[0], accounts[0], delegate_amount)
+    __old_turn_round(consensuses)
+    old_delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    __old_turn_round(consensuses)
+    __init_hybrid_score_mock()
+    __check_old_reward(operators, accounts[0], TOTAL_REWARD)
+    turn_round(consensuses)
+    stake_hub_claim_reward(accounts[0])
+    slash_threshold = slash_indicator.felonyThreshold()
+    for count in range(slash_threshold):
+        slash_indicator.slash(consensuses[0])
+    turn_round(consensuses)
+    assert consensuses[0] not in validator_set.getValidators()
+    turn_round(consensuses)
+    assert consensuses[0] not in validator_set.getValidators()
+    turn_round(consensuses)
+    assert consensuses[0] in validator_set.getValidators()
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == 0
+    turn_round(consensuses)
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == TOTAL_REWARD // 2
 
 
 def test_stake_immediately_after_upgrade(stake_hub, core_agent, set_candidate):
@@ -2862,5 +2935,5 @@ def __check_old_reward(operators, delegator, actual_reward=None):
     tracker = get_tracker(delegator)
     old_claim_reward_success(operators, delegator)
     assert tracker.delta() == old_reward
-    if actual_reward:
+    if actual_reward is not None:
         assert old_reward == actual_reward

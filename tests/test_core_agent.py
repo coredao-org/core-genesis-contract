@@ -275,6 +275,21 @@ class TestDelegateCoin:
         with brownie.reverts(f"{error_msg}"):
             core_agent.delegateCoin(operator)
 
+    def test_reward_calculation_after_major_offense(self, core_agent, slash_indicator, candidate_hub, validator_set):
+        register_candidate(operator=accounts[10])
+        operator = accounts[1]
+        margin = candidate_hub.requiredMargin() + slash_indicator.felonyDeposit()
+        consensus_address = register_candidate(operator=operator, margin=margin)
+        core_agent.delegateCoin(operator, {'value': MIN_INIT_DELEGATE_VALUE})
+        turn_round()
+        felony_threshold = slash_indicator.felonyThreshold()
+        for _ in range(felony_threshold):
+            slash_indicator.slash(consensus_address)
+        assert candidate_hub.isJailed(operator) is True
+        turn_round([consensus_address])
+        tx = stake_hub_claim_reward(accounts[0])
+        assert len(tx.events) == 0
+
     def test_delegate2under_margin(self, core_agent, slash_indicator, candidate_hub, validator_set):
         register_candidate(operator=accounts[10])
         operator = accounts[1]
@@ -1122,6 +1137,7 @@ def test_acc_stake_amount_cross_round_success(core_agent, set_candidate, stake_h
     reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
     expect_stake_amount = tests[0]
     assert acc_staked_amount == expect_stake_amount
+
 
 def test_clear_acc_stake_amount_after_claiming_rewards(core_agent, slash_indicator, stake_hub, set_candidate):
     operators, consensuses = set_candidate

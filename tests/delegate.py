@@ -342,13 +342,14 @@ def old_claim_reward_success(candidates, account=None):
         if account is None:
             account = accounts[0]
         tx = PledgeAgentMock[0].claimReward(candidates, {'from': account})
+        print('old_claim_reward_success>>>>>',tx.events)
 
 
 def old_claim_btc_reward_success(tx_ids, account=None):
     if account is None:
         account = accounts[0]
     tx = PledgeAgentMock[0].claimBtcReward(tx_ids, {'from': account})
-    print('old_claim_btc_reward_success>>>>>>>>',tx.events)
+    print('old_claim_btc_reward_success>>>>>>>>', tx.events)
     return tx
 
 
@@ -374,7 +375,7 @@ def old_delegate_btc_success(btc_value, agent, delegator, lock_time=None, tx_id=
     return tx_id
 
 
-def old_trannsfer_btc_success(tx_id, agent):
+def old_transfer_btc_success(tx_id, agent):
     tx = PledgeAgentMock[0].transferBtcOld(tx_id, agent)
     return tx_id
 

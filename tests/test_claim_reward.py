@@ -60,6 +60,7 @@ def set_block_reward(validator_set, candidate_hub, btc_light_client, btc_stake, 
     # The default staking time is 150 days
     set_block_time_stamp(150, LOCK_TIME)
     tlp_rates, lp_rates = Discount().get_init_discount()
+    btc_agent.setAssetWeight(1)
     btc_stake.setInitTlpRates(*tlp_rates)
     btc_agent.setInitLpRates(*lp_rates)
     btc_stake.setIsActive(True)
@@ -67,10 +68,8 @@ def set_block_reward(validator_set, candidate_hub, btc_light_client, btc_stake, 
     BTC_LST_STAKE = btc_lst_stake
     PLEDGE_AGENT = pledge_agent
     HASH_POWER_AGENT = hash_power_agent
-    print('accountssfasf12312', len(accounts))
     btc_lst_stake.updateParam('add', BTCLST_LOCK_SCRIPT, {'from': gov_hub.address})
-    print('dsfafsd',gov_hub.address)
-    print('accountssfasf12312', len(accounts))
+
 
 @pytest.fixture()
 def set_candidate():
@@ -80,80 +79,6 @@ def set_candidate():
         operators.append(operator)
         consensuses.append(register_candidate(operator=operator))
     return operators, consensuses
-
-
-class Delegator:
-    def __init__(self, delegator):
-        self.btc_delegate = BtcStake()
-        self.delegator = delegator
-        self.btc_tx_ids = []
-
-    def get_address(self):
-        return self.delegator
-
-    def delegate_btc(self, agent, btc_amount, lock_script, lock_data=None, relay=None, stake_duration=None,
-                     fee=1,
-                     script_type='p2sh', lock_time=None):
-        tx_id = delegate_btc_success(agent, self.delegator, btc_amount, lock_script, lock_data, relay, stake_duration,
-                                     fee, script_type, lock_time)
-        return tx_id
-
-    def transfer_btc(self, tx_id, target_candidate):
-        tx = transfer_btc_success(tx_id, target_candidate, self.delegator)
-        return tx
-
-    def delegate_btc_lst(self, btc_amount, lock_script, percentage, relay=None):
-        delegate_btc_lst_success(self.delegator, btc_amount, lock_script, percentage, relay)
-
-    def redeem_btc_lst(self, amount, pkscript):
-        redeem_btc_lst_success(self.delegator, amount, pkscript)
-
-    def transfer_btc_lst(self, amount, to):
-        transfer_btc_lst_success(self.delegator, amount, to)
-
-    def delegate_power(self, candidate, value=1, stake_round=0):
-        delegate_power_success(candidate, self.delegator, value, stake_round)
-
-    def delegate_coin(self, candidate, amount):
-        tx = delegate_coin_success(candidate, self.delegator, amount)
-        return tx
-
-    def undelegate_coin(self, candidate, amount):
-        undelegate_coin_success(candidate, self.delegator, amount)
-
-    def transfer_coin(self, source_agent, target_agent, amount):
-        transfer_coin_success(source_agent, target_agent, self.delegator, amount)
-
-    def claim_reward(self):
-        stake_hub_claim_reward(self.delegator)
-
-    def old_delegate_coin(self, candidate, amount=None, old=True):
-        old_delegate_coin_success(candidate, self.delegator, amount, old)
-
-    def old_undelegate_coin(self, candidate, amount=None, old=True):
-        old_undelegate_coin_success(candidate, self.delegator, amount, old)
-
-    def old_transfer_coin(self, source_agent, target_agent, amount=None, old=True):
-        old_transfer_coin_success(source_agent, target_agent, self.delegator, amount, old)
-
-    def old_claim_reward(self, candidates):
-        old_claim_reward_success(candidates, self.delegator)
-
-    def old_delegate_btc(self, candidate, amount, lock_time):
-        tx_id = old_delegate_btc_success(amount, candidate, self.delegator, lock_time)
-        self.btc_tx_ids.append(tx_id)
-        return tx_id
-
-    def old_claim_btc_reward(self):
-        tx = old_claim_btc_reward_success(self.btc_tx_ids, self.delegator)
-        return tx
-
-
-def add_delegators():
-    delegators = []
-    for account in accounts[:5]:
-        delegators.append(Delegator(account))
-    return delegators
 
 
 def add_candidates(count=25):
@@ -172,10 +97,6 @@ def mock_current_round():
     return current_round, timestamp
 
 
-def init_hybrid_score_mock():
-    STAKE_HUB.initHybridScoreMock()
-
-
 def mock_btc_stake_lock_time(timestamp, stake_round=None):
     if stake_round is None:
         stake_round = random.randint(1, 10)
@@ -185,48 +106,346 @@ def mock_btc_stake_lock_time(timestamp, stake_round=None):
 
 
 class TestInitHardForkDelegate:
-    def test_init_hard_fork_delegate0(self, pledge_agent, candidate_hub):
+
+    def test_successful_upgrade_after_round_switch(self, pledge_agent, candidate_hub):
         init_round_tag, timestamp = mock_current_round()
         mock_btc_stake_lock_time(timestamp)
         old_turn_round()
         set_round_tag(init_round_tag)
-        delegators = add_delegators()
         operators, consensuses = add_candidates()
         candidate_hub.setValidatorCount(21)
         old_turn_round()
         tx_ids = []
         lock_time, end_round = mock_btc_stake_lock_time(timestamp, 5)
         for index, op in enumerate(operators):
-            delegators[0].old_delegate_coin(op, BTC_VALUE + index)
+            old_delegate_coin_success(op, accounts[0], DELEGATE_VALUE + index)
         for index, op in enumerate(operators[0:10]):
-            tx_id = delegators[0].old_delegate_btc(op, BTC_VALUE + index, lock_time)
+            tx_id = old_delegate_btc_success(BTC_VALUE + index, op, accounts[0], lock_time)
             tx_ids.append(tx_id)
         lock_time, end_round = mock_btc_stake_lock_time(timestamp, 3)
-        delegators[0].delegate_coin(operators[0], DELEGATE_VALUE)
-        delegators[0].delegate_coin(operators[7], DELEGATE_VALUE)
+        delegate_coin_success(operators[0], accounts[0], DELEGATE_VALUE)
+        delegate_coin_success(operators[7], accounts[0], DELEGATE_VALUE)
         for index, op in enumerate(operators[10:12]):
             btc_amount = BTC_VALUE + (index + 10)
-            tx_id = delegators[1].old_delegate_btc(op, btc_amount, lock_time)
+            tx_id = old_delegate_btc_success(btc_amount, op, accounts[1], lock_time)
             tx_ids.append(tx_id)
-        delegators[0].old_delegate_coin(operators[8], DELEGATE_VALUE)
-        delegators[1].old_delegate_coin(operators[12], DELEGATE_VALUE)
-        delegators[2].delegate_power(operators[0], 1)
+        old_delegate_coin_success(operators[8], accounts[0], DELEGATE_VALUE)
+        old_delegate_coin_success(operators[12], accounts[1], DELEGATE_VALUE)
+        delegate_power_success(operators[0], accounts[2], 1)
         old_turn_round(consensuses)
-        delegators[2].delegate_power(operators[0], 1)
+        delegate_power_success(operators[0], accounts[2], 1)
         old_turn_round(consensuses)
-        delegators[2].delegate_power(operators[0], 1)
+        delegate_power_success(operators[0], accounts[2], 1)
         old_turn_round(consensuses)
-        delegators[0].old_claim_btc_reward()
-        delegators[2].old_claim_btc_reward()
         init_hybrid_score_mock()
+        move_btc_data(tx_ids)
+        delegate_coin_success(operators[0], accounts[0], DELEGATE_VALUE)
+        delegate_btc_lst_success(accounts[0], BTC_LST_VALUE, BTCLST_LOCK_SCRIPT)
+        delegate_power_success(operators[0], accounts[0], 1)
+        delegate_btc_success(operators[2], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+        turn_round(consensuses)
+        delegate_btc_lst_success(accounts[0], BTC_LST_VALUE, BTCLST_LOCK_SCRIPT)
+        old_claim_reward_success(operators, accounts[0])
+        old_claim_reward_success(operators, accounts[2])
+        turn_round(consensuses)
+        tx = stake_hub_claim_reward(accounts[0])
+        assert 'claimedReward' in tx.events
+
+    def test_multiple_stakes_after_upgrade(self, set_candidate):
+        btc_value = 100
+        btc_lst_value = 1000
+        delegate_amount = 600000
+        power_value = 1
+        operators, consensuses = set_candidate
+        old_turn_round()
+        tx_ids = []
+        for op in operators[:2]:
+            for account in accounts[:2]:
+                tx_id = old_delegate_btc_success(btc_value, op, account)
+                tx_ids.append(tx_id)
+                old_delegate_coin_success(op, account, delegate_amount)
+            for i in range(3):
+                delegate_power_success(op, accounts[2], power_value, stake_round=i)
+        old_turn_round(consensuses)
+        init_hybrid_score_mock()
+        move_btc_data(tx_ids)
+        old_claim_reward_success(operators, accounts[0])
+        delegate_coin_success(operators[0], accounts[0], delegate_amount)
+        delegate_btc_lst_success(accounts[0], btc_lst_value, BTCLST_LOCK_SCRIPT)
+        turn_round(consensuses)
+        redeem_btc_lst_success(accounts[0], btc_lst_value // 2, BTCLST_LOCK_SCRIPT)
+        transfer_coin_success(operators[0], operators[2], accounts[0], delegate_amount)
+        undelegate_coin_success(operators[2], accounts[0], delegate_amount // 2)
+        transfer_btc_success(tx_ids[0], operators[1], accounts[0])
+        turn_round(consensuses)
+        _, _, account_rewards, _ = parse_delegation([
+            {
+                "address": operators[0],
+                "coin": [set_delegate(accounts[0], delegate_amount * 2, delegate_amount // 2),
+                         set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value, btc_value), set_delegate(accounts[1], btc_value)],
+                "power": [set_delegate(accounts[2], power_value)]
+            },
+            {
+                "address": operators[1],
+                "coin": [set_delegate(accounts[0], delegate_amount), set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value), set_delegate(accounts[1], btc_value)],
+                "power": [set_delegate(accounts[2], power_value)],
+            }, {
+                "address": operators[2],
+            }], BLOCK_REWARD // 2, {
+            accounts[0]: set_btc_lst_delegate(btc_lst_value, btc_lst_value // 2)}, state_map={'core_lp': 4})
+        tracker = get_tracker(accounts[0])
+        stake_hub_claim_reward(accounts[0])
+        assert tracker.delta() == account_rewards[accounts[0]]
         turn_round(consensuses)
 
-    def test_account_create(self):
-        print('accountssfasf', len(accounts))
-        random_address()
-        for  index,account in enumerate(accounts):
-            print(f'index,account{account}',account.balance())
-        print('accounts', len(accounts))
+    def test_cancel_and_transfer_stakes_after_upgrade(self, set_candidate, slash_indicator):
+        btc_value = 100
+        btc_lst_value = 1000
+        delegate_amount = 600000
+        power_value = 1
+        operators, consensuses = set_candidate
+        old_turn_round()
+        tx_ids = []
+        for op in operators[:2]:
+            for account in accounts[:2]:
+                tx_id = old_delegate_btc_success(btc_value, op, account)
+                tx_ids.append(tx_id)
+                old_delegate_coin_success(op, account, delegate_amount)
+            for i in range(3):
+                delegate_power_success(op, accounts[2], power_value, stake_round=i)
+        old_turn_round(consensuses)
+        init_hybrid_score_mock()
+        move_btc_data(tx_ids)
+        old_claim_reward_success(operators, accounts[0])
+        delegate_coin_success(operators[0], accounts[0], delegate_amount)
+        delegate_btc_lst_success(accounts[0], btc_lst_value, BTCLST_LOCK_SCRIPT)
+        turn_round(consensuses)
+        redeem_btc_lst_success(accounts[0], btc_lst_value // 2, BTCLST_LOCK_SCRIPT)
+        transfer_coin_success(operators[0], operators[2], accounts[0], delegate_amount)
+        undelegate_coin_success(operators[2], accounts[0], delegate_amount)
+        transfer_btc_success(tx_ids[0], operators[1], accounts[0])
+        delegate_btc_success(operators[0], accounts[0], btc_value, LOCK_SCRIPT)
+        turn_round(consensuses)
+        _, _, account_rewards, _ = parse_delegation([
+            {
+                "address": operators[0],
+                "coin": [set_delegate(accounts[0], delegate_amount * 2, delegate_amount),
+                         set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value, btc_value), set_delegate(accounts[1], btc_value)],
+                "power": [set_delegate(accounts[2], power_value)]
+            },
+            {
+                "address": operators[1],
+                "coin": [set_delegate(accounts[0], delegate_amount), set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value), set_delegate(accounts[1], btc_value)],
+                "power": [set_delegate(accounts[2], power_value)],
+            }, {
+                "address": operators[2],
+            }], BLOCK_REWARD // 2, {
+            accounts[0]: set_btc_lst_delegate(btc_lst_value, btc_lst_value // 2)}, state_map={'core_lp': 4})
+        tracker = get_tracker(accounts[0])
+        stake_hub_claim_reward(accounts[0])
+        assert tracker.delta() == account_rewards[accounts[0]]
+        slash_threshold = slash_indicator.felonyThreshold()
+        for count in range(slash_threshold):
+            slash_indicator.slash(consensuses[0])
+            slash_indicator.slash(consensuses[1])
+        turn_round(consensuses)
+        stake_hub_claim_reward(accounts[0])
+        assert tracker.delta() == TOTAL_REWARD // 2
+        turn_round(consensuses)
+
+    def test_new_validator_join_after_upgrade(self, slash_indicator):
+        btc_value = 100
+        btc_lst_value = 1000
+        delegate_amount = 600000
+        power_value = 1
+        operators = []
+        consensuses = []
+        for operator in accounts[5:7]:
+            operators.append(operator)
+            consensuses.append(register_candidate(operator=operator))
+        old_turn_round()
+        tx_ids = []
+        for op in operators[:2]:
+            for account in accounts[:2]:
+                tx_id = old_delegate_btc_success(btc_value, op, account)
+                tx_ids.append(tx_id)
+                old_delegate_coin_success(op, account, delegate_amount)
+            for i in range(3):
+                delegate_power_success(op, accounts[2], power_value, stake_round=i)
+        old_turn_round(consensuses)
+        init_hybrid_score_mock()
+        move_btc_data(tx_ids)
+        old_claim_reward_success(operators, accounts[0])
+        delegate_coin_success(operators[0], accounts[0], delegate_amount)
+        delegate_btc_lst_success(accounts[0], btc_lst_value, BTCLST_LOCK_SCRIPT)
+        turn_round(consensuses)
+        for operator in accounts[8:9]:
+            operators.append(operator)
+            consensuses.append(register_candidate(operator=operator))
+        redeem_btc_lst_success(accounts[0], btc_lst_value, BTCLST_LOCK_SCRIPT)
+        delegate_btc_success(operators[0], accounts[0], btc_value, LOCK_SCRIPT)
+        delegate_coin_success(operators[2], accounts[0], delegate_amount)
+        delegate_coin_success(operators[2], accounts[1], delegate_amount)
+        delegate_btc_success(operators[2], accounts[0], btc_value, LOCK_SCRIPT)
+        turn_round(consensuses)
+        _, _, account_rewards, _ = parse_delegation([
+            {
+                "address": operators[0],
+                "coin": [set_delegate(accounts[0], delegate_amount * 2),
+                         set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value), set_delegate(accounts[1], btc_value)],
+                "power": [set_delegate(accounts[2], power_value)]
+            },
+            {
+                "address": operators[1],
+                "coin": [set_delegate(accounts[0], delegate_amount), set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value), set_delegate(accounts[1], btc_value)],
+                "power": [set_delegate(accounts[2], power_value)],
+            }], BLOCK_REWARD // 2, {
+            accounts[0]: set_btc_lst_delegate(btc_lst_value, btc_lst_value)}, state_map={'core_lp': 4})
+        tracker = get_tracker(accounts[0])
+        stake_hub_claim_reward(accounts[0])
+        assert tracker.delta() == account_rewards[accounts[0]]
+        delegate_btc_lst_success(accounts[0], btc_lst_value, BTCLST_LOCK_SCRIPT)
+        turn_round(consensuses)
+        _, _, account_rewards, _ = parse_delegation([
+            {
+                "address": operators[0],
+                "coin": [set_delegate(accounts[0], delegate_amount * 2),
+                         set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value, stake_duration=MONTH),
+                        set_delegate(accounts[0], btc_value),
+                        set_delegate(accounts[1], btc_value)],
+                "power": [set_delegate(accounts[2], power_value)]
+            },
+            {
+                "address": operators[1],
+                "coin": [set_delegate(accounts[0], delegate_amount), set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value), set_delegate(accounts[1], btc_value)],
+                "power": [set_delegate(accounts[2], power_value)],
+            }, {
+                "address": operators[2],
+                "coin": [set_delegate(accounts[0], delegate_amount), set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value, stake_duration=MONTH)]
+            }], BLOCK_REWARD // 2, state_map={'core_lp': 4})
+        stake_hub_claim_reward(accounts[0])
+        assert tracker.delta() == account_rewards[accounts[0]]
+        turn_round(consensuses)
+        _, _, account_rewards, _ = parse_delegation([
+            {
+                "address": operators[0],
+                "coin": [set_delegate(accounts[0], delegate_amount * 2),
+                         set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value, stake_duration=MONTH),
+                        set_delegate(accounts[0], btc_value),
+                        set_delegate(accounts[1], btc_value)],
+            },
+            {
+                "address": operators[1],
+                "coin": [set_delegate(accounts[0], delegate_amount), set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value), set_delegate(accounts[1], btc_value)],
+            }, {
+                "address": operators[2],
+                "coin": [set_delegate(accounts[0], delegate_amount), set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value, stake_duration=MONTH)]
+            }], BLOCK_REWARD // 2, {accounts[0]: set_btc_lst_delegate(btc_lst_value)}, state_map={'core_lp': 4})
+        stake_hub_claim_reward(accounts[0])
+        assert tracker.delta() == account_rewards[accounts[0]]
+        turn_round(consensuses)
+
+    def test_no_btc_lst_stake_after_upgrade(self, set_candidate):
+        btc_value = 100
+        delegate_amount = 600000
+        power_value = 1
+        operators, consensuses = set_candidate
+        old_turn_round()
+        tx_ids = []
+        for op in operators[:2]:
+            for account in accounts[:2]:
+                tx_id = old_delegate_btc_success(btc_value, op, account)
+                tx_ids.append(tx_id)
+                old_delegate_coin_success(op, account, delegate_amount)
+            for i in range(3):
+                delegate_power_success(op, accounts[2], power_value, stake_round=i)
+        old_turn_round(consensuses)
+        init_hybrid_score_mock()
+        move_btc_data(tx_ids)
+        old_delegate_coin_success(operators[0], accounts[0], delegate_amount, False)
+        delegate_power_success(operators[2], accounts[0], power_value)
+        turn_round(consensuses)
+        transfer_coin_success(operators[0], operators[2], accounts[0], delegate_amount)
+        undelegate_coin_success(operators[2], accounts[0], delegate_amount // 2)
+        old_undelegate_coin_success(operators[1], accounts[0], delegate_amount // 2, False)
+        transfer_coin_success(operators[1], operators[0], accounts[0], delegate_amount // 2)
+        transfer_btc_success(tx_ids[0], operators[1], accounts[0])
+        turn_round(consensuses)
+        _, _, account_rewards, _ = parse_delegation([
+            {
+                "address": operators[0],
+                "coin": [set_delegate(accounts[0], delegate_amount * 2, delegate_amount // 2),
+                         set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value, btc_value), set_delegate(accounts[1], btc_value)],
+                "power": [set_delegate(accounts[2], power_value)]
+            },
+            {
+                "address": operators[1],
+                "coin": [set_delegate(accounts[0], delegate_amount, delegate_amount // 2),
+                         set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value), set_delegate(accounts[1], btc_value)],
+                "power": [set_delegate(accounts[2], power_value)],
+            }, {
+                "address": operators[2],
+                "power": [set_delegate(accounts[0], power_value)]
+            }], BLOCK_REWARD // 2, state_map={'core_lp': 4})
+        tracker = get_tracker(accounts[0])
+        stake_hub_claim_reward(accounts[0])
+        assert tracker.delta() == account_rewards[accounts[0]]
+        turn_round(consensuses)
+
+    def test_stake_in_next_round_after_upgrade(self, set_candidate):
+        btc_value = 100
+        delegate_amount = 600000
+        operators, consensuses = set_candidate
+        old_turn_round()
+        tx_ids = []
+        for op in operators[:2]:
+            for account in accounts[:2]:
+                tx_id = old_delegate_btc_success(btc_value, op, account)
+                tx_ids.append(tx_id)
+                old_delegate_coin_success(op, account, delegate_amount)
+        old_turn_round(consensuses)
+        init_hybrid_score_mock()
+        move_btc_data(tx_ids)
+        turn_round(consensuses, round_count=3)
+        old_claim_reward_success(operators, accounts[0])
+        transfer_coin_success(operators[0], operators[2], accounts[0], delegate_amount)
+        undelegate_coin_success(operators[2], accounts[0], delegate_amount // 2)
+        old_undelegate_coin_success(operators[1], accounts[0], delegate_amount // 2, False)
+        transfer_coin_success(operators[1], operators[0], accounts[0], delegate_amount // 2)
+        turn_round(consensuses)
+        _, _, account_rewards, _ = parse_delegation([
+            {
+                "address": operators[0],
+                "coin": [set_delegate(accounts[0], delegate_amount, delegate_amount // 2),
+                         set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value), set_delegate(accounts[1], btc_value)],
+            },
+            {
+                "address": operators[1],
+                "coin": [set_delegate(accounts[0], delegate_amount, delegate_amount // 2),
+                         set_delegate(accounts[1], delegate_amount)],
+                "btc": [set_delegate(accounts[0], btc_value), set_delegate(accounts[1], btc_value)],
+            }, {
+                "address": operators[1]
+            }], BLOCK_REWARD // 2, state_map={'core_lp': 4})
+        tracker = get_tracker(accounts[0])
+        stake_hub_claim_reward(accounts[0])
+        assert tracker.delta() == account_rewards[accounts[0]]
+        turn_round(consensuses)
 
 
 class TestClaimReward:
@@ -273,3 +492,24 @@ class TestClaimReward:
         assert tracker0.delta() == account_rewards[accounts[0]]
         assert tracker1.delta() == account_rewards[accounts[1]]
         assert tracker2.delta() == account_rewards[accounts[2]]
+
+
+def init_hybrid_score_mock():
+    STAKE_HUB.initHybridScoreMock()
+    set_round_tag(get_current_round())
+
+
+def move_btc_data(tx_ids):
+    BTC_STAKE.moveData(tx_ids)
+
+
+def old_turn_round(miners: list = None, tx_fee=100, round_count=1):
+    if miners is None:
+        miners = []
+    tx = None
+    for _ in range(round_count):
+        for miner in miners:
+            ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[99]})
+        tx = CandidateHubMock[0].turnRoundOld()
+        chain.sleep(1)
+    return tx
