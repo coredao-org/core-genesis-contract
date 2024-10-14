@@ -88,7 +88,7 @@ def test_register_invalid_commission(candidate_hub, required_margin, commission)
 @pytest.mark.parametrize("margin", [
     pytest.param(0, marks=pytest.mark.xfail),
     pytest.param(1, marks=pytest.mark.xfail),
-    Web3.toWei(11000, 'ether')
+    Web3.to_wei(11000, 'ether')
 ])
 def test_register_margin(candidate_hub, margin):
     candidate_hub.register(
@@ -222,8 +222,10 @@ def test_register_candidate(candidate_hub, required_margin):
     fee_address = random_address()
 
     tests = [
-        (accounts[1], consensus_address, fee_address, 0, required_margin, False, "commissionThousandths should be in (0, 1000)"),
-        (accounts[1], consensus_address, fee_address, 1000, required_margin, False, "commissionThousandths should be in (0, 1000)"),
+        (accounts[1], consensus_address, fee_address, 0, required_margin, False,
+         "commissionThousandths should be in (0, 1000)"),
+        (accounts[1], consensus_address, fee_address, 1000, required_margin, False,
+         "commissionThousandths should be in (0, 1000)"),
         (accounts[1], consensus_address, fee_address, 1, required_margin - 1, False, "deposit is not enough"),
         (accounts[3], consensus_address, fee_address, 1, required_margin, False, "it is in jail"),
         (accounts[1], consensus_address, fee_address, 100, required_margin, True, ""),
@@ -300,11 +302,15 @@ def test_update_candidate(candidate_hub, required_margin):
 
     tests = [
         (accounts[1], None, consensus_address, fee_address, 100, False, "candidate does not exist", None),
-        (accounts[2], True, consensus_address, fee_address, 0, False, "commissionThousandths should in range (0, 1000)", None),
-        (accounts[3], True, random_address(), fee_address, 1000, False, "commissionThousandths should in range (0, 1000)", None),
+        (accounts[2], True, consensus_address, fee_address, 0, False, "commissionThousandths should in range (0, 1000)",
+         None),
+        (accounts[3], True, random_address(), fee_address, 1000, False,
+         "commissionThousandths should in range (0, 1000)", None),
         (accounts[3], None, consensus_address, fee_address, 100, False, "the consensus already exists", None),
-        (accounts[3], None, random_address(), fee_address, 201 + max_commission_change, False, "commissionThousandths out of adjustment range", None),
-        (accounts[3], None, random_address(), fee_address, 199 - max_commission_change, False, "commissionThousandths out of adjustment range", None),
+        (accounts[3], None, random_address(), fee_address, 201 + max_commission_change, False,
+         "commissionThousandths out of adjustment range", None),
+        (accounts[3], None, random_address(), fee_address, 199 - max_commission_change, False,
+         "commissionThousandths out of adjustment range", None),
         (accounts[3], None, random_address(), fee_address, 200 + max_commission_change, True, "", None),
         (accounts[3], None, random_address(), fee_address, 200 - max_commission_change, True, "", None),
         (accounts[3], None, random_address(), fee_address, 200 + max_commission_change, True, "", None),
@@ -461,15 +467,17 @@ def test_jail_validator(candidate_hub, validator_set, required_margin):
                     })
 
 
-def test_turn_round(candidate_hub, pledge_agent, validator_set, required_margin):
-    required_coin_deposit = pledge_agent.requiredCoinDeposit()
+def test_turn_round(candidate_hub, core_agent, validator_set, required_margin):
+    required_coin_deposit = core_agent.requiredCoinDeposit()
     validator_count = candidate_hub.validatorCount()
 
     tests = [
         ([accounts[1]], [required_coin_deposit], [1], [17]),
         (accounts[1:3], [0, required_coin_deposit], [1, 1], [17, 17]),
-        (accounts[1:validator_count+2], [0] + [required_coin_deposit] * validator_count, [1] * (validator_count+1), [1] + [17] * validator_count),
-        (accounts[1:validator_count+2], [0, 0] + [required_coin_deposit] * (validator_count-1), [1] * (validator_count+1), [1] + [17] * (validator_count)),
+        (accounts[1:validator_count + 2], [0] + [required_coin_deposit] * validator_count, [1] * (validator_count + 1),
+         [1] + [17] * validator_count),
+        (accounts[1:validator_count + 2], [0, 0] + [required_coin_deposit] * (validator_count - 1),
+         [1] * (validator_count + 1), [1] + [17] * (validator_count)),
         (accounts[1:6], [0] * 5, [1, 3, 5, 9, 17], [17, 3, 5, 9, 17])
     ]
     for agents, deposit, set_status, status in tests:
@@ -478,7 +486,7 @@ def test_turn_round(candidate_hub, pledge_agent, validator_set, required_margin)
             candidate_hub.setCandidateStatus(agent, _set_status, {'from': agent})
         for agent, _deposit in zip(agents, deposit):
             if _deposit > 0:
-                __delegate_coin_success(pledge_agent, agent, agent, 0, _deposit)
+                __delegate_coin_success(core_agent, agent, agent, 0, _deposit)
 
         turn_round()
 
@@ -494,11 +502,11 @@ def test_turn_round(candidate_hub, pledge_agent, validator_set, required_margin)
             if current_status == (current_status & candidate_hub.UNREGISTER_STATUS()):
                 candidate_hub.unregister({'from': agent})
             if _deposit > 0:
-                pledge_agent.undelegateCoin(agent, {'from': agent})
+                core_agent.undelegateCoin(agent, _deposit, {'from': agent})
 
 
-def test_unregister_reentry(candidate_hub, required_margin):
-    candidate_hub_proxy = UnRegisterReentry.deploy(candidate_hub.address, {'from': accounts[0]})
+def test_unregister_reentry(candidate_hub, required_margin, stake_hub):
+    candidate_hub_proxy = UnRegisterReentry.deploy(candidate_hub.address, stake_hub, {'from': accounts[0]})
     register_candidate(operator=accounts[1])
     candidate_hub_proxy.register(random_address(), candidate_hub_proxy.address, 500, {'value': required_margin})
     tx = candidate_hub_proxy.unregister()
@@ -508,11 +516,11 @@ def test_unregister_reentry(candidate_hub, required_margin):
     })
 
 
-def __delegate_coin_success(pledge_agent, agent, delegator, old_value, new_value):
-    tx = pledge_agent.delegateCoin(agent, {'from': delegator, 'value': new_value})
+def __delegate_coin_success(core_agent, agent, delegator, old_value, new_value):
+    tx = core_agent.delegateCoin(agent, {'from': delegator, 'value': new_value})
     expect_event(tx, "delegatedCoin", {
-        "agent": agent,
+        "candidate": agent,
         "delegator": delegator,
         "amount": new_value,
-        "totalAmount": new_value + old_value
+        "realtimeAmount": new_value + old_value
     })

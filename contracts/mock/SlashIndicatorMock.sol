@@ -30,6 +30,10 @@ contract SlashIndicatorMock is SlashIndicator {
       validators.push(newValidators[i-1]);
     }
   }
+      
+  function getSlashValidators() external view returns (address[] memory) {
+    return validators;
+  }
 
   function getIndicators() public view returns (address[] memory, uint256[] memory) {
     address[] memory v = new address[](validators.length);

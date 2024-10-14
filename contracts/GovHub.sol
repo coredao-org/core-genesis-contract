@@ -30,7 +30,6 @@ contract GovHub is System, IParamSubscriber {
 
   uint256 public executingPeriod;
 
-  event paramChange(string key, bytes value);
   event receiveDeposit(address indexed from, uint256 amount);
   event VoteCast(address voter, uint256 proposalId, bool support);
   event ProposalCreated(
@@ -314,7 +313,7 @@ contract GovHub is System, IParamSubscriber {
       }
       executingPeriod = newExecutingPeriod;
     } else {
-      require(false, "unknown param");
+      revert UnsupportedGovParam(key);
     }
     emit paramChange(key, value);
   }

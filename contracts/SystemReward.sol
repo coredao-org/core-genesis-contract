@@ -4,17 +4,19 @@ import "./System.sol";
 import "./interface/ISystemReward.sol";
 import "./interface/IParamSubscriber.sol";
 import "./interface/IBurn.sol";
-import "./lib/BytesToTypes.sol";
+import "./lib/BytesLib.sol";
 import "./lib/Memory.sol";
 
 /// This smart contract manages funds for relayers and verifiers
 contract SystemReward is System, ISystemReward, IParamSubscriber {
+  using BytesLib for *;
   uint256 public constant INCENTIVE_BALANCE_CAP = 1e25;
 
   uint256 public incentiveBalanceCap;
+  // Add STAKE_HUB_ADDR into operators via gov in v1.0.12
   uint256 public numOperator;
-  mapping(address => bool) operators;
-  bool isBurn;
+  mapping(address => bool) public operators;
+  bool public isBurn;
 
   /*********************** init **************************/
   function init() external onlyNotInit {
@@ -34,7 +36,6 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   event rewardTo(address indexed to, uint256 amount);
   event rewardEmpty();
   event receiveDeposit(address indexed from, uint256 amount);
-  event paramChange(string key, bytes value);
 
   receive() external payable {
     if (msg.value != 0) {
@@ -90,17 +91,34 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   /// @param value the new value set to the parameter
   function updateParam(string calldata key, bytes calldata value) external override onlyInit onlyGov {
     if (Memory.compareStrings(key, "incentiveBalanceCap")) {
-      require(value.length == 32, "length of incentiveBalanceCap mismatch");
-      uint256 newIncentiveBalanceCap = BytesToTypes.bytesToUint256(32, value);
-      require(newIncentiveBalanceCap != 0, "the incentiveBalanceCap out of range");
+      if (value.length != 32) {
+        revert MismatchParamLength(key);
+      }
+      uint256 newIncentiveBalanceCap = value.toUint256(0);
+      if (newIncentiveBalanceCap == 0) {
+        revert OutOfBounds(key, newIncentiveBalanceCap, 1, type(uint256).max);
+      }
       incentiveBalanceCap = newIncentiveBalanceCap;
     } else if (Memory.compareStrings(key, "isBurn")) {
-      require(value.length == 32, "length of isBurn mismatch");
-      uint256 newIsBurn = BytesToTypes.bytesToUint256(32, value);
-      require(newIsBurn <= 1, "the newIsBurn out of range");
+      if (value.length != 1) {
+        revert MismatchParamLength(key);
+      }
+      uint8 newIsBurn = value.toUint8(0);
+      if (newIsBurn > 1) {
+        revert OutOfBounds(key, newIsBurn, 0, 1);
+      }
       isBurn = newIsBurn == 1;
+    } else if (Memory.compareStrings(key, "addOperator")) {
+      if (value.length != 20) {
+        revert MismatchParamLength(key);
+      }
+      address newOperator = value.toAddress(0);
+      if (!operators[newOperator]) {
+        operators[newOperator] = true;
+        numOperator++;
+      }
     } else {
-      require(false, "unknown param");
+      revert UnsupportedGovParam(key);
     }
     emit paramChange(key, value);
   }

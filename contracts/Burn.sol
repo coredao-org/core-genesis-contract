@@ -20,7 +20,6 @@ contract Burn is System, IBurn, IParamSubscriber {
 
   /*********************** events **************************/
   event burned(address indexed to, uint256 amount);
-  event paramChange(string key, bytes value);
 
   /// Burn incoming CORE tokens
   /// Send back the portion which exceeds the cap
@@ -54,7 +53,7 @@ contract Burn is System, IBurn, IParamSubscriber {
       }
       burnCap = newBurnCap;
     } else {
-      require(false, "unknown param");
+      revert UnsupportedGovParam(key);
     }
     emit paramChange(key, value);
   }

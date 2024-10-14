@@ -372,7 +372,7 @@ library TypedMemView {
      */
     function sameType(bytes29 left, bytes29 right) internal pure returns (bool) {
         // XOR the inputs to check their difference
-        return (left ^ right) >> 216 == 0;
+        return (left ^ right) >> (2 * TWELVE_BYTES) == 0;
     }
 
     /**

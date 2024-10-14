@@ -42,7 +42,6 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
 
   event relayerRegister(address indexed relayer);
   event relayerUnRegister(address indexed relayer);
-  event paramChange(string key, bytes value);
 
 
   function init() external onlyNotInit{
@@ -85,7 +84,7 @@ contract RelayerHub is IRelayerHub, System, IParamSubscriber{
       require(newDues > 0 && newDues < requiredDeposit, "the dues out of range");
       dues = newDues;
     } else {
-      require(false, "unknown param");
+      revert UnsupportedGovParam(key);
     }
     emit paramChange(key, value);
   }

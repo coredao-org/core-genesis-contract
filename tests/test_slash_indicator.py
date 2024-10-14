@@ -1,7 +1,7 @@
 import pytest
 import brownie
 from web3 import Web3
-from eth_abi import encode_abi
+from eth_abi import encode
 from brownie import *
 from .utils import expect_event, padding_left, random_address
 from .common import execute_proposal
@@ -9,20 +9,20 @@ from .common import execute_proposal
 
 @pytest.fixture(scope="module", autouse=True)
 def set_up(slash_indicator):
-    hex_value = padding_left(Web3.toHex(150), 64)
+    hex_value = padding_left(Web3.to_hex(150), 64)
     execute_proposal(
         slash_indicator.address,
         0,
         "updateParam(string,bytes)",
-        encode_abi(['string', 'bytes'], ['felonyThreshold', Web3.toBytes(hexstr=hex_value)]),
+        encode(['string', 'bytes'], ['felonyThreshold', Web3.to_bytes(hexstr=hex_value)]),
         "update felonyThreshold"
     )
 
 
 def test_slash(slash_indicator, validator_set):
     for slash_address, times, count in (
-        (random_address(), 1, 1),
-        (random_address(), slash_indicator.felonyThreshold(), 0)
+            (random_address(), 1, 1),
+            (random_address(), slash_indicator.felonyThreshold(), 0)
     ):
         validator_set.setValidatorSetMap(slash_address)
         for _ in range(times):

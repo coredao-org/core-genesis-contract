@@ -37,7 +37,6 @@ program.option("--mock <mock>",
 program.parse(process.argv);
 
 const data = {
-  initRoundInterval: init_cycle.roundInterval,
   initConsensusStateBytes: program.initConsensusStateBytes,
   initChainHeight: program.initChainHeight,
   rewardForValidatorSetChange: program.rewardForValidatorSetChange,

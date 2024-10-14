@@ -1,4 +1,5 @@
 pragma solidity 0.8.4;
+
 import "../BtcLightClient.sol";
 import "../lib/BytesLib.sol";
 
@@ -26,19 +27,20 @@ contract BtcLightClientMock is BtcLightClient {
 
     function setCandidates(uint roundTimeTag, address[] memory candidates) public {
         delete roundPowerMap[roundTimeTag];
-        for (uint i=0; i< candidates.length; i++) {
+        for (uint i = 0; i < candidates.length; i++) {
             roundPowerMap[roundTimeTag].candidates.push(candidates[i]);
         }
     }
-    function setCheckResult(bool value) public {
+
+    function setCheckResult(bool value, uint64 value1) public {
         checkResult = value;
+        timesTamp = value1;
     }
-    
 
     function setMiners(uint roundTimeTag, address candidate, address[] memory rewardAddrs) public {
         RoundPower storage r = roundPowerMap[roundTimeTag];
         bool exist;
-        for(uint i=0; i<r.candidates.length; i++) {
+        for (uint i = 0; i < r.candidates.length; i++) {
             if (r.candidates[i] == candidate) {
                 exist = true;
                 break;
@@ -48,7 +50,7 @@ contract BtcLightClientMock is BtcLightClient {
             r.candidates.push(candidate);
         }
         delete r.powerMap[candidate];
-        for (uint i=0; i<rewardAddrs.length; i++) {
+        for (uint i = 0; i < rewardAddrs.length; i++) {
             r.powerMap[candidate].miners.push(rewardAddrs[i]);
             r.powerMap[candidate].btcBlocks.push(bytes32(0));
         }
@@ -56,5 +58,19 @@ contract BtcLightClientMock is BtcLightClient {
 
     function addMinerPowerMock(bytes32 blockHash) external {
         addMinerPower(blockHash);
+    }
+    /// Get powers of given candidates (number of BTC blocks delegated to candidates) in a specific round
+    /// @param roundTimeTag The specific round time
+    /// @param candidates The given candidates to get their powers
+    /// @return powers The corresponding powers of given candidates
+    function getRoundPowersMock(uint256 roundTimeTag, address[] calldata candidates) external view returns (uint256[] memory powers) {
+        uint256 count = candidates.length;
+        powers = new uint256[](count);
+
+        RoundPower storage r = roundPowerMap[roundTimeTag];
+        for (uint256 i = 0; i < count; ++i) {
+            powers[i] = r.powerMap[candidates[i]].miners.length;
+        }
+        return powers;
     }
 }
