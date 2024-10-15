@@ -314,6 +314,13 @@ class DataCenter:
     ############# end getter and setter ###############
 
     ################### candidate #####################
+    def has_available_candidate(self):
+        for candidate in self.candidates.values():
+            if candidate.can_delegate():
+                return True
+
+        return False
+
     def is_registered(self, operator):
         return self.candidates.get(operator) is not None
 
@@ -1189,7 +1196,11 @@ class RegisterCandidate(TaskBuilder):
         if not self.enabled:
             return False
 
+        # at least one available candidate is required
         data_center = task_generator.get_data_center()
+        if not data_center.has_available_candidate():
+            return True
+
         probability = data_center.get_probability(self.__class__.__name__)
         p = random.randint(1, constants.PROBABILITY_DECIMALS)
         return p <= probability
