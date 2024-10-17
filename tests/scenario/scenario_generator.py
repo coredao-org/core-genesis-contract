@@ -1229,7 +1229,13 @@ class SlashValidator(TaskBuilder):
         operator = task_generator.get_operator()
 
         data_center = task_generator.get_data_center()
+
         if not data_center.is_available(operator):
+            return
+
+        # do not slash the only remaining candidate
+        candidates = data_center.get_available_candidates()
+        if len(candidates) == 1:
             return
 
         max_count = data_center.get_felony_threshold()
@@ -1274,6 +1280,11 @@ class RefuseDelegate(TaskBuilder):
             return
 
         if not data_center.can_delegate(operator):
+            return
+
+        # the only remaining candidate cannot refuse a delegate
+        candidates = data_center.get_available_candidates()
+        if len(candidates) == 1:
             return
 
         task = [self.__class__.__name__, operator]
