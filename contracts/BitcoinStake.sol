@@ -384,6 +384,12 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       (bool success, bytes memory data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("moveBtcData(bytes32)", txid));
       require(success, "call PLEDGE_AGENT_ADDR.moveBtcData() failed.");
       (address candidate, address delegator, uint256 amount, uint256 round, uint256 lockTime) = abi.decode(data, (address,address,uint256,uint256,uint256));
+      {
+        uint256 endRound = uint256(lockTime) / SatoshiPlusHelper.ROUND_INTERVAL;
+        if (endRound <= roundTag) {
+          continue;
+        }
+      }
       BtcTx storage bt = btcTxMap[txid];
       if (bt.amount != 0) {
         continue;

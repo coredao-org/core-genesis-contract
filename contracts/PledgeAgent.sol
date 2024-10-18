@@ -348,7 +348,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     uint256 length = expireInfo.agentAddrList.length;
     for (uint256 j = length; j != 0; j--) {
       if (expireInfo.agentAddrList[j-1] == candidate) {
-        agentsMap[candidate].totalBtc -= amount;
+        // agentsMap[candidate].totalBtc -= amount;
         if (expireInfo.agent2valueMap[candidate] == amount) {
           delete expireInfo.agent2valueMap[candidate];
           delete expireInfo.agentExistMap[candidate];
