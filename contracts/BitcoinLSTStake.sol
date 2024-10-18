@@ -92,9 +92,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   // a list of lst redeem/burn request whose BTC payout transaction are in pending status
   Redeem[] public redeemRequests;
 
-  // limit of burn btc amount
-  uint256 public burnBTCLimit;
-
   // key: keccak256 of pkscript.
   // value: index+1 of redeemRequests.
   mapping(bytes32 => uint256) public redeemMap;
@@ -152,7 +149,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     roundTag = initRound;
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
     alreadyInit = true;
-    burnBTCLimit = 10 * SatoshiPlusHelper.BTC_DECIMAL;
   }
 
   /*********************** Interface implementations ***************************/
@@ -272,9 +268,9 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       reward += rewardList[i];
     }
     if (stakedAmount == 0) {
-      accuredRewardPerBTCMap[roundTag] = accuredRewardPerBTCMap[roundTag-1];
+      accuredRewardPerBTCMap[roundTag] = _getRoundRewardPerBTC(roundTag-1);
     } else {
-      accuredRewardPerBTCMap[roundTag] = accuredRewardPerBTCMap[roundTag-1] + reward * SatoshiPlusHelper.BTC_DECIMAL / stakedAmount;
+      accuredRewardPerBTCMap[roundTag] = _getRoundRewardPerBTC(roundTag-1) + reward * SatoshiPlusHelper.BTC_DECIMAL / stakedAmount;
     }
   }
 
@@ -360,8 +356,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       redeemRequests[index1 - 1].amount += amount;
       totalAmount = redeemRequests[index1 - 1].amount;
     }
-
-    require(totalAmount <= burnBTCLimit, "The cumulative burn amount has reached the upper limit");
     
     IBitcoinLSTToken(BTCLST_TOKEN_ADDR).burn(msg.sender, uint256(burnAmount));
     emit redeemed(msg.sender, amount, utxoFee, pkscript);
@@ -408,12 +402,6 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       } else {
         _unpause();
       }
-    } else if (Memory.compareStrings(key, "burnBTCLimit")) {
-      if (value.length != 32) {
-        revert MismatchParamLength(key);
-      }
-      uint256 newBurnBTCLimit = value.toUint256(0);
-      burnBTCLimit = newBurnBTCLimit;
     } else if (Memory.compareStrings(key, "utxoFee")) {
       if (value.length != 8) {
         revert MismatchParamLength(key);
