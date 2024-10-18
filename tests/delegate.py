@@ -338,6 +338,8 @@ def old_claim_reward_success(candidates, account=None):
     if isinstance(account, list):
         for a in account:
             tx = PledgeAgentMock[0].claimReward(candidates, {'from': a})
+            print('old_claim_reward_success>>>>>', tx.events)
+
     else:
         if account is None:
             account = accounts[0]

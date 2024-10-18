@@ -725,6 +725,34 @@ def test_claim_reward_after_turnround_failure(set_candidate, candidate_hub, stak
     turn_round(consensuses)
 
 
+def test_claim_reward_after_round_failure(set_candidate, candidate_hub, stake_hub, lst_token, btc_lst_stake):
+    operators, consensuses = set_candidate
+    block_times_tamp = 1723122315
+    set_last_round_tag(2, block_times_tamp)
+    chain.mine(timestamp=block_times_tamp)
+    turn_round()
+    candidate_hub.setControlRoundTimeTag(False)
+    block_time = block_times_tamp
+    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT, percentage=Utils.DENOMINATOR)
+    chain.mine(timestamp=block_time + Utils.ROUND_INTERVAL)
+    turn_round()
+    chain.mine(timestamp=block_time + Utils.ROUND_INTERVAL * 2)
+    turn_round(consensuses)
+    assert btc_lst_stake.accuredRewardPerBTCMap(19944)
+    candidate_hub.setTurnroundFailed(True)
+    chain.mine(timestamp=block_time + Utils.ROUND_INTERVAL * 3)
+    with brownie.reverts("turnRound failed"):
+        turn_round(consensuses)
+    candidate_hub.setTurnroundFailed(False)
+    chain.mine(timestamp=block_time + Utils.ROUND_INTERVAL * 4)
+    turn_round(consensuses)
+    chain.mine(timestamp=block_time + Utils.ROUND_INTERVAL * 5)
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker0.delta() == TOTAL_REWARD * 3 * 4
+
+
 def test_retry_turnround_after_failure(set_candidate, candidate_hub, stake_hub, lst_token, btc_lst_stake):
     operators, consensuses = set_candidate
     block_times_tamp = 1723122315

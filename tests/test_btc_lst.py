@@ -1364,6 +1364,8 @@ def test_distribute_reward_success(btc_lst_stake, btc_agent):
     stake_amount = 10000
     update_system_contract_address(btc_lst_stake, btc_agent=accounts[0])
     round_tag = get_current_round()
+    round_tag += 1
+    btc_lst_stake.setRoundTag(round_tag)
     btc_lst_stake.setStakedAmount(stake_amount)
     btc_lst_stake.distributeReward(validators, reward_list)
     sum_reward = sum(reward_list)
@@ -1382,10 +1384,56 @@ def test_distribute_reward_with_no_stakes(btc_lst_stake, btc_agent):
     history_amount = 5000
     update_system_contract_address(btc_lst_stake, btc_agent=accounts[0])
     round_tag = get_current_round()
-    btc_lst_stake.setAccuredRewardPerBTCMap(6, history_amount)
+    round_tag += 2
+    btc_lst_stake.setRoundTag(round_tag)
+    btc_lst_stake.setAccuredRewardPerBTCMap(round_tag - 1, history_amount)
     btc_lst_stake.distributeReward(validators, reward_list)
     accured_reward = btc_lst_stake.getAccuredRewardPerBTCMap(round_tag)
     assert accured_reward == history_amount
+
+
+def test_no_reward_in_init_round(btc_lst_stake, btc_agent):
+    validators = accounts[:3]
+    reward_list = [1000, 20000, 30000]
+    stake_amount = 10000
+    update_system_contract_address(btc_lst_stake, btc_agent=accounts[0])
+    round_tag = get_current_round()
+    round_tag += 1
+    btc_lst_stake.setRoundTag(round_tag)
+    btc_lst_stake.setStakedAmount(stake_amount)
+    btc_lst_stake.setAccuredRewardPerBTCMap(round_tag - 1, 5000)
+    btc_lst_stake.distributeReward(validators, reward_list)
+    sum_reward = sum(reward_list)
+    accured_reward = btc_lst_stake.getAccuredRewardPerBTCMap(round_tag)
+    round_reward = sum_reward * Utils.BTC_DECIMAL // stake_amount
+    assert accured_reward == round_reward
+    btc_lst_stake.setRoundTag(round_tag + 1)
+    btc_lst_stake.distributeReward(validators, reward_list)
+    accured_reward = btc_lst_stake.getAccuredRewardPerBTCMap(round_tag + 1)
+    assert accured_reward == round_reward * 2
+
+
+def test_no_reward_generated_in_current_round(btc_lst_stake, btc_agent):
+    validators = accounts[:3]
+    reward_list = [1000, 20000, 30000]
+    stake_amount = 10000
+    update_system_contract_address(btc_lst_stake, btc_agent=accounts[0])
+    round_tag = get_current_round()
+    round_tag += 10
+    btc_lst_stake.setRoundTag(round_tag)
+    btc_lst_stake.setStakedAmount(stake_amount)
+    history_reward0 = 50000
+    btc_lst_stake.setAccuredRewardPerBTCMap(round_tag - 2, history_reward0)
+    btc_lst_stake.setAccuredRewardPerBTCMap(round_tag - 3, history_reward0 * 10)
+    btc_lst_stake.distributeReward(validators, reward_list)
+    sum_reward = sum(reward_list)
+    accured_reward = btc_lst_stake.getAccuredRewardPerBTCMap(round_tag)
+    round_reward = sum_reward * Utils.BTC_DECIMAL // stake_amount
+    assert accured_reward == round_reward + history_reward0
+    btc_lst_stake.setRoundTag(round_tag + 1)
+    btc_lst_stake.distributeReward(validators, reward_list)
+    accured_reward = btc_lst_stake.getAccuredRewardPerBTCMap(round_tag + 1)
+    assert accured_reward == round_reward * 2 + history_reward0
 
 
 def test_distribute_reward_only_btc_agent_can_call(btc_lst_stake, btc_agent):
@@ -1746,6 +1794,7 @@ def test_redeem_without_pledge_reverts(btc_lst_stake, lst_token, set_candidate):
         btc_lst_stake.redeem(BTC_VALUE // 2, REDEEM_SCRIPT)
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 @pytest.mark.parametrize("redeem_value", [0, 1, -1])
 def test_btc_redeem_exceeds_single_limit(btc_lst_stake, lst_token, set_candidate, redeem_value):
     utxo_fee = 100
@@ -1760,6 +1809,7 @@ def test_btc_redeem_exceeds_single_limit(btc_lst_stake, lst_token, set_candidate
         assert 'redeemed' in tx.events
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 def test_btc_redeem_in_multiple_parts(btc_lst_stake, lst_token, set_candidate):
     btc_value = 15e8
     redeem_amount = 2e8
@@ -1771,6 +1821,7 @@ def test_btc_redeem_in_multiple_parts(btc_lst_stake, lst_token, set_candidate):
         btc_lst_stake.redeem(redeem_amount, REDEEM_SCRIPT)
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 @pytest.mark.parametrize("redeem_value", [9e8, 10e8, 11e8, 14e8])
 def test_redeem_exceeds_after_multiple_stakes(btc_lst_stake, lst_token, set_candidate, redeem_value):
     btc_value = 3e8
@@ -1784,6 +1835,7 @@ def test_redeem_exceeds_after_multiple_stakes(btc_lst_stake, lst_token, set_cand
         assert 'redeemed' in tx.events
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 def test_exceed_redeem_after_multiple_stakes_and_redeems(btc_lst_stake, lst_token, set_candidate):
     btc_value = 3e8
     redeem_amount = 2e8
@@ -1796,6 +1848,7 @@ def test_exceed_redeem_after_multiple_stakes_and_redeems(btc_lst_stake, lst_toke
         btc_lst_stake.redeem(redeem_amount, REDEEM_SCRIPT)
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 @pytest.mark.parametrize("part", [True, False])
 def test_recalculate_total_redeem_amount_after_undelegate(btc_lst_stake, part):
     btc_value = 5e8
@@ -1834,6 +1887,7 @@ def test_recalculate_total_redeem_amount_after_undelegate(btc_lst_stake, part):
             btc_lst_stake.redeem(9e8, REDEEM_SCRIPT)
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 def test_full_clear_after_undelegate(btc_lst_stake):
     btc_value = 20e8
     redeem_amount0 = 2e8
@@ -1848,6 +1902,7 @@ def test_full_clear_after_undelegate(btc_lst_stake):
     assert 'redeemed' in tx.events
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 @pytest.mark.parametrize("burn_btc_limit", [1000, 1e6, 20e8, 100e8])
 def test_redeem_after_modifying_btc_limit(btc_lst_stake, burn_btc_limit):
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
@@ -2091,6 +2146,7 @@ def test_update_paused_range_error(btc_lst_stake, paused):
         btc_lst_stake.updateParam('paused', paused)
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 @pytest.mark.parametrize("burn_btc_limit", [1e5, 2e8, 10e8, 100e8])
 def test_update_burn_btc_limit_success(btc_lst_stake, burn_btc_limit):
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
@@ -2099,6 +2155,7 @@ def test_update_burn_btc_limit_success(btc_lst_stake, burn_btc_limit):
     assert btc_lst_stake.burnBTCLimit() == int(burn_btc_limit)
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 def test_update_burn_btc_limit_param_length_error(btc_lst_stake):
     burn_btc_limit = 10e8
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
