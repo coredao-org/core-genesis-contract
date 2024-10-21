@@ -17,7 +17,7 @@ program.option(
 program.option("--mock <mock>",
     "if use mock",
     false);
-program.option("-c, --chainid <chainid>", "chain id", "1115")
+program.option("-c, --chainid <chainid>", "chain id", "1114")
 
 program.parse(process.argv);
 
