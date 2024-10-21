@@ -104,7 +104,6 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     uint256 candidateSize = candidates.length;
     uint256[] memory lstAmounts = IBitcoinStake(BTCLST_STAKE_ADDR).getStakeAmounts(candidates);
     amounts = IBitcoinStake(BTC_STAKE_ADDR).getStakeAmounts(candidates);
-
     for (uint256 i = 0; i < candidateSize; ++i) {
       candidateMap[candidates[i]].lstStakeAmount = lstAmounts[i];
       candidateMap[candidates[i]].stakeAmount = amounts[i];
@@ -126,7 +125,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /// @param coreAmount the accumurated amount of staked CORE.
   /// @return reward Amount claimed
   /// @return floatReward floating reward amount
-  /// @return accStakedAmount accumulated stake amount (multipled by rounds), used for grading calculation
+  /// @return accStakedAmount accumulated stake amount (multiplied by rounds), used for grading calculation
   function claimReward(address delegator, uint256 coreAmount) external override onlyStakeHub returns (uint256 reward, int256 floatReward, uint256 accStakedAmount) {
     (uint256 btcReward, uint256 btcRewardUnclaimed, uint256 btcAccStakedAmount) = IBitcoinStake(BTC_STAKE_ADDR).claimReward(delegator);
     uint256 gradeLength = grades.length;

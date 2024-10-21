@@ -49,13 +49,13 @@ contract BitcoinLSTStakeMock is BitcoinLSTStake {
     }
 
 
-    function getAccuredRewardPerBTCMap(uint256 round) external view returns (uint256) {
-        uint256 reward = accuredRewardPerBTCMap[round];
+    function getaccruedRewardPerBTCMap(uint256 round) external view returns (uint256) {
+        uint256 reward = accruedRewardPerBTCMap[round];
         return reward;
     }
 
-    function setAccuredRewardPerBTCMap(uint256 round, uint256 value) external {
-        accuredRewardPerBTCMap[round] = value;
+    function setaccruedRewardPerBTCMap(uint256 round, uint256 value) external {
+        accruedRewardPerBTCMap[round] = value;
     }
 
 

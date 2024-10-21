@@ -6,7 +6,6 @@ import "./interface/IBitcoinStake.sol";
 import "./interface/ICandidateHub.sol";
 import "./interface/ILightClient.sol";
 import "./interface/IParamSubscriber.sol";
-import "./interface/IStakeHub.sol";
 import "./lib/BytesLib.sol";
 import "./lib/Memory.sol";
 import "./lib/BitcoinHelper.sol";
@@ -66,7 +65,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
 
   // key: roundtag
   // value: reward per BTC accumulated
-  mapping(uint256 => uint256) public accuredRewardPerBTCMap;
+  mapping(uint256 => uint256) public accruedRewardPerBTCMap;
 
   // the number of blocks to mark a BTC staking transaction as confirmed
   uint32 public btcConfirmBlock;
@@ -135,6 +134,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   event undelegatedOverflow(bytes32 indexed txid, uint32 outputIndex, uint64 expectAmount, uint64 actualAmount, bytes pkscript);
   event addedWallet(bytes32 indexed _hash, uint64 _type);
   event removedWallet(bytes32 indexed _hash, uint64 _type);
+  event rewardUpdated(uint256 round, uint256 value);
 
   modifier onlyBtcLSTToken() {
     require(msg.sender == BTCLST_TOKEN_ADDR, 'only btc lst token can call this function');
@@ -268,10 +268,11 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       reward += rewardList[i];
     }
     if (stakedAmount == 0) {
-      accuredRewardPerBTCMap[roundTag] = _getRoundRewardPerBTC(roundTag-1);
+      accruedRewardPerBTCMap[roundTag] = _getRoundRewardPerBTC(roundTag-1);
     } else {
-      accuredRewardPerBTCMap[roundTag] = _getRoundRewardPerBTC(roundTag-1) + reward * SatoshiPlusHelper.BTC_DECIMAL / stakedAmount;
+      accruedRewardPerBTCMap[roundTag] = _getRoundRewardPerBTC(roundTag-1) + reward * SatoshiPlusHelper.BTC_DECIMAL / stakedAmount;
     }
+    emit rewardUpdated(roundTag, accruedRewardPerBTCMap[roundTag]);
   }
 
   /// Get staked BTC amount.
@@ -315,7 +316,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param delegator the delegator address
   /// @return reward Amount claimed
   /// @return rewardUnclaimed Amount unclaimed
-  /// @return accStakedAmount accumulated stake amount (multipled by days), used for grading calculation
+  /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
   function claimReward(address delegator) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed, uint256 accStakedAmount) {
     if (paused()) {
       return (0, 0, 0);
@@ -565,7 +566,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       return 0;
     }
     for (;round != initRound; --round) {
-      reward = accuredRewardPerBTCMap[round];
+      reward = accruedRewardPerBTCMap[round];
       if (reward != 0) {
         return reward;
       }
@@ -577,7 +578,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param userAddress the user address to update
   /// @param claim whether the return amount of reward will be claimed
   /// @return reward amount of user reward updated/claimed
-  /// @return accStakedAmount accumulated stake amount (multipled by days), used for grading calculation
+  /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
   function _updateUserRewards(address userAddress, bool claim) internal returns (uint256 reward, uint256 accStakedAmount) {
     UserStakeInfo storage user = userStakeInfo[userAddress];
     uint256 changeRound = user.changeRound;
@@ -678,7 +679,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
       _scriptPubkeyWithLength = _outputView.scriptPubkeyWithLength();
       _arbitraryData = _scriptPubkeyWithLength.opReturnPayload();
 
-      // Checks whether the output is an arbitarary data or not
+      // Checks whether the output is an arbitrary data or not
       if(_arbitraryData == TypedMemView.NULL) {
         // Output is not an arbitrary data
         if (keccak256(_scriptPubkeyView.clone()) == keccak256(_lockingScript)) {

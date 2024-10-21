@@ -437,7 +437,7 @@ library BitcoinHelper {
             _scriptPubkeyWithLength = scriptPubkeyWithLength(output);
             _arbitraryData = opReturnPayload(_scriptPubkeyWithLength);
 
-            // Checks whether the output is an arbitarary data or not
+            // Checks whether the output is an arbitrary data or not
             if(_arbitraryData == TypedMemView.NULL) {
                 // Output is not an arbitrary data
                 if (
@@ -475,7 +475,7 @@ library BitcoinHelper {
             _scriptPubkeyWithLength = scriptPubkeyWithLength(_outputView);
             _arbitraryData = opReturnPayload(_scriptPubkeyWithLength);
 
-            // Checks whether the output is an arbitarary data or not
+            // Checks whether the output is an arbitrary data or not
             if(_arbitraryData == TypedMemView.NULL) {
                 // Output is not an arbitrary data
                 if (

@@ -33,6 +33,6 @@ interface IAgent {
   /// @param coreAmount the accumurated amount of staked CORE.
   /// @return reward Amount claimed
   /// @return floatReward floating reward amount
-  /// @return accStakedAmount accumulated stake amount (multipled by rounds), used for grading calculation
+  /// @return accStakedAmount accumulated stake amount (multiplied by rounds), used for grading calculation
   function claimReward(address delegator, uint256 coreAmount) external returns (uint256 reward, int256 floatReward, uint256 accStakedAmount);
 }

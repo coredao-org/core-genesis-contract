@@ -19,9 +19,9 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   // minimal CORE require to stake
   uint256 public requiredCoinDeposit;
 
-  // Accured reward of every 1 million CORE per validator on each round
+  // accrued reward of every 1 million CORE per validator on each round
   // validator => (round => 1 million CORE Reward)
-  mapping(address => mapping(uint256 => uint256)) public accuredRewardMap;
+  mapping(address => mapping(uint256 => uint256)) public accruedRewardMap;
 
   // key: delegator address
   // value: delegator info
@@ -119,7 +119,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
         continue;
       }
       validator = validators[i];
-      mapping(uint256 => uint256) storage m = accuredRewardMap[validator];
+      mapping(uint256 => uint256) storage m = accruedRewardMap[validator];
       Candidate storage c = candidateMap[validator];
       l = c.continuousRewardEndRounds.length;
       if (l != 0) {
@@ -129,7 +129,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
         historyReward = 0;
         lastRewardRound = 0;
       }
-      // Calculate accured reward of 1M Core on a validator for the round
+      // Calculate accrued reward of 1M Core on a validator for the round
       m[round] = historyReward + rewardList[i] * SatoshiPlusHelper.CORE_STAKE_DECIMAL / c.amount;
       if (lastRewardRound + 1 == round) {
         c.continuousRewardEndRounds[l - 1] = round;
@@ -209,7 +209,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param delegator the delegator address
   /// @return reward Amount claimed
   /// @return floatReward floating reward amount
-  /// @return accStakedAmount accumulated stake amount (multipled by rounds), used for grading calculation
+  /// @return accStakedAmount accumulated stake amount (multiplied by rounds), used for grading calculation
   function claimReward(address delegator, uint256 /*coreAmount*/) external override onlyStakeHub returns (uint256 reward, int256 floatReward, uint256 accStakedAmount) {
     address[] storage candidates = delegatorMap[delegator].candidates;
     uint256 candidateSize = candidates.length;
@@ -426,7 +426,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param candidate the validator candidate to collect rewards
   /// @param cd the structure stores user CORE stake information
   /// @return reward The amount of CORE collected
-  /// @return accStakedAmount accumulated stake amount (multipled by days), used for grading calculation
+  /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
   function _collectRewardFromCandidate(address candidate, CoinDelegator storage cd) internal returns (uint256 reward, uint256 accStakedAmount) {
     uint256 stakedAmount = cd.stakedAmount;
     uint256 realtimeAmount = cd.realtimeAmount;
@@ -452,19 +452,19 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param changeRound the last round when the delegator acted
   /// @return reward the amount of rewards collected
   /// @return changed whether the changedRound value should be updated
-  /// @return accStakedAmount accumulated stake amount (multipled by days), used for grading calculation
+  /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
   function _collectReward(address candidate, uint256 stakedAmount, uint256 realtimeAmount, uint256 transferredAmount, uint256 changeRound) internal returns (uint256 reward, bool changed, uint256 accStakedAmount) {
     require(changeRound != 0, "invalid delegator");
     uint256 lastRoundTag = roundTag - 1;
     if (changeRound <= lastRoundTag) {
-      uint256 lastRoundReward = _getRoundAccuredReward(candidate, lastRoundTag);
-      uint256 lastChangeRoundReward = _getRoundAccuredReward(candidate, changeRound - 1);
+      uint256 lastRoundReward = _getRoundAccruedReward(candidate, lastRoundTag);
+      uint256 lastChangeRoundReward = _getRoundAccruedReward(candidate, changeRound - 1);
       uint256 changeRoundReward;
       reward = stakedAmount * (lastRoundReward - lastChangeRoundReward);
       accStakedAmount = stakedAmount * (lastRoundTag - changeRound + 1);
       
       if (transferredAmount != 0) {
-        changeRoundReward = _getRoundAccuredReward(candidate, changeRound);
+        changeRoundReward = _getRoundAccruedReward(candidate, changeRound);
         reward += transferredAmount * (changeRoundReward - lastChangeRoundReward);
         accStakedAmount += transferredAmount;
       }
@@ -472,7 +472,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       if (realtimeAmount != stakedAmount) {
         if (changeRound < lastRoundTag) {
           if (changeRoundReward == 0) {
-            changeRoundReward = _getRoundAccuredReward(candidate, changeRound);
+            changeRoundReward = _getRoundAccruedReward(candidate, changeRound);
           }
           reward += (realtimeAmount - stakedAmount) * (lastRoundReward - changeRoundReward);
           accStakedAmount += (realtimeAmount - stakedAmount) * (lastRoundTag - changeRound);
@@ -502,19 +502,19 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     delete candidateMap[candidate].cDelegatorMap[delegator];
   }
 
-  /// get accured rewards of a validator candidate on a given round
+  /// get accrued rewards of a validator candidate on a given round
   /// @param candidate validator candidate address
   /// @param round the round to calculate rewards
   /// @return reward the amount of rewards
-  function _getRoundAccuredReward(address candidate, uint256 round) internal returns (uint256 reward) {
-    reward = accuredRewardMap[candidate][round];
+  function _getRoundAccruedReward(address candidate, uint256 round) internal returns (uint256 reward) {
+    reward = accruedRewardMap[candidate][round];
     if (reward != 0) {
       return reward;
     }
     
     // there might be no rewards for a candidate on a given round if it is unelected or jailed, etc
     // the accrued reward map will only be updated when reward is distributed to the candidate on that round
-    // in that case, the accured reward for round N == a round smaller but also closest to N
+    // in that case, the accrued reward for round N == a round smaller but also closest to N
     // here we use binary search to get that round efficiently
     Candidate storage c = candidateMap[candidate];
     uint256 b = c.continuousRewardEndRounds.length;
@@ -539,8 +539,8 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       }
     }
     if (targetRound != 0) {
-      reward = accuredRewardMap[candidate][targetRound];
-      accuredRewardMap[candidate][round] = reward;
+      reward = accruedRewardMap[candidate][targetRound];
+      accruedRewardMap[candidate][round] = reward;
     }
     return reward;
   }
