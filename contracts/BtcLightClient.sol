@@ -16,6 +16,10 @@ import "./System.sol";
 contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
   // error codes for storeBlockHeader
+  bool public constant POW_ALLOW_MIN_DIFFICULTY_BLOCKS = true;
+  uint256 public constant POW_TARGET_SPACING = 600;
+  uint256 public constant POW_LIMIT = 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
+
   int256 public constant ERR_DIFFICULTY = 10010; // difficulty didn't match current difficulty
   int256 public constant ERR_RETARGET = 10020;  // difficulty didn't match retarget
   int256 public constant ERR_NO_PREV_BLOCK = 10030;
@@ -414,6 +418,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     }
     blockHeight = 1 + getHeight(hashPrevBlock);
     uint32 prevBits = getBits(hashPrevBlock);
+    uint32 expectBits;
     if (blockHeight % DIFFICULTY_ADJUSTMENT_INTERVAL != 0) {
       // since blockHeight is 1 more than blockNumber; OR clause is special case for 1st header
       /* we need to check prevBits isn't 0 otherwise the 1st header
@@ -422,7 +427,18 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
        * the initial parent, but as these forks will have lower score than
        * the main chain, they will not have impact.
        */
-      if (bits != prevBits && prevBits != 0) {
+      if (POW_ALLOW_MIN_DIFFICULTY_BLOCKS) {
+        uint64 blockTime = flip4Bytes(uint32(loadInt256(100, headerBytes)>>224));
+        uint64 prevBlockTime = getTimestamp(hashPrevBlock);
+        if (blockTime > prevBlockTime + POW_TARGET_SPACING*2)
+          expectBits = toCompactBits(POW_LIMIT);
+        else {
+          // Return the last non-special-min-difficulty-rules-block
+          bytes32 lastAdjustmentHash = adjustmentHashes[blockHeight - blockHeight % DIFFICULTY_ADJUSTMENT_INTERVAL];
+          expectBits = getBits(lastAdjustmentHash);
+        }
+      }
+      if (bits != expectBits && expectBits != 0) {
         return (blockHeight, scoreBlock, ERR_DIFFICULTY);
       }
     } else {
