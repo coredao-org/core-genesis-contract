@@ -369,6 +369,9 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @param to ERC20 standard to address
   /// @param value the amount of tokens to transfer
   function onTokenTransfer(address from, address to, uint256 value) external whenNotPaused onlyBtcLSTToken {
+    if (from == to) {
+      return;
+    }
     uint64 amount = uint64(value);
     require(uint256(amount) == value, 'btc amount limit uint64');
     _afterBurn(from, amount);
