@@ -5,7 +5,6 @@ import "./interface/IBitcoinStake.sol";
 import "./interface/ICandidateHub.sol";
 import "./interface/ILightClient.sol";
 import "./interface/IParamSubscriber.sol";
-import "./interface/IStakeHub.sol";
 import "./lib/BytesLib.sol";
 import "./lib/Memory.sol";
 import "./lib/BitcoinHelper.sol";
@@ -30,9 +29,9 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   // value: bitcoin stake record
   mapping(bytes32 => BtcTx) public btcTxMap;
 
-  // Accured reward per btc of a validator on a given round
+  // accrued reward per btc of a validator on a given round
   // validator => (round => perBTCReward)
-  mapping(address => mapping(uint256 => uint256)) public accuredRewardPerBTCMap;
+  mapping(address => mapping(uint256 => uint256)) public accruedRewardPerBTCMap;
 
   // roundTag is set to be timestamp / round interval,
   // the valid value should be greater than 10,000 since the chain started.
@@ -251,7 +250,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       uint256 historyReward;
       uint256 lastRewardRound;
       validator = validators[i];
-      mapping(uint256 => uint256) storage m = accuredRewardPerBTCMap[validator];
+      mapping(uint256 => uint256) storage m = accruedRewardPerBTCMap[validator];
       Candidate storage c = candidateMap[validator];
       l = c.continuousRewardEndRounds.length;
       if (l != 0) {
@@ -283,7 +282,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// @param delegator the delegator address
   /// @return reward Amount claimed
   /// @return rewardUnclaimed Amount unclaimed
-  /// @return accStakedAmount accumulated stake amount (multipled by days), used for grading calculation
+  /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
   function claimReward(address delegator) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed, uint256 accStakedAmount) {
     bool expired;
     bytes32[] storage txids = delegatorMap[delegator].txids;
@@ -531,7 +530,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       _scriptPubkeyWithLength = _outputView.scriptPubkeyWithLength();
       _arbitraryData = _scriptPubkeyWithLength.opReturnPayload();
 
-      // Checks whether the output is an arbitarary data or not
+      // Checks whether the output is an arbitrary data or not
       if(_arbitraryData == TypedMemView.NULL) {
           // Output is not an arbitrary data
           if (
@@ -570,19 +569,19 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     delegator = payload.indexAddress(7);
   }
 
-  /// get accured rewards of a validator candidate on a given round
+  /// get accrued rewards of a validator candidate on a given round
   /// @param candidate validator candidate address
   /// @param round the round to calculate rewards
   /// @return reward the amount of rewards
-  function _getRoundAccuredReward(address candidate, uint256 round) internal returns (uint256 reward) {
-    reward = accuredRewardPerBTCMap[candidate][round];
+  function _getRoundAccruedReward(address candidate, uint256 round) internal returns (uint256 reward) {
+    reward = accruedRewardPerBTCMap[candidate][round];
     if (reward != 0) {
       return reward;
     }
 
     // there might be no rewards for a candidate on a given round if it is unelected or jailed, etc
     // the accrued reward map will only be updated when reward is distributed to the candidate on that round
-    // in that case, the accured reward for round N == a round smaller but also closest to N
+    // in that case, the accrued reward for round N == a round smaller but also closest to N
     // here we use binary search to get that round efficiently
     Candidate storage c = candidateMap[candidate];
     uint256 b = c.continuousRewardEndRounds.length;
@@ -608,8 +607,8 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     }
 
     if (targetRound != 0) {
-      reward = accuredRewardPerBTCMap[candidate][targetRound];
-      accuredRewardPerBTCMap[candidate][round] = reward;
+      reward = accruedRewardPerBTCMap[candidate][targetRound];
+      accruedRewardPerBTCMap[candidate][round] = reward;
     }
     return reward;
   }
@@ -618,7 +617,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// @param txid the BTC stake transaction id
   /// @return reward reward of the BTC stake transaction
   /// @return expired whether the stake is expired
-  /// @return accStakedAmount accumulated stake amount (multipled by days), used for grading calculation
+  /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
   function _collectReward(bytes32 txid) internal returns (uint256 reward, bool expired, uint256 accStakedAmount) {
     BtcTx storage bt = btcTxMap[txid];
     DepositReceipt storage dr = receiptMap[txid];
@@ -629,7 +628,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     if (drRound < lastRound && drRound < unlockRound1) {
       uint256 minRound = lastRound < unlockRound1 ? lastRound : unlockRound1;
       // full reward
-      reward = (_getRoundAccuredReward(dr.candidate, minRound) - _getRoundAccuredReward(dr.candidate, drRound)) * bt.amount / SatoshiPlusHelper.BTC_DECIMAL;
+      reward = (_getRoundAccruedReward(dr.candidate, minRound) - _getRoundAccruedReward(dr.candidate, drRound)) * bt.amount / SatoshiPlusHelper.BTC_DECIMAL;
       accStakedAmount = bt.amount * (minRound - drRound);
 
       // apply time grading to BTC rewards

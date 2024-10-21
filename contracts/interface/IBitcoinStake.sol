@@ -43,6 +43,6 @@ interface IBitcoinStake {
   /// @param delegator the delegator address
   /// @return reward Amount claimed
   /// @return rewardUnclaimed Amount unclaimed
-  /// @return accStakedAmount accumulated stake amount (multipled by days), used for grading calculation
+  /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
   function claimReward(address delegator) external returns (uint256 reward, uint256 rewardUnclaimed, uint256 accStakedAmount);
 }
