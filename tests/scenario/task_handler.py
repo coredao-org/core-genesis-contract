@@ -55,7 +55,9 @@ class RegisterCandidate(TaskHandler):
         super().on_task_ready()
         self.chain.init_balance(CandidateHubMock[0])
         self.chain.init_balance(self.task.fee_addr)
+        self.checker.check_balance(self.task.fee_addr)
         self.chain.init_balance(self.task.operator_addr)
+        self.checker.check_balance(self.task.operator_addr)
 
     def on_task_finish(self):
         super().on_task_finish()
@@ -69,9 +71,9 @@ class RegisterCandidate(TaskHandler):
         self.check_state()
 
     def check_state(self):
+        self.checker.check_candidate(self.task.operator_addr)
         self.checker.check_balance(CandidateHubMock[0])
         self.checker.check_balance(self.task.operator_addr)
-        self.checker.check_candidate(self.task.operator_addr)
 
 
 class UnregisterCandidate(TaskHandler):
@@ -213,6 +215,7 @@ class TurnRound(TaskHandler):
 
     def check_state(self):
         self.checker.check_current_round()
+        self.checker.check_validator_set()
         self.checker.check_candidate_statuses()
         self.checker.check_validator_incomes()
         self.checker.check_validator_stake_amounts()
@@ -223,9 +226,9 @@ class TurnRound(TaskHandler):
         self.checker.check_balance(ValidatorSetMock[0])
         self.checker.check_balance(StakeHubMock[0])
 
-        print(f"ROUND={self.chain.get_round()} validate set")
-        for validator in self.chain.get_validators().values():
-            print(f"validator: {addr_to_name(validator.get_operator_addr())}")
+        # print(f"ROUND={self.chain.get_round()} validate set")
+        # for validator in self.chain.get_validators().values():
+        #     print(f"validator: {addr_to_name(validator.get_operator_addr())}")
 
 
 class CreateStakeLockTx(TaskHandler):

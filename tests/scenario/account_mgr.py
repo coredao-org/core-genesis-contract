@@ -31,6 +31,20 @@ class AccountMgr:
 
     __inited = False
 
+
+    @classmethod
+    def __clear(cls):
+        cls.__contract_addr_table = {}
+        cls.__operator_addr_table = {}
+        cls.__consensus_addr_table = {}
+        cls.__fee_addr_table = {}
+        cls.__delegator_addr_table = {}
+        cls.__sponsor_addr_table = {}
+        cls.__addr_to_name_table = {}
+        cls.__backup_random_addr_table = {}
+        cls.__inited = False
+
+
     @classmethod
     def __gen_random_addr(cls):
         addr = Account.create(str(random.random())).address
@@ -57,7 +71,7 @@ class AccountMgr:
     @classmethod
     def init_account_mgr(cls):
         if cls.__inited:
-            return
+            cls.__clear()
 
         cls.__inited = True
 

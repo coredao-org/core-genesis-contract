@@ -29,12 +29,12 @@ contract CoreAgentMock is CoreAgent {
         return (candidates, amount);
     }
 
-    function getaccruedRewardMap(address validator, uint256 round) external view returns (uint256) {
+    function getAccruedRewardMap(address validator, uint256 round) external view returns (uint256) {
         uint256 accruedReward = accruedRewardMap[validator][round];
         return accruedReward;
     }
 
-    function setaccruedRewardMap(address candidate, uint256 round, uint256 amount) external {
+    function setAccruedRewardMap(address candidate, uint256 round, uint256 amount) external {
         accruedRewardMap[candidate][round] = amount;
     }
 

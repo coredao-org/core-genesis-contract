@@ -200,12 +200,13 @@ def set_system_contract_address(
         getattr(c, "updateContractAddr")(args)
 
     candidate_hub.setControlRoundTimeTag(True)
-    accounts[-21].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
     # init after set system contract
     system_reward.init()
     btc_stake.init()
     btc_lst_stake.init()
     stake_hub.init()
+
     if is_development:
         btc_stake.developmentInit()
         btc_lst_stake.developmentInit()

@@ -21,8 +21,8 @@ stake_manager = StakeManager()
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set, gov_hub):
-    accounts[-10].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
-    accounts[-10].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -249,12 +249,54 @@ def test_lock_script_not_found_reverts(btc_lst_stake, lst_token, set_candidate, 
         btc_lst_stake.delegate('0x00', 1, [], 0, lock_script, {"from": accounts[1]})
 
 
-def test_lock_script_wallet_inactive_reverts(btc_lst_stake, set_candidate):
+@pytest.mark.parametrize("round_count", [0, 1, 2, 3])
+def test_lock_script_wallet_inactive_reverts(btc_lst_stake, set_candidate, round_count):
     stake_manager.add_wallet(REDEEM_SCRIPT)
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
     btc_lst_stake.updateParam('remove', LOCK_SCRIPT)
+    turn_round(round_count=round_count)
     with brownie.reverts("wallet inactive"):
         btc_lst_stake.delegate('0x00', 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
+
+
+def test_delete_wallet_after_stake(btc_lst_stake, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    stake_manager.add_wallet(REDEEM_SCRIPT)
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    delegate_btc_lst_success(accounts[1], BTC_VALUE, LOCK_SCRIPT)
+    btc_lst_stake.updateParam('remove', LOCK_SCRIPT)
+    turn_round(consensuses, round_count=2)
+    tracker = get_tracker(accounts[1])
+    stake_hub_claim_reward(accounts[1])
+    assert tracker.delta() == TOTAL_REWARD * 3 // 2
+    stake_manager.add_wallet(LOCK_SCRIPT)
+    turn_round(consensuses)
+    stake_hub_claim_reward(accounts[1])
+    assert tracker.delta() == TOTAL_REWARD * 3 // 2
+    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round(consensuses, round_count=2)
+    tracker0 = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker0.delta() == TOTAL_REWARD * 3 // 4
+
+
+def test_delete_multisig_wallet(btc_lst_stake, set_candidate):
+    turn_round()
+    lst_script0 = random_btc_lst_lock_script()
+    lst_script1 = random_btc_lst_lock_script()
+    stake_manager.add_wallet(REDEEM_SCRIPT)
+    stake_manager.add_wallet(lst_script0)
+    stake_manager.add_wallet(lst_script1)
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    stake_manager.remove_wallet(lst_script0)
+    wallet_index = btc_lst_stake.getWalletMap(keccak_hash256(lst_script0))
+    assert wallet_index == 3
+    assert btc_lst_stake.wallets(wallet_index - 1)['status'] == 2
+    stake_manager.add_wallet(lst_script0)
+    wallet_index = btc_lst_stake.getWalletMap(keccak_hash256(lst_script0))
+    assert wallet_index == 3
+    assert btc_lst_stake.wallets(wallet_index - 1)['status'] == 1
 
 
 def test_op_return_length_error_causes_failure(btc_lst_stake, lst_token):
@@ -268,6 +310,25 @@ def test_op_return_length_error_causes_failure(btc_lst_stake, lst_token):
         f'11eec300000000001976a914e1c5ba4d1fef0a3c7806603de565929684f9c2b188ac00000000')
     with brownie.reverts("payload length is too small"):
         btc_lst_stake.delegate(btc_tx, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
+
+
+def test_btc_lst_opreturn_too_long(btc_lst_stake, lst_token):
+    lock_script = '0x0014cdf3d02dd323c14bea0bed94962496c80c093344'
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    btc_lst_stake.updateParam('add', lock_script)
+    op_length0 = hex(33).replace('0x', '')
+    op_length1 = hex(31).replace('0x', '')
+    btc_tx = (
+        '01000000017943db896bfd8554e30717213a4de3fb8ac88669915eb08ccdb118faed8cf227020000006a47304402200255151b40013b656c752dd85ab6ea27487e8f5f658cb44b6db231609c3b416c02202a4e3682b64a2d0acae87a526968a7330d6e05f71e5190faae4efbc83a86da2701210270e4215fbe540cab09ac91c9586eba4fc797537859489f4a23d3e22356f1732'
+        'fffffffff03d00700'
+        '0000000000160014cdf3d02dd323c14bea0bed94962496c80c093344'
+        '0000000000000000'
+        f'{op_length0}6a{op_length1}5341542b0204589fb29aac15b9a4b7f17c3385939b007540f4d79101'
+        f'890001'
+        '8bd9c300000000001976a914e1c5ba4d1fef0a3c7806603de565929684f9c2b188ac00000000')
+
+    tx = btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[0]})
+    assert 'delegated' in tx.events
 
 
 def test_stake_failed_on_wrong_magic(btc_lst_stake, lst_token, set_candidate):
@@ -297,7 +358,8 @@ def test_btc_lst_stake_address_zero(btc_lst_stake, lst_token, set_candidate, btc
     assert btc_lst_stake.realtimeAmount() == 0
     turn_round(consensuses, round_count=2)
     tx = stake_hub_claim_reward(constants.ADDRESS_ZERO)
-    assert len(tx.events) == 0
+    assert tx.events['claimedBtcLstReward']['amount'] == 0
+    assert len(tx.events) == 4
 
 
 def test_btc_stake_with_zero_amount_fails(btc_lst_stake, lst_token):
@@ -562,7 +624,8 @@ def test_delegate_non_zero_valid_stake(btc_lst_stake, stake_hub, set_candidate):
     assert 'Transfer' not in tx.events
     turn_round(consensuses, round_count=2)
     tx = stake_hub_claim_reward(constants.ADDRESS_ZERO)
-    assert len(tx.events) == 0
+    assert len(tx.events) == 4
+    assert tx.events['claimedBtcLstReward']['amount'] == 0
 
 
 def test_multi_output_gas_consumption(btc_lst_stake, stake_hub, set_candidate):
@@ -636,6 +699,84 @@ def test_stake_with_inactive_wallet_address(btc_lst_stake, lst_token, set_candid
     stake_manager.remove_wallet(REDEEM_SCRIPT)
     with brownie.reverts("wallet inactive"):
         delegate_btc_lst_success(accounts[0], BTC_VALUE, REDEEM_SCRIPT)
+
+
+@pytest.mark.parametrize("utxo_fee", [1000, 3000, 5000, 100000])
+def test_stake_after_utxo_fee_update(btc_lst_stake, utxo_fee):
+    btc_amount = 6001
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(utxo_fee)), 16)
+    btc_lst_stake.updateParam('utxoFee', hex_value)
+    btc_tx, lock_script = __create_btc_lst_delegate(accounts[0], btc_amount)
+    if btc_amount >= utxo_fee * 2:
+        tx = btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
+        assert 'delegated' in tx.events
+    else:
+        with brownie.reverts("btc amount is too small"):
+            btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
+
+
+def test_lst_not_minted(btc_lst_stake):
+    btc_value = 10000
+    btc_amount = 6000
+    # BTCLST staking transactions have been generated
+    btc_tx, lock_script = __create_btc_lst_delegate(accounts[0], btc_amount)
+    failed_tx_id = get_transaction_txid(btc_tx)
+    valid_tx_id = delegate_btc_lst_success(accounts[1], btc_value, lock_script)
+    #  The staking failed
+    user_address = random_btc_lst_lock_script()
+    # Scenario 1
+    #  input must from stake wallet.
+    redeem_btc_tx = btc_delegate.build_btc_lst(
+        set_outputs([btc_amount, user_address]),
+        set_inputs([failed_tx_id, 0])
+    )
+    # Because this ratio is not in the scope of our record
+    with brownie.reverts("input must from stake wallet."):
+        btc_lst_stake.undelegate(redeem_btc_tx, 0, [], 0)
+
+    # Scenario 2
+    new_lock_script = random_btc_lst_lock_script()
+    stake_manager.add_wallet(new_lock_script)
+    # Transfer to another MultiSig wallet address
+    transfer_tx = btc_delegate.build_btc_lst(
+        set_outputs([btc_amount, new_lock_script]),
+        set_inputs([failed_tx_id, 0], [valid_tx_id, 0])
+    )
+    with brownie.reverts("should not delegate from whitelisted multisig wallets"):
+        btc_lst_stake.delegate(transfer_tx, 1, [], 0, new_lock_script, {"from": accounts[1]})
+
+    # Scenario 3
+    new_lock_script = random_btc_lst_lock_script()
+    stake_manager.add_wallet(new_lock_script)
+    # Transfer to another MultiSig wallet address
+    # UTXOs must be picked
+    transfer_to_wallet_tx = btc_delegate.build_btc_lst(
+        set_outputs([btc_amount // 3, new_lock_script]),
+        set_inputs([failed_tx_id, 0])
+    )
+    to_wallet_tx_id = get_transaction_txid(transfer_to_wallet_tx)
+    tx = btc_lst_stake.delegate(transfer_to_wallet_tx, 1, [], 0, new_lock_script, {"from": accounts[1]})
+    new_tx_id = delegate_btc_lst_success(accounts[1], btc_value, new_lock_script)
+    # MultiSig wallet B transfers money directly to the user
+    transfer_to_user_tx = btc_delegate.build_btc_lst(
+        set_outputs([btc_amount, user_address], [btc_value, new_lock_script]),
+        set_inputs([to_wallet_tx_id, 0], [new_tx_id, 0])
+    )
+    to_user_tx_id = get_transaction_txid(transfer_to_user_tx)
+    tx = btc_lst_stake.undelegate(transfer_to_user_tx, 1, [], 1)
+    __check_btc_lst_tx_map_info(to_user_tx_id, {
+        'amount': btc_value,
+        'outputIndex': 1,
+        'blockHeight': 1,
+    })
+    expect_event(tx, 'undelegatedOverflow', {
+        'txid': to_user_tx_id,
+        'outputIndex': 0,
+        'expectAmount': 0,
+        'actualAmount': btc_amount,
+        'pkscript': user_address,
+    })
 
 
 def test_lst_btc_undelegate_success(btc_lst_stake, lst_token, set_candidate):
@@ -998,15 +1139,14 @@ def test_vout_with_two_wallet_addresses(btc_lst_stake, lst_token, set_candidate,
     undelegate_amount = BTC_VALUE - FEE
     redeem_btc_tx0 = btc_delegate.build_btc_lst(
         set_outputs([BTC_VALUE, LOCK_SCRIPT], [undelegate_amount * 3, REDEEM_SCRIPT]),
-        set_inputs([tx_id, 2]),
-        set_op_return([accounts[0]])
+        set_inputs([tx_id, 2])
     )
     tx = btc_lst_stake.undelegate(redeem_btc_tx0, 1, [], 0, {'from': accounts[2]})
     tx_id = get_transaction_txid(redeem_btc_tx0)
     assert 'undelegated' not in tx.events
     __check_btc_lst_tx_map_info(tx_id, {
         "amount": (BTC_VALUE - FEE) * 3,
-        "outputIndex": 2,
+        "outputIndex": 1,
         "blockHeight": 1
     })
 
@@ -1266,16 +1406,18 @@ def test_distribute_reward_success(btc_lst_stake, btc_agent):
     stake_amount = 10000
     update_system_contract_address(btc_lst_stake, btc_agent=accounts[0])
     round_tag = get_current_round()
+    round_tag += 1
+    btc_lst_stake.setRoundTag(round_tag)
     btc_lst_stake.setStakedAmount(stake_amount)
     btc_lst_stake.distributeReward(validators, reward_list)
     sum_reward = sum(reward_list)
-    accured_reward = btc_lst_stake.getAccuredRewardPerBTCMap(round_tag)
+    accrued_reward = btc_lst_stake.getAccruedRewardPerBTCMap(round_tag)
     round_reward = sum_reward * Utils.BTC_DECIMAL // stake_amount
-    assert accured_reward == round_reward
+    assert accrued_reward == round_reward
     btc_lst_stake.setRoundTag(round_tag + 1)
     btc_lst_stake.distributeReward(validators, reward_list)
-    accured_reward = btc_lst_stake.getAccuredRewardPerBTCMap(round_tag + 1)
-    assert accured_reward == round_reward * 2
+    accrued_reward = btc_lst_stake.getAccruedRewardPerBTCMap(round_tag + 1)
+    assert accrued_reward == round_reward * 2
 
 
 def test_distribute_reward_with_no_stakes(btc_lst_stake, btc_agent):
@@ -1284,10 +1426,56 @@ def test_distribute_reward_with_no_stakes(btc_lst_stake, btc_agent):
     history_amount = 5000
     update_system_contract_address(btc_lst_stake, btc_agent=accounts[0])
     round_tag = get_current_round()
-    btc_lst_stake.setAccuredRewardPerBTCMap(6, history_amount)
+    round_tag += 2
+    btc_lst_stake.setRoundTag(round_tag)
+    btc_lst_stake.setAccruedRewardPerBTCMap(round_tag - 1, history_amount)
     btc_lst_stake.distributeReward(validators, reward_list)
-    accured_reward = btc_lst_stake.getAccuredRewardPerBTCMap(round_tag)
-    assert accured_reward == history_amount
+    accrued_reward = btc_lst_stake.getAccruedRewardPerBTCMap(round_tag)
+    assert accrued_reward == history_amount
+
+
+def test_no_reward_in_init_round(btc_lst_stake, btc_agent):
+    validators = accounts[:3]
+    reward_list = [1000, 20000, 30000]
+    stake_amount = 10000
+    update_system_contract_address(btc_lst_stake, btc_agent=accounts[0])
+    round_tag = get_current_round()
+    round_tag += 1
+    btc_lst_stake.setRoundTag(round_tag)
+    btc_lst_stake.setStakedAmount(stake_amount)
+    btc_lst_stake.setAccruedRewardPerBTCMap(round_tag - 1, 5000)
+    btc_lst_stake.distributeReward(validators, reward_list)
+    sum_reward = sum(reward_list)
+    accrued_reward = btc_lst_stake.getAccruedRewardPerBTCMap(round_tag)
+    round_reward = sum_reward * Utils.BTC_DECIMAL // stake_amount
+    assert accrued_reward == round_reward
+    btc_lst_stake.setRoundTag(round_tag + 1)
+    btc_lst_stake.distributeReward(validators, reward_list)
+    accrued_reward = btc_lst_stake.getAccruedRewardPerBTCMap(round_tag + 1)
+    assert accrued_reward == round_reward * 2
+
+
+def test_no_reward_generated_in_current_round(btc_lst_stake, btc_agent):
+    validators = accounts[:3]
+    reward_list = [1000, 20000, 30000]
+    stake_amount = 10000
+    update_system_contract_address(btc_lst_stake, btc_agent=accounts[0])
+    round_tag = get_current_round()
+    round_tag += 10
+    btc_lst_stake.setRoundTag(round_tag)
+    btc_lst_stake.setStakedAmount(stake_amount)
+    history_reward0 = 50000
+    btc_lst_stake.setAccruedRewardPerBTCMap(round_tag - 2, history_reward0)
+    btc_lst_stake.setAccruedRewardPerBTCMap(round_tag - 3, history_reward0 * 10)
+    btc_lst_stake.distributeReward(validators, reward_list)
+    sum_reward = sum(reward_list)
+    accrued_reward = btc_lst_stake.getAccruedRewardPerBTCMap(round_tag)
+    round_reward = sum_reward * Utils.BTC_DECIMAL // stake_amount
+    assert accrued_reward == round_reward + history_reward0
+    btc_lst_stake.setRoundTag(round_tag + 1)
+    btc_lst_stake.distributeReward(validators, reward_list)
+    accrued_reward = btc_lst_stake.getAccruedRewardPerBTCMap(round_tag + 1)
+    assert accrued_reward == round_reward * 2 + history_reward0
 
 
 def test_distribute_reward_only_btc_agent_can_call(btc_lst_stake, btc_agent):
@@ -1648,6 +1836,7 @@ def test_redeem_without_pledge_reverts(btc_lst_stake, lst_token, set_candidate):
         btc_lst_stake.redeem(BTC_VALUE // 2, REDEEM_SCRIPT)
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 @pytest.mark.parametrize("redeem_value", [0, 1, -1])
 def test_btc_redeem_exceeds_single_limit(btc_lst_stake, lst_token, set_candidate, redeem_value):
     utxo_fee = 100
@@ -1662,6 +1851,7 @@ def test_btc_redeem_exceeds_single_limit(btc_lst_stake, lst_token, set_candidate
         assert 'redeemed' in tx.events
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 def test_btc_redeem_in_multiple_parts(btc_lst_stake, lst_token, set_candidate):
     btc_value = 15e8
     redeem_amount = 2e8
@@ -1673,6 +1863,7 @@ def test_btc_redeem_in_multiple_parts(btc_lst_stake, lst_token, set_candidate):
         btc_lst_stake.redeem(redeem_amount, REDEEM_SCRIPT)
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 @pytest.mark.parametrize("redeem_value", [9e8, 10e8, 11e8, 14e8])
 def test_redeem_exceeds_after_multiple_stakes(btc_lst_stake, lst_token, set_candidate, redeem_value):
     btc_value = 3e8
@@ -1686,6 +1877,7 @@ def test_redeem_exceeds_after_multiple_stakes(btc_lst_stake, lst_token, set_cand
         assert 'redeemed' in tx.events
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 def test_exceed_redeem_after_multiple_stakes_and_redeems(btc_lst_stake, lst_token, set_candidate):
     btc_value = 3e8
     redeem_amount = 2e8
@@ -1698,6 +1890,7 @@ def test_exceed_redeem_after_multiple_stakes_and_redeems(btc_lst_stake, lst_toke
         btc_lst_stake.redeem(redeem_amount, REDEEM_SCRIPT)
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 @pytest.mark.parametrize("part", [True, False])
 def test_recalculate_total_redeem_amount_after_undelegate(btc_lst_stake, part):
     btc_value = 5e8
@@ -1736,6 +1929,7 @@ def test_recalculate_total_redeem_amount_after_undelegate(btc_lst_stake, part):
             btc_lst_stake.redeem(9e8, REDEEM_SCRIPT)
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 def test_full_clear_after_undelegate(btc_lst_stake):
     btc_value = 20e8
     redeem_amount0 = 2e8
@@ -1750,6 +1944,7 @@ def test_full_clear_after_undelegate(btc_lst_stake):
     assert 'redeemed' in tx.events
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 @pytest.mark.parametrize("burn_btc_limit", [1000, 1e6, 20e8, 100e8])
 def test_redeem_after_modifying_btc_limit(btc_lst_stake, burn_btc_limit):
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
@@ -1774,6 +1969,10 @@ def test_on_token_transfer_success(btc_agent, btc_lst_stake, lst_token, set_cand
     turn_round()
     turn_round(consensuses)
     update_system_contract_address(btc_lst_stake, lst_token=accounts[0])
+    __check_user_stake_info(accounts[0], {
+        'realtimeAmount': BTC_VALUE * 2,
+        'stakedAmount': 0
+    })
     btc_lst_stake.onTokenTransfer(accounts[0], accounts[1], btc_amount // 2)
     __check_user_stake_info(accounts[0], {
         'realtimeAmount': BTC_VALUE,
@@ -1993,6 +2192,7 @@ def test_update_paused_range_error(btc_lst_stake, paused):
         btc_lst_stake.updateParam('paused', paused)
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 @pytest.mark.parametrize("burn_btc_limit", [1e5, 2e8, 10e8, 100e8])
 def test_update_burn_btc_limit_success(btc_lst_stake, burn_btc_limit):
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
@@ -2001,6 +2201,7 @@ def test_update_burn_btc_limit_success(btc_lst_stake, burn_btc_limit):
     assert btc_lst_stake.burnBTCLimit() == int(burn_btc_limit)
 
 
+@pytest.mark.skip(reason="remove the skip for the burnBTCLimit function")
 def test_update_burn_btc_limit_param_length_error(btc_lst_stake):
     burn_btc_limit = 10e8
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])

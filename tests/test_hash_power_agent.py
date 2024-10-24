@@ -4,7 +4,7 @@ from web3 import Web3
 from brownie import accounts
 from .common import turn_round, register_candidate, get_current_round
 from .delegate import delegate_power_success
-from .utils import update_system_contract_address
+from .utils import update_system_contract_address, expect_event
 
 MIN_INIT_DELEGATE_VALUE = 0
 BLOCK_REWARD = 0
@@ -15,8 +15,8 @@ TX_FEE = int(1e4)
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set, gov_hub):
-    accounts[-10].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
-    accounts[-10].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -142,6 +142,19 @@ def test_get_power_stake_amounts_success(hash_power_agent, set_candidate):
     assert power_amounts[1] == sum(sum_stake_amounts)
 
 
+@pytest.mark.parametrize("round_count", [0, 1, 2, 3])
+def test_power_valid_for_one_round(btc_stake, set_candidate, hash_power_agent, btc_lst_stake, round_count):
+    power_value = 1
+    operators, consensuses = set_candidate
+    delegate_power_success(operators[0], accounts[0], power_value)
+    turn_round()
+    turn_round(consensuses)
+    turn_round(consensuses, round_count=round_count)
+    update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
+    reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[0], 0).return_value
+    assert acc_staked_amount == power_value
+
+
 def test_power_claim_reward_success(hash_power_agent):
     validators = accounts[:3]
     staked_amounts = [6, 12, 15]
@@ -157,9 +170,15 @@ def test_power_claim_reward_success(hash_power_agent):
     update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
     hash_power_agent.distributeReward(validators, reward_list, round_tag + 1)
     for index, v in enumerate(validators):
-        reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[index], 0).return_value
+        tx = hash_power_agent.claimReward(accounts[index], 0)
+        reward_sum, unclaimed, acc_staked_amount = tx.return_value
         reward = reward_list[index] // sum_stake_amounts[index] * staked_amounts[index]
         actual_acc_staked_amount = staked_amounts[index]
+        expect_event(tx, 'claimedHashReward', {
+            'delegator': accounts[index],
+            'amount': reward,
+            'accStakedAmount': actual_acc_staked_amount
+        })
         assert reward_sum == reward
         assert actual_acc_staked_amount == actual_acc_staked_amount
         assert unclaimed == 0
