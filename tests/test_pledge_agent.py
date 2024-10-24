@@ -228,22 +228,21 @@ def test_claim_reward(pledge_agent, candidate_hub, agents_type: str):
     __init_hybrid_score_mock()
     turn_round(round_count=2)
     actual_reward = 0
-    event_length = 0
+    event_length = 4
     if agents_type == "empty":
         tx = pledge_agent.claimReward([])
-        assert len(tx.events) == 0
     elif agents_type == "all":
         tx = pledge_agent.claimReward(operators)
         actual_reward = TOTAL_REWARD * 3
-        event_length = 1
+        event_length = 5
     elif agents_type == "none":
         tx = pledge_agent.claimReward([random_address()])
-        assert len(tx.events) == 0
     else:
-        event_length = 1
+        event_length = 5
         tx = pledge_agent.claimReward(operators[:2] + [random_address()])
         actual_reward = TOTAL_REWARD * 2
-    if event_length == 1:
+    assert len(tx.events) == event_length
+    if event_length == 5:
         assert tx.events['claimedReward']['amount'] == actual_reward
 
 
@@ -432,7 +431,7 @@ def test_move_btc_data_then_claim_btc_reward(pledge_agent, btc_stake, success):
         with brownie.reverts("btc tx not found"):
             pledge_agent.claimBtcReward(tx_ids)
         tx = stake_hub_claim_reward(accounts[0])
-        assert len(tx.events) == 0
+        assert len(tx.events) == 4
         turn_round([consensus])
         with brownie.reverts("btc tx not found"):
             pledge_agent.claimBtcReward(tx_ids)

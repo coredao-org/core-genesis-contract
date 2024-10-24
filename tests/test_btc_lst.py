@@ -358,7 +358,8 @@ def test_btc_lst_stake_address_zero(btc_lst_stake, lst_token, set_candidate, btc
     assert btc_lst_stake.realtimeAmount() == 0
     turn_round(consensuses, round_count=2)
     tx = stake_hub_claim_reward(constants.ADDRESS_ZERO)
-    assert len(tx.events) == 0
+    assert tx.events['claimedBtcLstReward']['amount'] == 0
+    assert len(tx.events) == 4
 
 
 def test_btc_stake_with_zero_amount_fails(btc_lst_stake, lst_token):
@@ -623,7 +624,8 @@ def test_delegate_non_zero_valid_stake(btc_lst_stake, stake_hub, set_candidate):
     assert 'Transfer' not in tx.events
     turn_round(consensuses, round_count=2)
     tx = stake_hub_claim_reward(constants.ADDRESS_ZERO)
-    assert len(tx.events) == 0
+    assert len(tx.events) == 4
+    assert tx.events['claimedBtcLstReward']['amount'] == 0
 
 
 def test_multi_output_gas_consumption(btc_lst_stake, stake_hub, set_candidate):

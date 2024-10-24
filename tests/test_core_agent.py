@@ -288,7 +288,7 @@ class TestDelegateCoin:
         assert candidate_hub.isJailed(operator) is True
         turn_round([consensus_address])
         tx = stake_hub_claim_reward(accounts[0])
-        assert len(tx.events) == 0
+        assert len(tx.events) == 4
 
     def test_delegate2under_margin(self, core_agent, slash_indicator, candidate_hub, validator_set):
         register_candidate(operator=accounts[10])
@@ -1070,7 +1070,13 @@ def test_core_claim_reward_success(core_agent, set_candidate):
     turn_round()
     turn_round(consensuses)
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
+    tx = core_agent.claimReward(accounts[0], 0)
+    expect_event(tx, 'claimedCoinReward', {
+        'delegator': accounts[0],
+        'amount': TOTAL_REWARD,
+        'accStakedAmount': MIN_INIT_DELEGATE_VALUE,
+    })
+    reward, reward_unclaimed, acc_staked_amount = tx.return_value
     assert reward == TOTAL_REWARD
     assert reward_unclaimed == 0
     assert acc_staked_amount == MIN_INIT_DELEGATE_VALUE
@@ -1086,7 +1092,13 @@ def test_claim_reward_success_with_existing_historical_rewards(core_agent, set_c
     assert core_agent.rewardMap(accounts[0]) == [TOTAL_REWARD, MIN_INIT_DELEGATE_VALUE]
     turn_round(consensuses)
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
+    tx = core_agent.claimReward(accounts[0], 0)
+    expect_event(tx, 'claimedCoinReward', {
+        'delegator': accounts[0],
+        'amount': TOTAL_REWARD * 2,
+        'accStakedAmount': MIN_INIT_DELEGATE_VALUE * 2,
+    })
+    reward, reward_unclaimed, acc_staked_amount = tx.return_value
     assert reward == TOTAL_REWARD * 2
     assert acc_staked_amount == MIN_INIT_DELEGATE_VALUE * 2
     assert core_agent.rewardMap(accounts[0]) == [0, 0]
@@ -1161,7 +1173,11 @@ def test_calc_acc_stake_after_coin_stake(core_agent, set_candidate, stake_hub, r
     turn_round(consensuses, round_count=round_count)
     acc_stake_amount0 *= round_count
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
+    tx = core_agent.claimReward(accounts[0], 0)
+    expect_event(tx, 'claimedCoinReward', {
+        'accStakedAmount': acc_stake_amount0
+    })
+    reward, reward_unclaimed, acc_staked_amount = tx.return_value
     expect_stake_amount = 0
     if round_count > 0:
         expect_stake_amount = tests[0]

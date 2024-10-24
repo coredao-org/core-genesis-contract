@@ -138,6 +138,7 @@ def test_get_stake_amounts_success(btc_agent, btc_stake, btc_lst_stake, set_cand
     btc_amount = 3000
     operators, consensuses = set_candidate
     turn_round()
+    update_system_contract_address(btc_agent, stake_hub=accounts[0])
     btc_agent.getStakeAmounts(operators, 0)
     for o in operators:
         btc_stake.setCandidateMap(o, btc_amount, btc_amount, [])
@@ -147,6 +148,13 @@ def test_get_stake_amounts_success(btc_agent, btc_stake, btc_lst_stake, set_cand
     amount = lst_validator_amount + btc_amount
     assert amounts == [amount, amount, amount]
     assert total_amount == amount * 3
+
+
+def test_only_stake_hub_can_call(btc_agent, btc_stake, btc_lst_stake, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    with brownie.reverts("the msg sender must be stake hub contract"):
+        btc_agent.getStakeAmounts(operators, 0)
 
 
 def test_set_new_round_success(btc_agent, btc_stake, btc_lst_stake, set_candidate):
@@ -257,6 +265,16 @@ def test_update_core_amount_and_claim_reward(btc_agent, tests):
     round_reward_manager.mock_btc_reward_map(accounts[0], btc_reward, 0, btc_amount)
     reward = btc_agent.claimReward.call(accounts[0], core_amount)
     assert reward == [actual_btc_reward, unclaimed_reward, btc_amount]
+    tx = btc_agent.claimReward(accounts[0], core_amount)
+    dual_staking_rate = actual_btc_reward
+    expect_event(tx, 'claimedBtcReward', {
+        'delegator': accounts[0],
+        'amount': actual_btc_reward,
+        'unclaimedAmount': 0,
+        'floatReward': unclaimed_reward,
+        'accStakedAmount': btc_amount,
+        'dualStakingRate': dual_staking_rate
+    })
 
 
 @pytest.mark.parametrize("tests", [
@@ -283,6 +301,23 @@ def test_unclaimed_reward_record_correct(btc_agent, set_candidate, tests):
     reward = btc_agent.claimReward.call(accounts[0], core_amount)
     unclaimed_reward -= TOTAL_REWARD * 3
     assert reward == [actual_btc_reward, unclaimed_reward, btc_amount + BTC_LST_VALUE]
+    tx = btc_agent.claimReward(accounts[0], core_amount)
+    dual_staking_rate = tests[0][-1][-1]
+
+    expect_event(tx, 'claimedBtcReward', {
+        'amount': actual_btc_reward,
+        'unclaimedAmount': 0,
+        'floatReward': actual_btc_reward - btc_reward,
+        'accStakedAmount': btc_amount,
+        'dualStakingRate': dual_staking_rate
+    })
+    expect_event(tx, 'claimedBtcLstReward', {
+        'amount': 0,
+        'unclaimedAmount': 0,
+        'floatReward': 0 - TOTAL_REWARD * 3,
+        'accStakedAmount': BTC_LST_VALUE,
+        'percent': 0
+    })
 
 
 @pytest.mark.parametrize("tests", [
@@ -345,8 +380,10 @@ def test_btc_extra_pool_reward(btc_agent, btc_lst_stake, tests):
     additional_bonus = actual_btc_reward - btc_reward
     btc_lst_reward = tests['btc_lst_reward']
     actual_btc_lst_reward = btc_lst_reward * btc_lst_percentage // Utils.DENOMINATOR
-    round_reward_manager.mock_btc_reward_map(accounts[0], btc_reward, duration_unclaimed, 100)
-    round_reward_manager.mock_btc_lst_reward_map(accounts[0], btc_lst_reward, 0)
+    btc_acc_amount = 1100
+    btc_lst_acc_amount = 1200
+    round_reward_manager.mock_btc_reward_map(accounts[0], btc_reward, duration_unclaimed, btc_acc_amount)
+    round_reward_manager.mock_btc_lst_reward_map(accounts[0], btc_lst_reward, btc_lst_acc_amount)
     update_system_contract_address(btc_agent, stake_hub=accounts[0])
     reward = btc_agent.claimReward.call(accounts[0], 0)
     if duration_unclaimed > 0:
@@ -356,7 +393,22 @@ def test_btc_extra_pool_reward(btc_agent, btc_lst_stake, tests):
     actual_reward = actual_btc_reward + actual_btc_lst_reward
     assert actual_reward == tests['expect_reward']
     assert additional_bonus == tests['expect_surplus']
-    assert reward == [actual_reward, additional_bonus, 100]
+    assert reward == [actual_reward, additional_bonus, btc_acc_amount + btc_lst_acc_amount]
+    tx = btc_agent.claimReward(accounts[0], 0)
+    expect_event(tx, 'claimedBtcReward', {
+        'amount': actual_btc_reward,
+        'unclaimedAmount': duration_unclaimed,
+        'floatReward': actual_btc_reward - btc_reward,
+        'accStakedAmount': btc_acc_amount,
+        'dualStakingRate': btc_percentage
+    })
+    expect_event(tx, 'claimedBtcLstReward', {
+        'amount': actual_btc_lst_reward,
+        'unclaimedAmount': 0,
+        'floatReward': actual_btc_lst_reward - btc_lst_reward,
+        'accStakedAmount': btc_lst_acc_amount,
+        'percent': btc_lst_percentage
+    })
 
 
 @pytest.mark.parametrize("tests", [
