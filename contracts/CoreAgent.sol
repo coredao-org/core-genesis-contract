@@ -77,7 +77,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     uint256 amount,
     uint256 realtimeAmount
   );
-  event claimedReward(address indexed delegator, uint256 amount);
+  event claimedCoinReward(address indexed delegator, uint256 amount, uint256 accStakedAmount);
 
   modifier onlyPledgeAgent() {
     require(msg.sender == PLEDGE_AGENT_ADDR, "the sender must be PledgeAgent contract");
@@ -232,7 +232,10 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     if (accStakedAmount != 0 || reward != 0) {
       delete rewardMap[delegator];
     }
-    return (reward + rewardSum, 0, accStakedAmount + accStakedAmountSum);
+    reward += rewardSum;
+    floatReward = 0;
+    accStakedAmount += accStakedAmountSum;
+    emit claimedCoinReward(delegator, reward, accStakedAmount);
   }
 
   /*********************** Receive data from PledgeAgent ***************************/

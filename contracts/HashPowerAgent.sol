@@ -16,7 +16,7 @@ contract HashPowerAgent is IAgent, System, IParamSubscriber {
   mapping(address => Reward) public rewardMap;
 
   /*********************** events **************************/
-  event claimedReward(address indexed delegator, uint256 amount);
+  event claimedHashReward(address indexed delegator, uint256 amount, uint256 accStakedAmount);
 
   struct Reward {
     uint256 reward;
@@ -87,6 +87,7 @@ contract HashPowerAgent is IAgent, System, IParamSubscriber {
       accStakedAmount = rewardMap[delegator].accStakedAmount;
       delete rewardMap[delegator];
     }
+    emit claimedHashReward(delegator, reward, accStakedAmount);
     return (reward, 0, accStakedAmount);
   }
 
