@@ -103,7 +103,7 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
   /// @param candidates List of candidate operator addresses
   /// @return amounts List of staked BTC amounts of all candidates in this round
   /// @return totalAmount Total BTC staked on all candidates in this round
-  function getStakeAmounts(address[] calldata candidates, uint256 /*round*/) external override returns (uint256[] memory amounts, uint256 totalAmount) {
+  function getStakeAmounts(address[] calldata candidates, uint256 /*round*/) external override onlyStakeHub returns (uint256[] memory amounts, uint256 totalAmount) {
     uint256 candidateSize = candidates.length;
     uint256[] memory lstAmounts = IBitcoinStake(BTCLST_STAKE_ADDR).getStakeAmounts(candidates);
     amounts = IBitcoinStake(BTC_STAKE_ADDR).getStakeAmounts(candidates);
