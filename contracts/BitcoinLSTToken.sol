@@ -3,7 +3,6 @@ pragma solidity 0.8.4;
 
 import './interface/IBitcoinLSTToken.sol';
 import "./interface/IParamSubscriber.sol";
-import "./lib/Memory.sol";
 import "./System.sol";
 
 contract BitcoinLSTToken is IBitcoinLSTToken, System, IParamSubscriber {
