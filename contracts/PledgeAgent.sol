@@ -33,7 +33,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   uint256 public constant INIT_REQUIRED_COIN_DEPOSIT = 1e18;
   uint256 public constant INIT_HASH_POWER_FACTOR = 20000;
   uint256 public constant POWER_BLOCK_FACTOR = 1e18;
-  uint32 public constant INIT_BTC_CONFIRM_BLOCK = 3;
+  uint32 public constant INIT_BTC_CONFIRM_BLOCK = 6;
   uint256 public constant INIT_MIN_BTC_LOCK_ROUND = 7;
   uint256 public constant ROUND_INTERVAL = 86400;
   uint256 public constant INIT_MIN_BTC_VALUE = 1e6;
