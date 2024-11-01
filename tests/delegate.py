@@ -344,6 +344,7 @@ def old_claim_reward_success(candidates, account=None):
             account = accounts[0]
         tx = PledgeAgentMock[0].claimReward(candidates, {'from': account})
 
+
 def old_claim_btc_reward_success(tx_ids, account=None):
     if account is None:
         account = accounts[0]
@@ -474,7 +475,11 @@ class BtcStake:
         self.outputs.append(output_info)
         return output_info
 
-    def build_btc(self, inputs, outputs, opreturn):
+    def build_btc(self, outputs, inputs=None, opreturn=None):
+        if inputs is None:
+            inputs = []
+        if opreturn is None:
+            opreturn = []
         self.clear()
         for i in inputs:
             self.btc_stake_build_input(*i)

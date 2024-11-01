@@ -62,4 +62,12 @@ contract BitcoinLSTStakeMock is BitcoinLSTStake {
         return redeemRequests.length;
     }
 
+    function mockBuildPkScript(bytes32 whash, uint32 addrType) external view returns (bytes memory pkscript) {
+        pkscript = _buildPkScript(whash, addrType);
+    }
+
+    function mockExtractPkScriptAddr(bytes memory pkScript) external view returns (bytes32 whash, uint32 addrType) {
+        return _extractPkScriptAddr(pkScript);
+    }
+    
 }

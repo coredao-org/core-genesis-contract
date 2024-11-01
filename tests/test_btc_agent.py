@@ -133,6 +133,19 @@ def test_only_stake_hub_can_call_distribute_reward(btc_agent):
         btc_agent.distributeReward(candidates, rewards, 0)
 
 
+def test_distribute_reward_reverts(btc_agent, btc_stake, btc_lst_stake):
+    candidates = accounts[:3]
+    rewards = [10000, 20000, 30000]
+    round_tag = get_current_round() + 2
+    btc_lst_stake.setRoundTag(round_tag)
+    btc_stake.setRoundTag(round_tag)
+    update_system_contract_address(btc_agent, stake_hub=accounts[0])
+    btc_agent.distributeReward(candidates, rewards, 0)
+    for index, c in enumerate(candidates):
+        assert btc_stake.accruedRewardPerBTCMap(c, round_tag) == 0
+    assert btc_lst_stake.getAccruedRewardPerBTCMap(round_tag) == 0
+
+
 def test_get_stake_amounts_success(btc_agent, btc_stake, btc_lst_stake, set_candidate):
     lst_amount = 6000
     btc_amount = 3000
