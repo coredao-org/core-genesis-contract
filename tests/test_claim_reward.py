@@ -1,3 +1,4 @@
+import brownie
 import pytest
 from .calc_reward import set_delegate, parse_delegation, Discount, set_btc_lst_delegate
 from .common import register_candidate, turn_round, stake_hub_claim_reward, set_round_tag, claim_stake_and_relay_reward
@@ -58,7 +59,6 @@ def set_block_reward(validator_set, candidate_hub, btc_stake, stake_hub, pledge_
     BTC_LST_STAKE = btc_lst_stake
     PLEDGE_AGENT = pledge_agent
     system_reward.setOperator(stake_hub.address)
-    btc_lst_stake.updateParam('add', BTCLST_LOCK_SCRIPT, {'from': gov_hub.address})
 
 
 @pytest.fixture()
@@ -97,6 +97,7 @@ def mock_btc_stake_lock_time(timestamp, stake_round=None):
 
 def test_successful_upgrade_after_round_switch(pledge_agent, candidate_hub):
     init_round_tag, timestamp = mock_current_round()
+    stake_manager.add_wallet(BTCLST_LOCK_SCRIPT)
     mock_btc_stake_lock_time(timestamp)
     old_turn_round()
     set_round_tag(init_round_tag)
@@ -141,6 +142,7 @@ def test_successful_upgrade_after_round_switch(pledge_agent, candidate_hub):
 
 
 def test_multiple_stakes_after_upgrade(set_candidate):
+    stake_manager.add_wallet(BTCLST_LOCK_SCRIPT)
     btc_value = 100
     btc_lst_value = 1000
     delegate_amount = 600000
@@ -210,6 +212,7 @@ def test_cancel_and_transfer_stakes_after_upgrade(set_candidate, slash_indicator
     move_btc_data(tx_ids)
     old_claim_reward_success(operators, accounts[0])
     delegate_coin_success(operators[0], accounts[0], delegate_amount)
+    stake_manager.add_wallet(BTCLST_LOCK_SCRIPT)
     delegate_btc_lst_success(accounts[0], btc_lst_value, BTCLST_LOCK_SCRIPT)
     turn_round(consensuses)
     redeem_btc_lst_success(accounts[0], btc_lst_value // 2, BTCLST_LOCK_SCRIPT)
@@ -272,6 +275,7 @@ def test_new_validator_join_after_upgrade(slash_indicator):
     move_btc_data(tx_ids)
     old_claim_reward_success(operators, accounts[0])
     delegate_coin_success(operators[0], accounts[0], delegate_amount)
+    stake_manager.add_wallet(BTCLST_LOCK_SCRIPT)
     delegate_btc_lst_success(accounts[0], btc_lst_value, BTCLST_LOCK_SCRIPT)
     turn_round(consensuses)
     for operator in accounts[8:9]:
@@ -483,6 +487,54 @@ def test_claim_rewards_after_becoming_validator_post_upgrade(pledge_agent, valid
     assert tracker.delta() == TOTAL_REWARD // 2 * 4
 
 
+@pytest.mark.parametrize("round_count", [0, 1, 2, 5, 6])
+def test_data_migration_between_different_validator_states(pledge_agent, validator_set, slash_indicator,
+                                                           candidate_hub, round_count):
+    candidate_hub.setValidatorCount(3)
+    operators = []
+    consensuses = []
+    tx_ids = []
+    set_round_tag(LOCK_TIME // Utils.ROUND_INTERVAL - 2)
+    for operator in accounts[5:15]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    for op in operators:
+        old_delegate_coin_success(op, accounts[0], MIN_INIT_DELEGATE_VALUE)
+        old_delegate_coin_success(op, accounts[1], MIN_INIT_DELEGATE_VALUE)
+    for op in operators[:5]:
+        tx_id0 = old_delegate_btc_success(BTC_VALUE, op, accounts[0])
+        tx_ids.append(tx_id0)
+    for op in operators[:8]:
+        tx_id1 = old_delegate_btc_success(BTC_VALUE, op, accounts[1], LOCK_TIME)
+        tx_ids.append(tx_id1)
+    for op in operators[:9]:
+        delegate_power_success(op, accounts[0])
+    old_turn_round()
+    candidate_hub.refuseDelegate({'from': operators[0]})
+    old_turn_round()
+    for i in range(6, 10):
+        candidate_hub.unregister({'from': operators[i]})
+    slash_threshold = slash_indicator.felonyThreshold()
+    for count in range(slash_threshold):
+        slash_indicator.slash(consensuses[2])
+    slash_threshold = slash_indicator.misdemeanorThreshold()
+    for count in range(slash_threshold):
+        slash_indicator.slash(consensuses[3])
+    candidate_hub.refuseDelegate({'from': operators[1]})
+    old_turn_round(consensuses)
+    init_hybrid_score_mock()
+    pledge_agent.moveCandidateData(operators)
+    move_btc_data(tx_ids)
+    turn_round(consensuses, round_count=round_count)
+    old_claim_reward_success(operators, accounts[0])
+    old_claim_reward_success(operators, accounts[1])
+    turn_round(consensuses, round_count=2)
+    tx = stake_hub_claim_reward(accounts[0])
+    assert 'claimedReward' in tx.events
+    tx = stake_hub_claim_reward(accounts[1])
+    assert 'claimedReward' in tx.events
+
+
 def test_btclst_claim_extra_rewards_after_upgrade(set_candidate):
     btc_lst_value = 1000
     delegate_amount = 600000
@@ -497,6 +549,7 @@ def test_btclst_claim_extra_rewards_after_upgrade(set_candidate):
     old_turn_round(consensuses)
     init_hybrid_score_mock()
     old_claim_reward_success(operators, accounts[0])
+    stake_manager.add_wallet(BTCLST_LOCK_SCRIPT)
     delegate_btc_lst_success(accounts[0], btc_lst_value, BTCLST_LOCK_SCRIPT, Utils.DENOMINATOR * 2)
     turn_round(consensuses)
     redeem_btc_lst_success(accounts[0], btc_lst_value // 2, BTCLST_LOCK_SCRIPT)
@@ -566,6 +619,7 @@ def test_claim_reward_after_hardcap_update(stake_hub, hard_cap, set_candidate):
     delegate_coin_success(operators[0], accounts[0], COIN_VALUE)
     delegate_btc_success(operators[1], accounts[1], BTC_VALUE, LOCK_SCRIPT, relay=accounts[1])
     delegate_power_success(operators[2], accounts[2], POWER_VALUE)
+    stake_manager.add_wallet(BTCLST_LOCK_SCRIPT)
     delegate_btc_lst_success(accounts[0], BTC_LST_VALUE, BTCLST_LOCK_SCRIPT)
     turn_round(consensuses, round_count=2, tx_fee=TX_FEE)
     _, unclaimed_rewards, account_rewards, _ = parse_delegation([{
@@ -594,6 +648,11 @@ def test_claim_reward_after_hardcap_update(stake_hub, hard_cap, set_candidate):
     assert tracker0.delta() == account_rewards[accounts[0]]
     assert tracker1.delta() == account_rewards[accounts[1]]
     assert tracker2.delta() == account_rewards[accounts[2]]
+
+
+def test_no_multisig_wallet_stake(btc_lst_stake):
+    with brownie.reverts("Wallet not found"):
+        delegate_btc_lst_success(accounts[0], BTC_VALUE, BTCLST_LOCK_SCRIPT)
 
 
 def init_hybrid_score_mock():

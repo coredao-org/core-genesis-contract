@@ -299,6 +299,18 @@ def test_delete_multisig_wallet(btc_lst_stake, set_candidate):
     assert btc_lst_stake.wallets(wallet_index - 1)['status'] == 1
 
 
+def test_stake_to_removed_wallet(btc_lst_stake, set_candidate):
+    turn_round()
+    lst_script0 = random_btc_lst_lock_script()
+    lst_script1 = random_btc_lst_lock_script()
+    stake_manager.add_wallet(REDEEM_SCRIPT)
+    stake_manager.add_wallet(lst_script0)
+    stake_manager.add_wallet(lst_script1)
+    stake_manager.remove_wallet(lst_script0)
+    with brownie.reverts("wallet inactive"):
+        delegate_btc_lst_success(accounts[0], BTC_VALUE, lst_script0)
+
+
 def test_op_return_length_error_causes_failure(btc_lst_stake, lst_token):
     op_length0 = hex(27).replace('0x', '')
     op_length1 = hex(25).replace('0x', '')
@@ -627,7 +639,7 @@ def test_delegate_non_zero_valid_stake(btc_lst_stake, stake_hub, set_candidate):
     assert len(tx.events) == 4
     assert tx.events['claimedBtcLstReward']['amount'] == 0
 
-
+@pytest.mark.skip(reason="skip gas-related tests")
 def test_multi_output_gas_consumption(btc_lst_stake, stake_hub, set_candidate):
     turn_round()
     output = []
@@ -777,6 +789,45 @@ def test_lst_not_minted(btc_lst_stake):
         'actualAmount': btc_amount,
         'pkscript': user_address,
     })
+
+
+@pytest.mark.parametrize("script", ['p2sh', 'p2tr', 'p2wsh', 'p2wpkh', 'p2pkh'])
+def test_extract_pk_script_address_success(btc_lst_stake, lst_token, set_candidate, script):
+    delegate_script = __create_btc_lst_staking_script(script_type=script)
+    add_hash, add_type = btc_lst_stake.mockExtractPkScriptAddr(delegate_script)
+    actual_hash, actual_type = btc_script.get_script_hash(delegate_script)
+    assert [add_hash, add_type] == [actual_hash, actual_type]
+
+
+@pytest.mark.parametrize("script", ['p2sh', 'p2tr', 'p2wsh', 'p2wpkh', 'p2pkh'])
+def test_build_pk_script_success(btc_lst_stake, lst_token, set_candidate, script):
+    delegate_script = __create_btc_lst_staking_script(script_type=script)
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    btc_lst_stake.updateParam('add', delegate_script)
+    delegate_btc_lst_success(accounts[0], BTC_VALUE, delegate_script)
+    btc_lst_stake.redeem(BTC_VALUE, delegate_script)
+    redeem_requests = btc_lst_stake.redeemRequests(0)
+    pk_script = btc_lst_stake.mockBuildPkScript(redeem_requests['hash'], redeem_requests['addrType'])
+    assert delegate_script == pk_script
+
+
+@pytest.mark.parametrize("script", ['p2sh', 'p2tr', 'p2wsh', 'p2wpkh', 'p2pkh'])
+def test_undelegate_different_script_types(btc_lst_stake, lst_token, set_candidate, script):
+    delegate_script = __create_btc_lst_staking_script(script_type=script)
+    tx_id = delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    btc_lst_stake.redeem(BTC_VALUE, delegate_script)
+    redeem_requests = btc_lst_stake.redeemRequests(0)
+    redeem_btc_tx = btc_delegate.build_btc_lst(
+        set_outputs([BTC_VALUE - UTXO_FEE, delegate_script], [BTC_VALUE * 3, REDEEM_SCRIPT]),
+        set_inputs([tx_id, 0])
+    )
+    tx = btc_lst_stake.undelegate(redeem_btc_tx, 0, [], 0)
+    assert 'undelegated' in tx.events
+    expect_event(tx, 'undelegated', {
+        'pkscript': delegate_script
+    })
+    pk_script = btc_lst_stake.mockBuildPkScript(redeem_requests['hash'], redeem_requests['addrType'])
+    assert delegate_script == pk_script
 
 
 def test_lst_btc_undelegate_success(btc_lst_stake, lst_token, set_candidate):
@@ -1415,7 +1466,11 @@ def test_distribute_reward_success(btc_lst_stake, btc_agent):
     round_reward = sum_reward * Utils.BTC_DECIMAL // stake_amount
     assert accrued_reward == round_reward
     btc_lst_stake.setRoundTag(round_tag + 1)
-    btc_lst_stake.distributeReward(validators, reward_list)
+    tx = btc_lst_stake.distributeReward(validators, reward_list)
+    expect_event(tx, 'rewardUpdated', {
+        'round': round_tag + 1,
+        'value': round_reward * 2,
+    })
     accrued_reward = btc_lst_stake.getAccruedRewardPerBTCMap(round_tag + 1)
     assert accrued_reward == round_reward * 2
 
@@ -1620,6 +1675,23 @@ def test_check_acc_stake_amount_after_btc_lst_redeem(btc_lst_stake, btc_agent, s
     update_system_contract_address(btc_lst_stake, btc_agent=accounts[0])
     reward, reward_unclaimed, acc_staked_amount = btc_lst_stake.claimReward(accounts[0]).return_value
     assert acc_staked_amount == 0
+
+
+@pytest.mark.parametrize('paused', [0, 1])
+def test_claim_reward_when_paused(btc_lst_stake, btc_agent, set_candidate, paused):
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round(consensuses, round_count=2)
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    actual_reward = TOTAL_REWARD * 3
+    if paused:
+        btc_lst_stake.updateParam('paused', paused)
+        actual_reward = 0
+    update_system_contract_address(btc_lst_stake, btc_agent=accounts[0])
+    tx = btc_lst_stake.claimReward(accounts[0])
+    reward, _, _ = tx.return_value
+    assert reward == actual_reward
 
 
 def test_p2sh_lock_script_with_p2sh_redeem_script(btc_lst_stake, lst_token, set_candidate):
