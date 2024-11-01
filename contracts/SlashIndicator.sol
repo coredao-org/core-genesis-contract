@@ -252,6 +252,10 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
       v := and(mload(add(sig, 65)), 255)
     }
 
+    if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
+      return address(0x0);
+    }
+
     if (v < 27) {
       v += 27;
     }
