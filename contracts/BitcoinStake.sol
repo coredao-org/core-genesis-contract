@@ -253,6 +253,9 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       validator = validators[i];
       mapping(uint256 => uint256) storage m = accruedRewardPerBTCMap[validator];
       Candidate storage c = candidateMap[validator];
+      if (c.stakedAmount == 0) {
+        continue;
+      }
       l = c.continuousRewardEndRounds.length;
       if (l != 0) {
         lastRewardRound = c.continuousRewardEndRounds[l - 1];
