@@ -11,7 +11,7 @@ library SatoshiPlusHelper {
   uint256 public constant CORE_STAKE_DECIMAL = {{coreStakeDecimal}};
   uint256 public constant ROUND_INTERVAL = {{initRoundInterval}};
   uint256 public constant CHAINID = {{chainid}};
-  uint32 public constant INIT_BTC_CONFIRM_BLOCK = 3;
+  uint32 public constant INIT_BTC_CONFIRM_BLOCK = 6;
 
   uint32 public constant BTC_STAKE_VERSION = 1;
   uint32 public constant BTCLST_STAKE_VERSION = 2;
