@@ -1,16 +1,17 @@
 import codecs
-from bitcoinlib.keys import *
+import hashlib
+import random
+import binascii
+import ecdsa
+from _sha256 import sha256
 from web3 import Web3
 from brownie.network.transaction import TransactionReceipt
 from brownie.network.account import LocalAccount
 from eth_account import Account
-from hashlib import sha256
 from eth_abi import encode
 from brownie import *
 from Crypto.Hash import keccak
-import ecdsa
 from tests.constant import *
-import binascii
 
 
 def random_address():
@@ -19,7 +20,7 @@ def random_address():
 
 def random_btc_tx_id():
     rand_bytes = random.randbytes(32)
-    tx_id = sha256(sha256(rand_bytes).digest()).hexdigest()
+    tx_id = hashlib.sha256(sha256(rand_bytes).digest()).hexdigest()
     return '0x' + tx_id
 
 

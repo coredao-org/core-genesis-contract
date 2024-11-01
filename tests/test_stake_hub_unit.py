@@ -140,6 +140,22 @@ def test_no_stake_on_validator(validator_set, core_agent, btc_light_client, btc_
     })
 
 
+def test_add_round_reward_no_btc_stake(validator_set, core_agent, candidate_hub,
+                                       stake_hub):
+    round_tag = 100
+    core_value = 100
+    validators = [accounts[1], accounts[2]]
+    reward_list = [1000, 2000]
+    value_sum = sum(reward_list)
+    for validator in validators:
+        core_agent.setCandidateMapAmount(validator, core_value, core_value, 0)
+    candidate_hub.getScoreMock(validators, round_tag)
+    tx = validator_set.addRoundRewardMock(validators, reward_list, round_tag,
+                                          {'from': accounts[0], 'value': value_sum})
+    assert tx.events['roundReward'][0]['amount'] == reward_list
+    assert tx.events['roundReward'][2]['amount'] == [0, 0]
+
+
 def test_reward_without_stake(validator_set, core_agent, btc_light_client, btc_stake, candidate_hub, stake_hub):
     round_tag = 100
     validators = [accounts[1], accounts[2]]
@@ -730,4 +746,3 @@ def test_stake_hup_calculate_reward(stake_hub, btc_agent, validator_set, candida
         if test['status'] == 'success':
             assert stake_hub.calculateRewardMock(test['delegator']).return_value == (
                 test['expect_rewards'])
-

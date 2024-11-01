@@ -27,11 +27,6 @@ def set_up(system_reward, btc_light_client):
     gas_price(store_block_header_tx_gas_price)
 
 
-@pytest.fixture(autouse=True)
-def isolation():
-    pass
-
-
 data = '''{
     "hash": "00000000000000000003158101f63cf74f1111a9ab4b58a42aa05fdc6aa47171",
     "confirmations": 104200,
@@ -1500,11 +1495,35 @@ def test_check_tx_proof_success(btc_light_client):
     for _ in range(0, 6):
         btc_light_client.storeBlockHeader(btc_block_data[idx])
         idx += 1
-
     for i in range(len(txids)):
         nodes = get_intermediate_nodes(txids, i)
         nodes = ['0x' + binascii.hexlify(node).decode('utf8') for node in nodes]
         assert btc_light_client.checkTxProof(txids[i], 717700, 2, nodes, i)
+    for _ in range(6, 10):
+        btc_light_client.storeBlockHeader(btc_block_data[idx])
+        idx += 1
+    for i in range(len(txids)):
+        nodes = get_intermediate_nodes(txids, i)
+        nodes = ['0x' + binascii.hexlify(node).decode('utf8') for node in nodes]
+        assert btc_light_client.checkTxProof(txids[i], 717700, 7, nodes, i) is False
+
+
+@pytest.mark.parametrize("confirm_block", [4, 5, 6, 7])
+def test_update_confirm_block_and_check_tx_proof(btc_light_client, confirm_block):
+    chain_tip = btc_light_client.getChainTip()
+    idx = btc_light_client.getHeight(chain_tip) - btc_light_client.INIT_CHAIN_HEIGHT()
+    height = 717706
+    for _ in range(0, 10):
+        btc_light_client.storeBlockHeader(btc_block_data[idx])
+        idx += 1
+    assert btc_light_client.getChainTipHeight() == height
+    for i in range(len(txids)):
+        nodes = get_intermediate_nodes(txids, i)
+        nodes = ['0x' + binascii.hexlify(node).decode('utf8') for node in nodes]
+        check_tx_proof = True
+        if confirm_block > 6:
+            check_tx_proof = False
+        assert btc_light_client.checkTxProof(txids[i], 717700, confirm_block, nodes, i) is check_tx_proof
 
 
 def test_check_tx_proof_fail(btc_light_client):
@@ -1538,6 +1557,7 @@ def test_check_tx_proof_fail(btc_light_client):
         nodes = get_intermediate_nodes(txids, i)
         nodes = ['0x' + binascii.hexlify(node).decode('utf8') for node in nodes]
         assert not btc_light_client.checkTxProof(txids[i], 717700, 2, nodes, j)
+
 
 def test_check_tx_proof_and_get_time_success(btc_light_client):
     chain_tip = btc_light_client.getChainTip()

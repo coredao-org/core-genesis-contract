@@ -18,6 +18,7 @@ PUBLIC_KEY = "0223dd766d6e38eaf9c044dcb18d8221fe8c9a5763ca331e93fadc8f55949b8e12
 LOCK_TIME = 1736956800
 LOCK_SCRIPT = '0480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac'
 btc_script = get_btc_script()
+btc_delegate = BtcStake()
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -532,6 +533,78 @@ def test_btc_delegate_no_amount_limit(btc_stake, set_candidate, delegate_btc_val
     assert tracker.delta() == FEE
 
 
+def test_btc_high_stake_duration(btc_stake, set_candidate, candidate_hub):
+    operators, consensuses = set_candidate
+    turn_round()
+    set_last_round_tag(2)
+    lock_time = 2284244451
+    lock_script = __get_stake_lock_script(PUBLIC_KEY, lock_time)
+    delegate_btc_success(operators[0], accounts[0], BTC_VALUE, lock_script)
+    turn_round(consensuses, round_count=2)
+
+
+def test_stake_to_unregistered_validator_expires(btc_stake, set_candidate, candidate_hub):
+    operators, consensuses = set_candidate
+    candidate_hub.unregister({'from': operators[1]})
+    set_last_round_tag(2)
+    delegate_btc_success(operators[1], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round()
+    __check_candidate_map_info(operators[1], {
+        'stakedAmount': 0,
+        'realtimeAmount': BTC_VALUE,
+    })
+    turn_round(consensuses, round_count=3)
+    __check_candidate_map_info(operators[1], {
+        'stakedAmount': 0,
+        'realtimeAmount': 0,
+    })
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == 0
+
+
+def test_stake_to_non_validator_user(btc_stake, set_candidate, candidate_hub):
+    operators, consensuses = set_candidate
+    set_last_round_tag(2)
+    delegate_btc_success(accounts[1], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round()
+    __check_candidate_map_info(accounts[1], {
+        'stakedAmount': 0,
+        'realtimeAmount': BTC_VALUE,
+    })
+    turn_round(consensuses, round_count=3)
+    __check_candidate_map_info(accounts[1], {
+        'stakedAmount': 0,
+        'realtimeAmount': 0,
+    })
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == 0
+
+
+def test_stake_to_regular_address_then_transfer(btc_stake, set_candidate, candidate_hub):
+    operators, consensuses = set_candidate
+    tx_id = delegate_btc_success(accounts[1], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round()
+    transfer_btc_success(tx_id, operators[0], accounts[0])
+    __check_candidate_map_info(accounts[1], {
+        'stakedAmount': 0,
+        'realtimeAmount': 0,
+    })
+    __check_candidate_map_info(operators[0], {
+        'stakedAmount': 0,
+        'realtimeAmount': BTC_VALUE
+    })
+    turn_round(consensuses, round_count=3)
+    __check_candidate_map_info(accounts[1], {
+        'stakedAmount': 0,
+        'realtimeAmount': 0,
+    })
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == TOTAL_REWARD * 2
+
+
 def test_undelegate_success(btc_stake, set_candidate):
     operators, consensuses = set_candidate
     block_height = 200
@@ -607,6 +680,97 @@ def test_no_btc_tx_undelegated(btc_stake, set_candidate):
     assert tracker.delta() == TOTAL_REWARD
 
 
+def test_single_transaction_repeated_undelegate(btc_stake, set_candidate):
+    operators, consensuses = set_candidate
+    block_height = 200
+    index = 3000
+    tx_id0 = delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    pay_address0 = get_btc_script().k2_btc_pay_address(LOCK_SCRIPT, 'p2sh')
+    _, pay_address1, _ = random_btc_lock_script()
+    btc_tx = btc_delegate.build_btc(
+        set_outputs([BTC_VALUE, pay_address1], [BTC_VALUE, pay_address0]),
+        opreturn=set_op_return([operators[1], accounts[1], LOCK_SCRIPT])
+    )
+    btc_stake.delegate(btc_tx, 201, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
+    tx_id1 = get_transaction_txid(btc_tx)
+    turn_round(consensuses)
+    script, pay_address, _ = random_btc_lock_script()
+    btc_tx_info = {}
+    inputs = [build_input(tx_id0, 0), build_input(tx_id1, 2)]
+    outputs = [build_output(BTC_VALUE // 2, pay_address)]
+    generate_btc_transaction_info(btc_tx_info, inputs, outputs)
+    btc_tx1 = build_btc_transaction(btc_tx_info)
+    tx = btc_stake.undelegate(btc_tx1, block_height, [], index)
+    btc_tx_id1 = get_transaction_txid(btc_tx1)
+    expect_event(tx, 'undelegated', {
+        'outpointHash': tx_id0,
+        'outpointIndex': 0,
+        'usedTxid': btc_tx_id1,
+    })
+    expect_event(tx, 'undelegated', {
+        'outpointHash': tx_id1,
+        'outpointIndex': 2,
+        'usedTxid': btc_tx_id1,
+    }, idx=1)
+    with brownie.reverts(f"btc output is already undelegated."):
+        btc_stake.undelegate(btc_tx1, block_height, [], index)
+
+
+def test_failed_btc_transaction_repeated_undelegate(btc_stake, set_candidate):
+    operators, consensuses = set_candidate
+    block_height = 200
+    index = 3000
+    tx_id0 = delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    pay_address0 = get_btc_script().k2_btc_pay_address(LOCK_SCRIPT, 'p2sh')
+    _, pay_address1, _ = random_btc_lock_script()
+    btc_tx = btc_delegate.build_btc(
+        set_outputs([BTC_VALUE, pay_address1], [BTC_VALUE, pay_address0]),
+        opreturn=set_op_return([operators[1], accounts[1], LOCK_SCRIPT])
+    )
+    btc_stake.delegate(btc_tx, 201, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
+    tx_id1 = get_transaction_txid(btc_tx)
+    turn_round(consensuses)
+    _, pay_address, _ = random_btc_lock_script()
+    btc_tx_info = {}
+    inputs = [build_input(tx_id0, 1), build_input(tx_id1, 0)]
+    outputs = [build_output(BTC_VALUE // 2, pay_address)]
+    generate_btc_transaction_info(btc_tx_info, inputs, outputs)
+    btc_tx1 = build_btc_transaction(btc_tx_info)
+    with brownie.reverts(f"no btc tx undelegated."):
+        btc_stake.undelegate(btc_tx1, block_height, [], index)
+    with brownie.reverts(f"no btc tx undelegated."):
+        btc_stake.undelegate(btc_tx1, block_height, [], index)
+
+
+def test_undelegate_then_successful_stake(btc_stake, set_candidate):
+    operators, consensuses = set_candidate
+    block_height = 200
+    index = 3000
+    tx_id0 = delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    pay_address0 = get_btc_script().k2_btc_pay_address(LOCK_SCRIPT, 'p2sh')
+    _, pay_address1, _ = random_btc_lock_script()
+    btc_tx = btc_delegate.build_btc(
+        set_outputs([BTC_VALUE, pay_address1], [BTC_VALUE, pay_address0]),
+        opreturn=set_op_return([operators[1], accounts[1], LOCK_SCRIPT])
+    )
+    tx_id1 = get_transaction_txid(btc_tx)
+    turn_round(consensuses)
+    _, pay_address, _ = random_btc_lock_script()
+    btc_tx_info = {}
+    inputs = [build_input(tx_id0, 0), build_input(tx_id1, 2)]
+    outputs = [build_output(BTC_VALUE // 2, pay_address)]
+    generate_btc_transaction_info(btc_tx_info, inputs, outputs)
+    btc_tx1 = build_btc_transaction(btc_tx_info)
+    btc_stake.undelegate(btc_tx1, block_height, [], index)
+    with brownie.reverts(f"btc output is already undelegated."):
+        btc_stake.undelegate(btc_tx1, block_height, [], index)
+    btc_stake.delegate(btc_tx, 201, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
+    # this results in an error, but this is not the case in the real world
+    # It must be that Jiao Ben has been unlocked before you can carry out undelegate, so it is impossible to stake successfully at this time
+    with brownie.reverts(f"btc output is already undelegated."):
+        btc_stake.undelegate(btc_tx1, block_height, [], index)
+
+
 def test_btc_stake_distribute_reward_success(btc_stake, candidate_hub):
     validators = accounts[:3]
     amounts = [1000, 2000, 3000]
@@ -669,6 +833,17 @@ def test_distribute_reward_with_zero_amount(btc_stake, candidate_hub):
     btc_stake.distributeReward(validators, rewards)
     reward = 0
     for index, v in enumerate(validators[1:]):
+        __check_accrued_reward_per_btc(v, round_tag, reward)
+
+
+def test_non_zero_reward_with_zero_total_btc_stake(btc_stake, candidate_hub):
+    validators = accounts[:3]
+    rewards = [1000, 2000, 3000]
+    round_tag = get_current_round()
+    update_system_contract_address(btc_stake, btc_agent=accounts[0])
+    btc_stake.distributeReward(validators, rewards)
+    reward = 0
+    for index, v in enumerate(validators):
         __check_accrued_reward_per_btc(v, round_tag, reward)
 
 

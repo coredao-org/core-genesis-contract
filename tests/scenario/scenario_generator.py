@@ -1192,6 +1192,13 @@ class RegisterCandidate(TaskBuilder):
             return False
 
         data_center = task_generator.get_data_center()
+
+        # if no candidate is available, registration is required to ensure there
+        # is always a candidate eligible for selection as a validator when turnround
+        available_candidates = data_center.get_available_candidates()
+        if len(available_candidates) == 0:
+            return True
+
         probability = data_center.get_probability(self.__class__.__name__)
         p = random.randint(1, constants.PROBABILITY_DECIMALS)
         return p <= probability
@@ -1221,6 +1228,12 @@ class SlashValidator(TaskBuilder):
 
         data_center = task_generator.get_data_center()
         if not data_center.is_available(operator):
+            return
+
+        # do not slash the last available candidate ensure that each round
+        # has a candidate eligible for selection as a validator
+        available_candidates = data_center.get_available_candidates()
+        if len(available_candidates) <= 1:
             return
 
         max_count = data_center.get_felony_threshold()

@@ -3,7 +3,7 @@ import brownie
 from web3 import Web3
 from eth_abi import encode
 from brownie import *
-from .utils import expect_event, padding_left, random_address
+from .utils import expect_event, padding_left, random_address, random_btc_tx_id
 from .common import execute_proposal
 
 
@@ -104,3 +104,11 @@ def test_clean(slash_indicator, candidate_hub):
             assert cleaned_counts[idx] == _counts[idx]
 
         assert len(_validators) == cleaned_validator_length
+
+
+def test_ecrecovery_faild(slash_indicator, candidate_hub):
+    max_num = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
+    num = int(max_num) * int(1e18)
+    num_bytes = num.to_bytes(65, byteorder='big')
+    address = slash_indicator.mockEcrecovery(random_btc_tx_id(), num_bytes).return_value
+    assert address == ZERO_ADDRESS

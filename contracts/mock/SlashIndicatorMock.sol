@@ -44,4 +44,9 @@ contract SlashIndicatorMock is SlashIndicator {
         }
         return (v, c);
     }
+
+    function mockEcrecovery(bytes32 hash, bytes memory sig) public returns (address) {
+        return ecrecovery(hash, sig);
+    }
+
 }

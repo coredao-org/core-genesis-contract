@@ -763,6 +763,45 @@ def test_move_candidate_after_moving_btc_data(pledge_agent, validator_set, candi
     turn_round(consensuses, round_count=2)
 
 
+def test_stake_new_then_move_core_data(pledge_agent, validator_set, candidate_hub, set_candidate):
+    operators, consensuses = set_candidate
+    tx_id = random_btc_tx_id()
+    tx_id1 = random_btc_tx_id()
+    btc_value = 1000
+    core_value = 10000
+    script = "0x1234"
+    fee = 0
+    set_round_tag(LOCK_TIME // Utils.ROUND_INTERVAL - 10)
+    pledge_agent.delegateBtcMock(tx_id, btc_value, operators[0], accounts[1], script, LOCK_TIME, fee)
+    pledge_agent.delegateBtcMock(tx_id1, btc_value, operators[0], accounts[0], script, LOCK_TIME, fee)
+    old_delegate_coin_success(operators[0], accounts[0], core_value)
+    old_delegate_coin_success(operators[0], accounts[1], core_value)
+    __old_turn_round()
+    __old_turn_round(consensuses)
+    __init_hybrid_score_mock()
+    __move_btc_data([tx_id, tx_id1])
+    delegate_coin_success(operators[0], accounts[0], core_value)
+    tracker = get_tracker(accounts[0])
+    tx = old_delegate_coin_success(operators[0], accounts[0], core_value, False)
+    assert tracker.delta() == 0 - (core_value - TOTAL_REWARD // 2)
+    expect_event(tx, 'claimedReward', {
+        'amount': TOTAL_REWARD // 2
+    })
+    turn_round(consensuses)
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == TOTAL_REWARD // 2
+    turn_round(consensuses)
+    _, _, account_rewards, _ = parse_delegation([{
+        "address": operators[0],
+        "coin": [set_delegate(accounts[0], core_value * 3), set_delegate(accounts[1], core_value)],
+        "btc": [set_delegate(accounts[0], btc_value), set_delegate(accounts[1], btc_value)]
+    }], TOTAL_REWARD)
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == account_rewards[accounts[0]]
+    old_claim_reward_success(operators, accounts[0])
+
+
 def test_data_migration_with_cancelled_validator_registration(pledge_agent, validator_set, candidate_hub,
                                                               set_candidate):
     operators, consensuses = set_candidate
@@ -791,6 +830,7 @@ def test_data_migration_for_queued_validators(pledge_agent, validator_set, candi
     for i in range(2):
         for op in operators[:3]:
             old_delegate_coin_success(op, accounts[i], MIN_INIT_DELEGATE_VALUE)
+            delegate_power_success(op, accounts[i], MIN_INIT_DELEGATE_VALUE)
     __old_turn_round()
     assert consensuses[1] in validator_set.getValidators()
     __init_hybrid_score_mock()
@@ -799,6 +839,7 @@ def test_data_migration_for_queued_validators(pledge_agent, validator_set, candi
             'amount': MIN_INIT_DELEGATE_VALUE * 2,
             'realtimeAmount': MIN_INIT_DELEGATE_VALUE * 2
         })
+    turn_round(consensuses)
 
 
 def test_data_migration_for_validators_in_multiple_states(pledge_agent, validator_set, slash_indicator, candidate_hub):
@@ -915,6 +956,32 @@ def test_move_cancelled_validator_candidate_data(pledge_agent, validator_set, ca
     tracker = get_tracker(accounts[0])
     stake_hub_claim_reward(accounts[0])
     assert tracker.delta() == 0
+
+
+def test_deregister_multiple_rounds_then_move_candidate(pledge_agent, validator_set, candidate_hub,
+                                                        set_candidate):
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    for op in operators[:3]:
+        old_delegate_coin_success(op, accounts[1], MIN_INIT_DELEGATE_VALUE)
+    candidate_hub.unregister({'from': operators[0]})
+    __old_turn_round()
+    __old_turn_round(consensuses, round_count=2)
+    assert len(validator_set.getValidators()) == 2
+    __init_hybrid_score_mock()
+    pledge_agent.moveCandidateData([operators[0]])
+    __check_candidate_map_info(operators[0], {
+        'amount': 0,
+        'realtimeAmount': MIN_INIT_DELEGATE_VALUE * 2
+    })
+    consensuses.append(register_candidate(operator=operators[0]))
+    old_claim_reward_success([operators[0]], accounts[0])
+    turn_round(consensuses, round_count=4)
+    assert len(validator_set.getValidators()) == 3
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == TOTAL_REWARD // 2 * 3 + 1
+    turn_round(consensuses)
 
 
 @pytest.mark.parametrize("round_count", [0, 1, 2, 3])
