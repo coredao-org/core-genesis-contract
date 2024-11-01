@@ -229,6 +229,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       (_outpointHash, _outpointIndex) = _vinView.extractOutpoint(i);
       BtcTx storage bt = btcTxMap[_outpointHash];
       if (bt.amount != 0 && bt.outputIndex == _outpointIndex) {
+        require(bt.usedHeight == 0, "btc output is already undelegated.");
         bt.usedHeight = blockHeight;
         ++count;
         emit undelegated(_outpointHash, _outpointIndex, txid);      }
