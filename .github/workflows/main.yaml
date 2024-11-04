@@ -34,7 +34,7 @@ jobs:
       - name: Setup python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.7'
+          python-version: '3.11.9'
           cache: 'pip' # caching pip dependencies
 
       - name: Install python dependencies
@@ -55,5 +55,6 @@ jobs:
       
       - name: Run tests
         run: |
+          brownie pm install OpenZeppelin/openzeppelin-contracts@4.9.6
           sh generate-test-contracts.sh
           brownie test -v --stateful false
