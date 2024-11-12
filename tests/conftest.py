@@ -214,5 +214,5 @@ def set_system_contract_address(
 
 
 @pytest.fixture(scope="module")
-def min_init_delegate_value(pledge_agent):
-    return pledge_agent.requiredCoinDeposit()
+def min_init_delegate_value(core_agent):
+    return core_agent.requiredCoinDeposit()

@@ -113,6 +113,8 @@ class DelegatorStakeState:
         self.delegator_power_history_reward = {}
         self.delegator_power_history_accured_stake_amount = {}
 
+        self.delegator_map = {}
+
         # (delegator=>[(relayer1,amount1),(relayer2,amount2)])
         self.debts = {}
 
@@ -155,6 +157,12 @@ class DelegatorStakeState:
             assert self.btc_lst_stake_percent > 0
 
         self.utxo_fee = BitcoinLSTStakeMock[0].utxoFee()
+
+    def update_delegator_map(self, delegator, change_round):
+        self.delegator_map[delegator] = change_round
+
+    def get_delegator_map(self, delegator):
+        return self.delegator_map.get(delegator)
 
     def update_core_stake_grade_flag(self, grade_flag):
         self.core_stake_grade_flag = grade_flag
@@ -322,10 +330,6 @@ class DelegatorStakeState:
 
         assert self.delegator_btc_lst_realtime_amount[delegator] >= 0
 
-    def add_btc_lst_total_realtime_amount(self, delta_amount):
-        self.btc_lst_total_realtime_amount += delta_amount
-        assert self.btc_lst_total_realtime_amount >= 0
-
     def get_btc_lst_history_reward(self, delegator):
         return self.delegator_btc_lst_history_reward.get(delegator, 0)
 
@@ -364,6 +368,24 @@ class DelegatorStakeState:
     def update_btc_stake_history_reward(self, delegator, amount):
         assert amount >= 0
         self.delegator_btc_stake_history_reward[delegator] = amount
+
+    def get_assets_history_reward(self, delegator):
+        core_history_reward = self.get_core_history_reward(delegator)
+        btc_history_reward = self.get_btc_stake_history_reward(delegator)
+        power_history_reward = self.get_power_history_reward(delegator)
+        return core_history_reward + btc_history_reward + power_history_reward
+
+    def add_assets_history_reward(self, delegator, rewards):
+        assert len(rewards) == 3
+        self.add_core_history_reward(delegator, rewards[0])
+        self.add_power_history_reward(delegator, rewards[1])
+        self.add_btc_stake_history_reward(delegator, rewards[2])
+
+    def update_assets_history_reward(self, delegator, rewards):
+        assert len(rewards) == 3
+        self.update_core_history_reward(delegator, rewards[0])
+        self.update_btc_stake_history_reward(delegator, rewards[1])
+        self.update_power_history_reward(delegator, rewards[2])
 
     def get_btc_stake_history_unclaimable_reward(self, delegator):
         return self.delegator_btc_stake_history_unclaimable_reward.get(delegator, 0)

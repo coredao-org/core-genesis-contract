@@ -64,6 +64,7 @@ def expect_event_not_emitted(tx_receipt: TransactionReceipt, event_name):
     assert event_name not in tx_receipt.events
 
 
+
 class AccountTracker:
     def __init__(self, account: LocalAccount):
         self.account = account

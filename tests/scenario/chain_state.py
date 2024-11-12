@@ -128,7 +128,7 @@ class Candidate:
         assert not self.is_removed()
 
         return self.status == (
-                    self.status & (NodeStatus.CANDIDATE.value | NodeStatus.MARGIN.value | NodeStatus.INACTIVE.value))
+                self.status & (NodeStatus.CANDIDATE.value | NodeStatus.MARGIN.value | NodeStatus.INACTIVE.value))
 
     def is_validator(self):
         assert not self.is_removed()
@@ -340,6 +340,7 @@ class ChainState:
 
     def init_btc_asset(self):
         self.btc_asset = stake_asset.BtcAsset()
+        self.btc_asset.set_chain(self)
         print(f"btc asset init state: {self.btc_asset}")
 
     def init_validator_count(self):
@@ -369,6 +370,7 @@ class ChainState:
     def add_balance(self, addr, delta_amount):
         old_balance = self.get_balance(addr)
         self.balances[addr] = old_balance + delta_amount
+
         assert self.balances[addr] >= 0, f"old_balance={old_balance} delta_amount={delta_amount}"
 
     def update_balance(self, addr, amount):
@@ -591,7 +593,12 @@ class ChainState:
         return CoreAgentMock[0].getCandidateListByDelegator(delegator)
 
     def get_core_history_reward_on_chain(self, delegator):
-        return CoreAgentMock[0].rewardMap(delegator)[0]
+        # rewards [core,power,btc]
+        reward = 0
+        rewards = StakeHubMock[0].getDelegator(delegator)[1]
+        if len(rewards) != 0:
+            reward += rewards[0]
+        return reward
 
     def get_btc_lst_stake_tx_on_chain(self, txid):
         return BitcoinLSTStakeMock[0].btcTxMap(txid)
@@ -609,10 +616,18 @@ class ChainState:
         return BitcoinLSTStakeMock[0].rewardMap(delegator)[0]
 
     def get_btc_stake_history_reward_on_chain(self, delegator):
-        return BitcoinStakeMock[0].rewardMap(delegator)
+        reward = 0
+        rewards = StakeHubMock[0].getDelegator(delegator)[1]
+        if len(rewards) != 0:
+            reward += rewards[2]
+        return reward
 
     def get_power_history_reward_on_chain(self, delegator):
-        return HashPowerAgentMock[0].rewardMap(delegator)[0]
+        reward = HashPowerAgentMock[0].rewardMap(delegator)[0]
+        rewards = StakeHubMock[0].getDelegator(delegator)[1]
+        if len(rewards) != 0:
+            reward += rewards[1]
+        return reward
 
     def get_btc_stake_tx_on_chain(self, txid):
         return BitcoinStakeMock[0].btcTxMap(txid)

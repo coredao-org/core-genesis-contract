@@ -6,7 +6,7 @@ from eth_account import Account
 from brownie import accounts, UnRegisterReentry
 from brownie.test import given, strategy
 from brownie.network.transaction import Status, TransactionReceipt
-from .utils import random_address, expect_event
+from .utils import random_address, expect_event, padding_left, update_system_contract_address
 from .common import register_candidate, turn_round, get_candidate
 
 
@@ -215,6 +215,16 @@ def test_unregister_all(candidate_hub, validator_set):
     candidate_hub.refuseDelegate({'from': accounts[2]})
     turn_round()
     assert len(validator_set.getValidators()) == 2
+
+
+def test_bond_update_registration_failure(candidate_hub, required_margin):
+    consensus_address = random_address()
+    fee_address = random_address()
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(required_margin * 2), 64)
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    with brownie.reverts('deposit is not enough'):
+        candidate_hub.register(consensus_address, fee_address, 1, {'from': accounts[1], 'value': required_margin})
 
 
 def test_register_candidate(candidate_hub, required_margin):
@@ -514,6 +524,11 @@ def test_unregister_reentry(candidate_hub, required_margin, stake_hub):
         "success": False,
         "msg": "candidate does not exist"
     })
+
+
+def test_getRoundInterval_success(candidate_hub, required_margin, stake_hub):
+    interval = 86400
+    assert interval == candidate_hub.getRoundInterval()
 
 
 def __delegate_coin_success(core_agent, agent, delegator, old_value, new_value):

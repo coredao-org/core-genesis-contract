@@ -36,6 +36,7 @@ class Asset:
         self.bonus_amount = None
         self.amount = None
         self.factor = None
+        self.chain = None
         self.round_rewards = {}
 
         self.dual_stake_mask = 0
@@ -93,6 +94,9 @@ class Asset:
 
     def set_total_amount(self, total_amount):
         self.total_amount = total_amount
+
+    def set_chain(self, chain):
+        self.chain = chain
 
     def get_initial_state(self):
         pass
@@ -255,7 +259,6 @@ class CoreAsset(Asset):
         for addr in reversed(list(staked_candidates.keys())):
             candidate = candidates.get(addr)
             assert candidate is not None
-
             reward, accured_stake_amount = self.collect_reward_in_candidate(round, delegator, candidate)
             total_reward += reward
             total_accured_stake_amount += accured_stake_amount
@@ -271,17 +274,7 @@ class CoreAsset(Asset):
         # for addr in remove_list:
         #     delegator_stake_state.rm_core_stake_candidate(delegator, addr)
 
-        history_reward = delegator_stake_state.get_core_history_reward(delegator)
-        if history_reward > 0:
-            delegator_stake_state.update_core_history_reward(delegator, 0)
-
-        history_accured_stake_amount = delegator_stake_state.get_core_history_accured_stake_amount(delegator)
-        if history_accured_stake_amount > 0:
-            delegator_stake_state.update_core_history_accured_stake_amount(delegator, 0)
-
-        print(f"{self.name}, history_reward={history_reward}")
-
-        return total_reward + history_reward, 0, total_accured_stake_amount + history_accured_stake_amount
+        return total_reward, 0, total_accured_stake_amount
 
     def collect_reward_in_candidate(self, round, delegator, candidate):
         reward = 0
@@ -362,8 +355,6 @@ class PowerAsset(Asset):
             delegator_stake_state.update_power_history_reward(delegator, 0)
 
         history_accured_stake_amount = delegator_stake_state.get_power_history_accured_stake_amount(delegator)
-        if history_accured_stake_amount > 0:
-            delegator_stake_state.update_power_history_accured_stake_amount(delegator, 0)
 
         return history_reward, 0, history_accured_stake_amount
 
@@ -476,8 +467,9 @@ class BtcAsset(Asset):
         print(f"AFTER APPLY DUAL STAKING: {btc_stake_reward}, {unclaimable_btc_stake_reward}")
 
         # process btc lst staking reward
+        last_round = self.chain.get_round()
         btclst_reward, unlaimable_btclst_reward, btclst_accured_stake_amount = \
-            self.claim_btc_lst_reward(round, delegator, delegator_stake_state)
+            self.claim_btc_lst_reward(last_round, delegator, delegator_stake_state)
 
         # apply percent to btc lst staking reward
         btclst_reward, unlaimable_btclst_reward = \
@@ -518,16 +510,7 @@ class BtcAsset(Asset):
         for txid in remove_txid_list:
             delegator_stake_state.remove_btc_stake_txid(delegator, txid)
 
-        history_claimable_reward = delegator_stake_state.get_btc_stake_history_reward(delegator)
-        delegator_stake_state.update_btc_stake_history_reward(delegator, 0)
-
-        history_unclaimable_reward = delegator_stake_state.get_btc_stake_history_unclaimable_reward(delegator)
-        delegator_stake_state.update_btc_stake_history_unclaimable_reward(delegator, 0)
-
-        history_accured_stake_amount = delegator_stake_state.get_btc_stake_history_accured_stake_amount(delegator)
-        delegator_stake_state.update_btc_stake_history_accured_stake_amount(delegator, 0)
-
-        return total_claimable_reward + history_claimable_reward, total_unclaimable_reward + history_unclaimable_reward, total_accured_stake_amount + history_accured_stake_amount
+        return total_claimable_reward, total_unclaimable_reward, total_accured_stake_amount
 
     def collect_btc_stake_tx_reward(self, tx, delegator_stake_state, round):
         from_round = tx.get_round() + 1
