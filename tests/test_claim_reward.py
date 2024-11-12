@@ -1,7 +1,11 @@
 import brownie
 import pytest
+import rlp
+
 from .calc_reward import set_delegate, parse_delegation, Discount, set_btc_lst_delegate
-from .common import register_candidate, turn_round, stake_hub_claim_reward, set_round_tag, claim_stake_and_relay_reward
+from .common import register_candidate, turn_round, stake_hub_claim_reward, set_round_tag, claim_stake_and_relay_reward, \
+    execute_proposal
+from eth_utils import to_bytes
 from .delegate import *
 from .utils import *
 
@@ -31,9 +35,16 @@ def deposit_for_reward(validator_set, gov_hub):
     accounts[99].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
 
 
+@pytest.fixture()
+def init_system_reward_balance(system_reward):
+    incentive_balance = 10000000e18
+    system_reward.receiveRewards({'value': incentive_balance, 'from': accounts[97]})
+    assert system_reward.balance() == incentive_balance
+
+
 @pytest.fixture(scope="module", autouse=True)
 def set_block_reward(validator_set, candidate_hub, btc_stake, stake_hub, pledge_agent,
-                     btc_lst_stake, gov_hub, btc_agent, system_reward):
+                     btc_lst_stake, gov_hub, btc_agent, system_reward, core_agent):
     global BLOCK_REWARD, FEE, DELEGATE_VALUE, TOTAL_REWARD, MIN_INIT_DELEGATE_VALUE
     global BTC_STAKE, STAKE_HUB, CANDIDATE_HUB, BTC_LST_STAKE, PLEDGE_AGENT
     FEE = FEE * 100
@@ -42,7 +53,7 @@ def set_block_reward(validator_set, candidate_hub, btc_stake, stake_hub, pledge_
     total_block_reward = block_reward + TX_FEE
     BLOCK_REWARD = total_block_reward * ((100 - block_reward_incentive_percent) / 100)
     TOTAL_REWARD = BLOCK_REWARD // 2
-    MIN_INIT_DELEGATE_VALUE = pledge_agent.requiredCoinDeposit()
+    MIN_INIT_DELEGATE_VALUE = core_agent.requiredCoinDeposit()
     DELEGATE_VALUE = MIN_INIT_DELEGATE_VALUE * 1000
     BTC_STAKE = btc_stake
     STAKE_HUB = stake_hub
@@ -95,6 +106,7 @@ def mock_btc_stake_lock_time(timestamp, stake_round=None):
     return timestamp, end_round
 
 
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
 def test_successful_upgrade_after_round_switch(pledge_agent, candidate_hub):
     init_round_tag, timestamp = mock_current_round()
     stake_manager.add_wallet(BTCLST_LOCK_SCRIPT)
@@ -141,6 +153,7 @@ def test_successful_upgrade_after_round_switch(pledge_agent, candidate_hub):
     assert 'claimedReward' in tx.events
 
 
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
 def test_multiple_stakes_after_upgrade(set_candidate):
     stake_manager.add_wallet(BTCLST_LOCK_SCRIPT)
     btc_value = 100
@@ -192,6 +205,7 @@ def test_multiple_stakes_after_upgrade(set_candidate):
     turn_round(consensuses)
 
 
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
 def test_cancel_and_transfer_stakes_after_upgrade(set_candidate, slash_indicator):
     btc_value = 100
     btc_lst_value = 1000
@@ -251,6 +265,7 @@ def test_cancel_and_transfer_stakes_after_upgrade(set_candidate, slash_indicator
     turn_round(consensuses)
 
 
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
 def test_new_validator_join_after_upgrade(slash_indicator):
     btc_value = 100
     btc_lst_value = 1000
@@ -353,6 +368,7 @@ def test_new_validator_join_after_upgrade(slash_indicator):
     turn_round(consensuses)
 
 
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
 def test_no_btc_lst_stake_after_upgrade(set_candidate):
     btc_value = 100
     delegate_amount = 600000
@@ -403,6 +419,7 @@ def test_no_btc_lst_stake_after_upgrade(set_candidate):
     turn_round(consensuses)
 
 
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
 def test_stake_in_next_round_after_upgrade(set_candidate):
     btc_value = 100
     delegate_amount = 600000
@@ -445,6 +462,7 @@ def test_stake_in_next_round_after_upgrade(set_candidate):
     turn_round(consensuses)
 
 
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
 @pytest.mark.parametrize("round_count", [0, 1, 2])
 def test_claim_rewards_after_becoming_validator_post_upgrade(pledge_agent, validator_set, slash_indicator,
                                                              candidate_hub, round_count):
@@ -487,6 +505,7 @@ def test_claim_rewards_after_becoming_validator_post_upgrade(pledge_agent, valid
     assert tracker.delta() == TOTAL_REWARD // 2 * 4
 
 
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
 @pytest.mark.parametrize("round_count", [0, 1, 2, 5, 6])
 def test_data_migration_between_different_validator_states(pledge_agent, validator_set, slash_indicator,
                                                            candidate_hub, round_count):
@@ -535,6 +554,7 @@ def test_data_migration_between_different_validator_states(pledge_agent, validat
     assert 'claimedReward' in tx.events
 
 
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
 def test_btclst_claim_extra_rewards_after_upgrade(set_candidate):
     btc_lst_value = 1000
     delegate_amount = 600000
@@ -582,6 +602,7 @@ def test_btclst_claim_extra_rewards_after_upgrade(set_candidate):
     turn_round(consensuses)
 
 
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
 def test_btc_data_migration_not_affected_by_stake_duration(set_candidate):
     stake_manager.set_is_stake_hub_active(False)
     stake_manager.set_tlp_rates([[0, 5000], [2 * Utils.MONTH_TIMESTAMP, 10000]])
@@ -650,9 +671,298 @@ def test_claim_reward_after_hardcap_update(stake_hub, hard_cap, set_candidate):
     assert tracker2.delta() == account_rewards[accounts[2]]
 
 
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
+@pytest.mark.parametrize("tests", [
+    {'slash_agent': 0, 'validator': True, 'slash_type': 'felony', 'newRequiredMargin': 2000000, 'Margin': 1100000,
+     'claimed_reward': 13545},
+    {'slash_agent': 0, 'validator': True, 'slash_type': 'felony', 'newRequiredMargin': 2000000, 'Margin': 1100001,
+     'claimed_reward': 13545},
+    {'slash_agent': 1, 'validator': False, 'slash_type': 'felony', 'newRequiredMargin': 2000000, 'Margin': 1099999,
+     'claimed_reward': 0},
+    {'slash_agent': 0, 'validator': False, 'slash_type': 'felony', 'newRequiredMargin': 2000000, 'Margin': 1000000,
+     'claimed_reward': 0},
+    {'slash_agent': 0, 'validator': True, 'slash_type': 'minor', 'newRequiredMargin': 2000000, 'Margin': 900000,
+     'claimed_reward': 40635},
+    {'slash_agent': 0, 'validator': True, 'slash_type': 'minor', 'newRequiredMargin': 2000000, 'Margin': 1000000,
+     'claimed_reward': 40635}
+])
+def test_update_bond_after_slash(slash_indicator, tests, candidate_hub, validator_set):
+    delegate_value = MIN_INIT_DELEGATE_VALUE * 10
+    operators = []
+    consensuses = []
+    for operator in accounts[5:10]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    old_delegate_coin_success(operators[tests['slash_agent']], accounts[0], delegate_value)
+    old_turn_round()
+    tx = None
+    if tests['slash_type'] == 'minor':
+        slash_threshold = slash_indicator.misdemeanorThreshold()
+        event_name = 'validatorMisdemeanor'
+    else:
+        slash_threshold = slash_indicator.felonyThreshold()
+        event_name = 'validatorFelony'
+    for count in range(slash_threshold):
+        tx = slash_indicator.slash(consensuses[tests['slash_agent']])
+    assert event_name in tx.events
+    old_turn_round(consensuses)
+    hex_value = padding_left(Web3.to_hex(int(tests['newRequiredMargin'])), 64)
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    init_hybrid_score_mock()
+    old_claim_reward_success(operators, accounts[0])
+    tx = candidate_hub.addMargin({'from': operators[tests['slash_agent']], 'value': tests['Margin']})
+    turn_round(consensuses, round_count=3)
+    if tests['validator']:
+        assert consensuses[tests['slash_agent']] in validator_set.getValidators()
+    else:
+        assert consensuses[tests['slash_agent']] not in validator_set.getValidators()
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == tests['claimed_reward']
+    turn_round(consensuses, round_count=2)
+
+
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
+def test_upgrade_bond_does_not_affect_active_validators(slash_indicator, candidate_hub, set_candidate, validator_set):
+    delegate_value = MIN_INIT_DELEGATE_VALUE * 10
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], delegate_value)
+    old_turn_round()
+    old_turn_round(consensuses)
+    init_margin = 2000000
+    hex_value = padding_left(Web3.to_hex(int(init_margin * 100)), 64)
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    init_hybrid_score_mock()
+    old_claim_reward_success(operators, accounts[0])
+    turn_round(consensuses, round_count=3)
+    assert consensuses[0] in validator_set.getValidators()
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == TOTAL_REWARD * 3
+    tx = candidate_hub.addMargin({'from': operators[0], 'value': 100})
+    turn_round(consensuses, round_count=2)
+    assert consensuses[0] in validator_set.getValidators()
+    turn_round(consensuses, round_count=2)
+
+
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
+def test_add_bond_multiple_times(slash_indicator, candidate_hub, set_candidate, validator_set):
+    delegate_value = MIN_INIT_DELEGATE_VALUE * 10
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], delegate_value)
+    old_turn_round()
+    slash_threshold = slash_indicator.felonyThreshold()
+    event_name = 'validatorFelony'
+    tx = None
+    for count in range(slash_threshold):
+        tx = slash_indicator.slash(consensuses[0])
+    assert event_name in tx.events
+    old_turn_round(consensuses)
+    assert consensuses[0] not in validator_set.getValidators()
+    init_margin = 2000000
+    hex_value = padding_left(Web3.to_hex(init_margin * 10000), 64)
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    new_margin = 10000000
+    candidate_hub.addMargin({'from': operators[0], 'value': new_margin})
+    init_hybrid_score_mock()
+    old_claim_reward_success(operators, accounts[0])
+    turn_round(consensuses, round_count=3)
+    assert consensuses[0] not in validator_set.getValidators()
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(new_margin)), 64)
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    candidate_hub.addMargin({'from': operators[0], 'value': MIN_INIT_DELEGATE_VALUE})
+    turn_round(consensuses, round_count=2)
+    assert consensuses[0] in validator_set.getValidators()
+    turn_round(consensuses, round_count=2)
+
+
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
+@pytest.mark.parametrize("add_margin", [True, False])
+def test_bond_update_before_after_slash(slash_indicator, candidate_hub, set_candidate, validator_set, add_margin):
+    delegate_value = MIN_INIT_DELEGATE_VALUE * 10
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], delegate_value)
+    old_turn_round()
+    slash_threshold = slash_indicator.felonyThreshold()
+    event_name = 'validatorFelony'
+    tx = None
+    init_margin = 2000000
+    hex_value = padding_left(Web3.to_hex(init_margin * 10000), 64)
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    for count in range(slash_threshold):
+        tx = slash_indicator.slash(consensuses[0])
+    assert event_name in tx.events
+    old_turn_round(consensuses)
+    assert consensuses[0] not in validator_set.getValidators()
+    init_hybrid_score_mock()
+    old_claim_reward_success(operators, accounts[0])
+    turn_round(consensuses, round_count=3)
+    assert consensuses[0] not in validator_set.getValidators()
+    new_margin = 10002
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(new_margin)), 64)
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    if add_margin:
+        candidate_hub.addMargin({'from': operators[0], 'value': MIN_INIT_DELEGATE_VALUE})
+    turn_round(consensuses, round_count=2)
+    if add_margin:
+        assert consensuses[0] in validator_set.getValidators()
+    else:
+        assert consensuses[0] not in validator_set.getValidators()
+    turn_round(consensuses, round_count=2)
+
+
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
+@pytest.mark.parametrize("add_margin", [True, False])
+def test_slash_in_upgrade_round(slash_indicator, candidate_hub, set_candidate, validator_set, add_margin):
+    delegate_value = MIN_INIT_DELEGATE_VALUE * 10
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], delegate_value)
+    init_margin = 2000000
+    hex_value = padding_left(Web3.to_hex(init_margin * 10000), 64)
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    old_turn_round()
+    assert consensuses[0] in validator_set.getValidators()
+    init_hybrid_score_mock()
+    slash_threshold = slash_indicator.felonyThreshold()
+    event_name = 'validatorFelony'
+    tx = None
+    for count in range(slash_threshold):
+        tx = slash_indicator.slash(consensuses[0])
+    assert event_name in tx.events
+    turn_round(consensuses, round_count=1)
+    assert consensuses[0] not in validator_set.getValidators()
+    new_margin = 10002
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(new_margin)), 64)
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    if add_margin:
+        candidate_hub.addMargin({'from': operators[0], 'value': MIN_INIT_DELEGATE_VALUE})
+    turn_round(consensuses, round_count=2)
+    if add_margin:
+        assert consensuses[0] in validator_set.getValidators()
+    else:
+        assert consensuses[0] not in validator_set.getValidators()
+    turn_round(consensuses, round_count=2)
+
+
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
+@pytest.mark.parametrize("add_margin", [True, False])
+@pytest.mark.parametrize("round_count", [1, 2, 3])
+def test_slash_after_upgrade(slash_indicator, candidate_hub, set_candidate, validator_set, add_margin, round_count):
+    delegate_value = MIN_INIT_DELEGATE_VALUE * 10
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], delegate_value)
+    old_delegate_coin_success(operators[0], accounts[1], delegate_value)
+    tx_id = old_delegate_btc_success(BTC_VALUE, operators[0], accounts[1])
+    init_margin = 2000000
+    hex_value = padding_left(Web3.to_hex(init_margin * 10000), 64)
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    old_turn_round()
+    assert consensuses[0] in validator_set.getValidators()
+    init_hybrid_score_mock()
+    move_btc_data([tx_id])
+    turn_round(consensuses, round_count=round_count)
+    slash_threshold = slash_indicator.felonyThreshold()
+    event_name = 'validatorFelony'
+    tx = None
+    for count in range(slash_threshold):
+        tx = slash_indicator.slash(consensuses[0])
+    assert event_name in tx.events
+    turn_round(consensuses, round_count=1)
+    assert consensuses[0] not in validator_set.getValidators()
+    new_margin = 10002
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(new_margin)), 64)
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    if add_margin:
+        candidate_hub.addMargin({'from': operators[0], 'value': MIN_INIT_DELEGATE_VALUE})
+    turn_round(consensuses, round_count=2)
+    if add_margin:
+        assert consensuses[0] in validator_set.getValidators()
+    else:
+        assert consensuses[0] not in validator_set.getValidators()
+    turn_round(consensuses, round_count=2)
+
+
 def test_no_multisig_wallet_stake(btc_lst_stake):
     with brownie.reverts("Wallet not found"):
         delegate_btc_lst_success(accounts[0], BTC_VALUE, BTCLST_LOCK_SCRIPT)
+
+
+def test_stake_reward_claim_after_upgrade(stake_hub, system_reward, set_candidate, init_system_reward_balance):
+    surplus = 50000
+    accounts[3].transfer(stake_hub.address, surplus)
+    stake_hub.setSurplus(surplus)
+    assert stake_hub.balance() == surplus
+    delegate_amount = 500000
+    btc_amount = 100
+    operators, consensuses = set_candidate
+    old_turn_round()
+    old_delegate_coin_success(operators[0], accounts[10], delegate_amount)
+    old_delegate_coin_success(operators[0], accounts[11], delegate_amount)
+    old_delegate_coin_success(operators[1], accounts[12], delegate_amount)
+    old_turn_round()
+    old_transfer_coin_success(operators[0], operators[1], accounts[10], delegate_amount // 2)
+    old_undelegate_coin_success(operators[0], accounts[10], delegate_amount // 2)
+    old_turn_round(consensuses)
+    init_hybrid_score_mock()
+    old_turn_round(consensuses, round_count=2)
+    mock_delegate_coin_success(operators[2], accounts[0], delegate_amount)
+    mock_delegate_coin_success(operators[2], accounts[1], delegate_amount)
+    mock_delegate_btc_success(operators[2], accounts[2], btc_amount)
+    turn_round(consensuses)
+    mock_transfer_coin_success(operators[2], operators[1], accounts[0], delegate_amount // 2)
+    mock_undelegate_coin_success(operators[1], accounts[0], delegate_amount // 2)
+    turn_round(consensuses)
+    # hardfork
+    # gov surplus
+    system_reward_tracker = get_tracker(system_reward)
+    hex_value = padding_left(Web3.to_hex(surplus), 64)
+    execute_proposal(
+        stake_hub.address, 0,
+        "updateParam(string,bytes)",
+        encode(['string', 'bytes'], ['surplus', Web3.to_bytes(hexstr=hex_value)]),
+        "update surplus"
+    )
+    assert system_reward_tracker.delta() == surplus
+    #  add whiteList
+    percentage = 2000
+    white_list0 = [to_bytes(hexstr=accounts[50].address), percentage]
+    white_list_encode = rlp.encode(white_list0).hex()
+    execute_proposal(
+        system_reward.address, 0,
+        "updateParam(string,bytes)",
+        encode(['string', 'bytes'], ['addWhiteList', Web3.to_bytes(hexstr=white_list_encode)]),
+        "update addWhiteList0"
+    )
+    white_list1 = [to_bytes(hexstr=stake_hub.address), percentage * 2]
+    white_list_encode1 = rlp.encode(white_list1).hex()
+    execute_proposal(
+        system_reward.address, 0,
+        "updateParam(string,bytes)",
+        encode(['string', 'bytes'], ['addWhiteList', Web3.to_bytes(hexstr=white_list_encode1)]),
+        "update addWhiteList1"
+    )
+    assert system_reward.getWhiteListSet() == [[accounts[50].address, percentage], [stake_hub.address, percentage * 2]]
+    tracker = get_tracker(accounts[50])
+    burn_reward = 9030
+    delegate_coin_success(operators[2], accounts[3], delegate_amount)
+    turn_round(consensuses)
+    assert tracker.delta() == (surplus + burn_reward) * percentage // Utils.DENOMINATOR
+    delegate_coin_success(operators[0], accounts[2], delegate_amount)
+    turn_round(consensuses)
+    for account in accounts[:4]:
+        tx = stake_hub_claim_reward(account)
+        assert 'claimedReward' in tx.events
+    turn_round(consensuses)
 
 
 def init_hybrid_score_mock():

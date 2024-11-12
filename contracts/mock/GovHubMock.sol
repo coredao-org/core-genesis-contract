@@ -23,4 +23,10 @@ contract GovHubMock is GovHub {
             members[newMembers[i]] = memberSet.length;
         }
     }
+
+    function getMemberSetLength() external view  returns (uint256) {
+        return memberSet.length;
+    }
+
+
 }

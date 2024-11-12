@@ -69,6 +69,7 @@ def test_core_agent_init_can_only_run_once(core_agent):
         core_agent.init()
 
 
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
 def test_revert_if_not_called_by_only_pledge_agent(core_agent):
     candidates = accounts[:3]
     amounts = [1000, 2000, 3000]
@@ -77,6 +78,7 @@ def test_revert_if_not_called_by_only_pledge_agent(core_agent):
         core_agent._initializeFromPledgeAgent(candidates, amounts, realtime_amounts)
 
 
+@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
 def test_initialize_from_pledge_agent_success(core_agent):
     update_system_contract_address(core_agent, pledge_agent=accounts[0])
     candidates = accounts[:3]
@@ -288,7 +290,7 @@ class TestDelegateCoin:
         assert candidate_hub.isJailed(operator) is True
         turn_round([consensus_address])
         tx = stake_hub_claim_reward(accounts[0])
-        assert len(tx.events) == 4
+        assert 'claimedReward' not in tx.events
 
     def test_delegate2under_margin(self, core_agent, slash_indicator, candidate_hub, validator_set):
         register_candidate(operator=accounts[10])
@@ -358,7 +360,7 @@ def test_delegate_coin_success(core_agent):
                            round_tag, 0)
 
 
-def test_redelegate_calculates_reward(core_agent, set_candidate):
+def test_redelegate_calculates_reward(core_agent, set_candidate, stake_hub):
     operators, consensuses = set_candidate
     core_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE})
     turn_round()
@@ -373,19 +375,24 @@ def test_redelegate_calculates_reward(core_agent, set_candidate):
     })
     assert core_agent.candidateMap(operators[0])['realtimeAmount'] == MIN_INIT_DELEGATE_VALUE * 2
     reward, acc_staked_amount = core_agent.rewardMap(accounts[0])
-    assert reward == BLOCK_REWARD // 2
-    assert acc_staked_amount == MIN_INIT_DELEGATE_VALUE
+    assert reward == 0
+    assert acc_staked_amount == 0
+    stake_delegator_map = stake_hub.getDelegator(accounts[0])
+    assert stake_delegator_map == [get_current_round(), [TOTAL_REWARD, 0, 0]]
 
 
-def test_delegate_transfer_reward_calculation(core_agent, set_candidate):
+def test_delegate_transfer_reward_calculation(core_agent, stake_hub, set_candidate):
     operators, consensuses = set_candidate
     core_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE})
     turn_round()
     turn_round(consensuses)
     core_agent.transferCoin(operators[0], operators[1], MIN_INIT_DELEGATE_VALUE)
     reward, acc_staked_amount = core_agent.rewardMap(accounts[0])
-    assert reward == BLOCK_REWARD // 2
-    assert acc_staked_amount == MIN_INIT_DELEGATE_VALUE
+    stake_hub_reward_map = stake_hub.getDelegatorMap(accounts[0])
+    assert reward == 0
+    assert acc_staked_amount == 0
+    assert stake_hub_reward_map[0] == get_current_round()
+    assert stake_hub_reward_map[1] == [TOTAL_REWARD, 0, 0]
 
 
 def test_undelegate_amount_small(core_agent, validator_set):
@@ -510,15 +517,17 @@ def test_check_delegate_map_on_full_unstake(core_agent, validator_set):
     assert candidates_length == 0
 
 
-def test_undelegate_calculates_historical_rewards(core_agent, set_candidate):
+def test_undelegate_calculates_historical_rewards(core_agent, set_candidate, stake_hub):
     operators, consensuses = set_candidate
     core_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE})
     turn_round()
     turn_round(consensuses)
     core_agent.undelegateCoin(operators[0], MIN_INIT_DELEGATE_VALUE)
     reward, acc_staked_amount = core_agent.rewardMap(accounts[0])
-    assert reward == BLOCK_REWARD // 2
-    assert acc_staked_amount == MIN_INIT_DELEGATE_VALUE
+    assert reward == 0
+    assert acc_staked_amount == 0
+    stake_delegator_map = stake_hub.getDelegator(accounts[0])
+    assert stake_delegator_map == [get_current_round(), [TOTAL_REWARD, 0, 0]]
 
 
 @pytest.mark.parametrize("undelegate_type", ['all', 'part'])
@@ -991,13 +1000,19 @@ def test_transfer_small_remainder_success(core_agent, validator_set, candidate_h
     assert 'transferredCoin' in tx.events
 
 
-def test_transfer_calculates_historical_rewards(core_agent, set_candidate):
+def test_transfer_calculates_historical_rewards(core_agent, stake_hub, set_candidate):
     operators, consensuses = set_candidate
     core_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE})
+    core_agent.delegateCoin(operators[1], {'value': MIN_INIT_DELEGATE_VALUE})
+    core_agent.delegateCoin(operators[2], {'value': MIN_INIT_DELEGATE_VALUE})
     turn_round()
     turn_round(consensuses)
     core_agent.transferCoin(operators[0], operators[1], MIN_INIT_DELEGATE_VALUE, {'from': accounts[0]})
-    assert core_agent.rewardMap(accounts[0]) == [BLOCK_REWARD // 2, MIN_INIT_DELEGATE_VALUE]
+    core_agent.transferCoin(operators[1], operators[2], MIN_INIT_DELEGATE_VALUE, {'from': accounts[0]})
+    core_agent.transferCoin(operators[2], operators[0], MIN_INIT_DELEGATE_VALUE, {'from': accounts[0]})
+    assert core_agent.rewardMap(accounts[0]) == [0, 0]
+    stake_hub_reward_map = stake_hub.getDelegatorMap(accounts[0])
+    assert stake_hub_reward_map == [get_current_round(), [TOTAL_REWARD * 3, 0, 0]]
 
 
 @pytest.mark.parametrize('round_count', [0, 1, 2])
@@ -1061,7 +1076,7 @@ def test_transfer_after_staking_new_validator(core_agent):
 
 def test_only_stake_hub_can_call_claim_reward(core_agent):
     with brownie.reverts("the msg sender must be stake hub contract"):
-        core_agent.claimReward(accounts[0], 0)
+        core_agent.claimReward(accounts[0], 0, get_current_round() - 1, False)
 
 
 def test_core_claim_reward_success(core_agent, set_candidate):
@@ -1070,7 +1085,7 @@ def test_core_claim_reward_success(core_agent, set_candidate):
     turn_round()
     turn_round(consensuses)
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    tx = core_agent.claimReward(accounts[0], 0)
+    tx = core_agent.claimReward(accounts[0], 0, get_current_round() - 1, True)
     expect_event(tx, 'claimedCoinReward', {
         'delegator': accounts[0],
         'amount': TOTAL_REWARD,
@@ -1083,25 +1098,39 @@ def test_core_claim_reward_success(core_agent, set_candidate):
     assert core_agent.rewardMap(accounts[0]) == [0, 0]
 
 
-def test_claim_reward_success_with_existing_historical_rewards(core_agent, set_candidate):
+def test_claim_reward_success_with_existing_historical_rewards(core_agent, set_candidate, stake_hub):
     operators, consensuses = set_candidate
     core_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE})
     turn_round()
     turn_round(consensuses)
-    core_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE})
-    assert core_agent.rewardMap(accounts[0]) == [TOTAL_REWARD, MIN_INIT_DELEGATE_VALUE]
+    tx = core_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE})
+    expect_event(tx, 'storedCoinReward', {
+        'delegator': accounts[0],
+        'amount': 0,
+        'accStakedAmount': 0,
+    }, idx=0)
+    expect_event(tx, 'storedCoinReward', {
+        'delegator': accounts[0],
+        'amount': TOTAL_REWARD,
+        'accStakedAmount': MIN_INIT_DELEGATE_VALUE,
+    }, idx=1)
+    assert stake_hub.getDelegatorMap(accounts[0])[1][0] == TOTAL_REWARD
     turn_round(consensuses)
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    tx = core_agent.claimReward(accounts[0], 0)
+    tx = core_agent.claimReward(accounts[0], 0, get_current_round() - 1, True)
     expect_event(tx, 'claimedCoinReward', {
         'delegator': accounts[0],
-        'amount': TOTAL_REWARD * 2,
-        'accStakedAmount': MIN_INIT_DELEGATE_VALUE * 2,
+        'amount': TOTAL_REWARD,
+        'accStakedAmount': MIN_INIT_DELEGATE_VALUE,
     })
     reward, reward_unclaimed, acc_staked_amount = tx.return_value
-    assert reward == TOTAL_REWARD * 2
-    assert acc_staked_amount == MIN_INIT_DELEGATE_VALUE * 2
+    assert reward == TOTAL_REWARD
+    assert acc_staked_amount == MIN_INIT_DELEGATE_VALUE
     assert core_agent.rewardMap(accounts[0]) == [0, 0]
+    assert stake_hub.getDelegatorMap(accounts[0]) == [get_current_round() - 1, [TOTAL_REWARD, 0, 0]]
+    update_system_contract_address(core_agent, stake_hub=stake_hub)
+    stake_hub_claim_reward(accounts[0])
+    assert stake_hub.getDelegatorMap(accounts[0]) == [get_current_round(), []]
 
 
 def test_multi_validator_stake(core_agent, set_candidate):
@@ -1111,7 +1140,8 @@ def test_multi_validator_stake(core_agent, set_candidate):
     turn_round()
     turn_round(consensuses, round_count=2)
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
+    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0,
+                                                                         get_current_round() - 1, True).return_value
     assert reward == TOTAL_REWARD * 4
     assert acc_staked_amount == MIN_INIT_DELEGATE_VALUE * 6
 
@@ -1133,7 +1163,8 @@ def test_validate_acc_stake_amount(core_agent, set_candidate, operate, stake_hub
         stake_hub_claim_reward(accounts[0])
     turn_round(consensuses)
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
+    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0,
+                                                                         get_current_round() - 1, False).return_value
     if operate == 'undelegate':
         acc_stake_amount0 -= MIN_INIT_DELEGATE_VALUE
     assert acc_staked_amount == acc_stake_amount0
@@ -1142,7 +1173,8 @@ def test_validate_acc_stake_amount(core_agent, set_candidate, operate, stake_hub
     update_system_contract_address(core_agent, stake_hub=stake_hub)
     turn_round(consensuses)
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
+    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0,
+                                                                         get_current_round() - 1, False).return_value
     assert acc_staked_amount == acc_stake_amount0
 
 
@@ -1173,7 +1205,7 @@ def test_calc_acc_stake_after_coin_stake(core_agent, set_candidate, stake_hub, r
     turn_round(consensuses, round_count=round_count)
     acc_stake_amount0 *= round_count
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    tx = core_agent.claimReward(accounts[0], 0)
+    tx = core_agent.claimReward(accounts[0], 0, get_current_round() - 1, True)
     expect_event(tx, 'claimedCoinReward', {
         'accStakedAmount': acc_stake_amount0
     })
@@ -1209,7 +1241,8 @@ def test_acc_stake_amount_cross_round_success(core_agent, set_candidate, stake_h
             stake_hub_claim_reward(accounts[0])
     turn_round(consensuses, round_count=2)
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
+    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0,
+                                                                         get_current_round() - 1, False).return_value
     expect_stake_amount = tests[0]
     assert acc_staked_amount == expect_stake_amount
 
@@ -1223,13 +1256,15 @@ def test_clear_acc_stake_amount_after_claiming_rewards(core_agent, slash_indicat
         slash_indicator.slash(consensuses[0])
     turn_round(consensuses, round_count=2)
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
+    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0,
+                                                                         get_current_round() - 1, False).return_value
     assert reward == 0
     assert acc_staked_amount == MIN_INIT_DELEGATE_VALUE * 2
     update_system_contract_address(core_agent, stake_hub=stake_hub)
     turn_round(consensuses, round_count=2)
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
+    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0,
+                                                                         get_current_round() - 1, False).return_value
     assert acc_staked_amount == MIN_INIT_DELEGATE_VALUE * 2
 
 
@@ -1256,7 +1291,8 @@ def test_check_acc_amount_after_cancel_stake_current_round(core_agent, validator
     undelegate_coin_success(operators[agent_index], accounts[0], undelegate_amount)
     turn_round(consensuses, round_count=round_count)
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
+    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0,
+                                                                         get_current_round() - 1, False).return_value
     assert acc_staked_amount == expect_acc_stake_amount * round_count
 
 
@@ -1288,23 +1324,227 @@ def test_check_rewards_after_cancel_transfer_current_round(core_agent, validator
     undelegate_coin_success(operators[agent_index], accounts[0], undelegate_amount)
     turn_round(consensuses)
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
+    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0,
+                                                                         get_current_round() - 1, False).return_value
     assert reward == expect_reward
     assert acc_staked_amount == tests['expect_stake_amount']
 
 
-def test_calculate_reward_success(core_agent, set_candidate):
+@pytest.mark.parametrize("claim", [True, False])
+def test_view_rewards_on_validator(core_agent, validator_set, set_candidate, claim):
+    operators, consensuses = set_candidate
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    delegate_coin_success(operators[0], accounts[0], delegate_amount)
+    delegate_coin_success(operators[1], accounts[0], delegate_amount)
+    turn_round(consensuses, round_count=2)
+    if claim:
+        tx = stake_hub_claim_reward(accounts[0])
+        event_name = 'collectedReward'
+    else:
+        tx = transfer_coin_success(operators[0], operators[1], accounts[0], delegate_amount // 2)
+        event_name = 'storedReward'
+    expect_event(tx, event_name, {
+        'candidate': operators[1],
+        'delegator': accounts[0],
+        'reward': 0,
+        'accStakedAmount': 0,
+    }, idx=0)
+    expect_event(tx, event_name, {
+        'candidate': operators[0],
+        'delegator': accounts[0],
+        'reward': 0,
+        'accStakedAmount': 0,
+    }, idx=1)
+    expect_event(tx, event_name, {
+        'candidate': operators[1],
+        'delegator': accounts[0],
+        'reward': TOTAL_REWARD,
+        'accStakedAmount': delegate_amount,
+    }, idx=2)
+    expect_event(tx, event_name, {
+        'candidate': operators[0],
+        'delegator': accounts[0],
+        'reward': TOTAL_REWARD,
+        'accStakedAmount': delegate_amount,
+    }, idx=3)
+
+
+@pytest.mark.parametrize("claim", [True, False])
+def test_view_validator_rewards_after_unstaking(core_agent, validator_set, set_candidate, claim):
+    operators, consensuses = set_candidate
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    delegate_coin_success(operators[0], accounts[0], delegate_amount)
+    turn_round(consensuses)
+    undelegate_coin_success(operators[0], accounts[0], delegate_amount // 2)
+    turn_round(consensuses, round_count=3)
+
+    if claim:
+        tx = stake_hub_claim_reward(accounts[0])
+        event_name = 'collectedReward'
+    else:
+        tx = transfer_coin_success(operators[0], operators[1], accounts[0], delegate_amount // 2)
+        event_name = 'storedReward'
+    expect_event(tx, event_name, {
+        'candidate': operators[0],
+        'delegator': accounts[0],
+        'reward': TOTAL_REWARD // 2,
+        'accStakedAmount': delegate_amount // 2,
+    }, idx=0)
+    expect_event(tx, event_name, {
+        'candidate': operators[0],
+        'delegator': accounts[0],
+        'reward': TOTAL_REWARD * 2,
+        'accStakedAmount': delegate_amount,
+    }, idx=1)
+
+
+def test_historical_rewards_exist(core_agent, set_candidate, btc_agent):
+    operators, consensuses = set_candidate
+    for index, o in enumerate(operators):
+        delegate_coin_success(o, accounts[0], MIN_INIT_DELEGATE_VALUE)
+    turn_round()
+    turn_round(consensuses)
+    add_reward = 1000
+    acc_amount = 3000
+    core_agent.setCoreRewardMap(accounts[0], add_reward, acc_amount)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    reward, _, acc_staked_amount = core_agent.claimReward(accounts[0], 0, get_current_round() - 1,
+                                                          True).return_value
+    assert reward == TOTAL_REWARD * 3 + add_reward
+    assert acc_staked_amount == MIN_INIT_DELEGATE_VALUE * 3 + acc_amount
+
+
+@pytest.mark.parametrize("specified_round", [1, 2, 3, 4, 10])
+def test_calculate_for_specified_round(core_agent, set_candidate, btc_agent, specified_round):
+    operators, consensuses = set_candidate
+    for index, o in enumerate(operators):
+        delegate_coin_success(o, accounts[0], MIN_INIT_DELEGATE_VALUE)
+    delegate_round = get_current_round()
+    turn_round()
+    turn_round(consensuses, round_count=10)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    reward, _, acc_staked_amount = core_agent.claimReward(accounts[0], 0,
+                                                          delegate_round + specified_round,
+                                                          True).return_value
+    assert reward == TOTAL_REWARD * 3 * specified_round
+    assert acc_staked_amount == MIN_INIT_DELEGATE_VALUE * 3 * specified_round
+
+
+def test_calculate_round_greater_than_current_revert(core_agent, set_candidate, btc_agent):
+    operators, consensuses = set_candidate
+    for index, o in enumerate(operators):
+        delegate_coin_success(o, accounts[0], MIN_INIT_DELEGATE_VALUE)
+    turn_round()
+    turn_round(consensuses)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    with brownie.reverts("invalid settle round"):
+        core_agent.claimReward(accounts[0], 0, get_current_round() + 1, True)
+    with brownie.reverts("invalid settle round"):
+        core_agent.claimReward(accounts[0], 0, get_current_round(), True)
+
+
+def test_calculate_round_less_than_stake_round(core_agent, set_candidate, btc_agent):
+    operators, consensuses = set_candidate
+    for index, o in enumerate(operators):
+        delegate_coin_success(o, accounts[0], MIN_INIT_DELEGATE_VALUE)
+    delegate_round = get_current_round()
+    turn_round()
+    turn_round(consensuses, round_count=3)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    reward, _, acc_amount = core_agent.claimReward(accounts[0], 0, delegate_round - 1, True).return_value
+    assert reward == acc_amount == 0
+
+
+@pytest.mark.parametrize("settle_round", [1, 2, 3])
+def test_view_collect_reward_success(core_agent, set_candidate, settle_round):
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    delegate_coin_success(operators[0], accounts[1], MIN_INIT_DELEGATE_VALUE)
+    change_round = get_current_round()
+    turn_round()
+    turn_round(consensuses, round_count=4)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    reward, acc_amount = core_agent.viewCollectRewardFromCandidate(operators[0], accounts[0],
+                                                                   change_round + settle_round).return_value
+    assert reward == TOTAL_REWARD * settle_round // 2
+    assert acc_amount == MIN_INIT_DELEGATE_VALUE * settle_round
+    assert core_agent.getDelegator(operators[0], accounts[0])['changeRound'] == change_round + settle_round + 1
+
+
+def test_start_round_greater_equal_calculate_round(core_agent, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    delegate_coin_success(operators[0], accounts[1], MIN_INIT_DELEGATE_VALUE)
+    change_round = get_current_round()
+    assert __get_delegator_info(operators[0], accounts[0])['changeRound'] == change_round
+    turn_round()
+    turn_round(consensuses, round_count=4)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    reward, acc_amount = core_agent.viewCollectRewardFromCandidate(operators[0], accounts[0],
+                                                                   change_round - 1).return_value
+    assert reward == 0
+    assert acc_amount == 0
+
+
+@pytest.mark.parametrize("settle_round", [0, 1])
+def test_calculate_round_greater_equal_current_round(core_agent, set_candidate, settle_round):
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    delegate_coin_success(operators[0], accounts[1], MIN_INIT_DELEGATE_VALUE)
+    turn_round()
+    turn_round(consensuses, round_count=4)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    with brownie.reverts("invalid settle round"):
+        core_agent.viewCollectRewardFromCandidate(operators[0], accounts[0], get_current_round() + settle_round)
+
+
+def test_start_round_equal_calculate_round(core_agent, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    delegate_coin_success(operators[0], accounts[1], MIN_INIT_DELEGATE_VALUE)
+    turn_round()
+    delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    change_round = get_current_round()
+    assert __get_delegator_info(operators[0], accounts[0])['changeRound'] == change_round
+    turn_round(consensuses, round_count=2)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    reward, acc_amount = core_agent.viewCollectRewardFromCandidate(operators[0], accounts[0], change_round).return_value
+    assert reward == TOTAL_REWARD // 2
+    assert acc_amount == MIN_INIT_DELEGATE_VALUE
+    reward, acc_amount = core_agent.viewCollectRewardFromCandidate(operators[0], accounts[0],
+                                                                   get_current_round() - 1).return_value
+    assert reward == TOTAL_REWARD * (MIN_INIT_DELEGATE_VALUE * 2) // (MIN_INIT_DELEGATE_VALUE * 3)
+    assert acc_amount == MIN_INIT_DELEGATE_VALUE * 2
+
+
+def test_only_stakehub(core_agent, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    with brownie.reverts("the msg sender must be stake hub contract"):
+        core_agent.viewCollectRewardFromCandidate(operators[0], accounts[0], get_current_round() - 1)
+
+
+def test_calculate_reward_success(core_agent, set_candidate, stake_hub):
     operators, consensuses = set_candidate
     core_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE})
     turn_round()
     turn_round(consensuses)
     core_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE})
-    assert core_agent.rewardMap(accounts[0]) == (TOTAL_REWARD, MIN_INIT_DELEGATE_VALUE)
+    assert stake_hub.getDelegatorMap(accounts[0])[1][0] == TOTAL_REWARD
     turn_round(consensuses)
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    reward = core_agent.claimReward(accounts[0], 0).return_value
-    assert reward == [TOTAL_REWARD * 2, 0, MIN_INIT_DELEGATE_VALUE * 2]
-    assert core_agent.rewardMap(accounts[0]) == [0, 0]
+    reward = core_agent.claimReward(accounts[0], 0, get_current_round() - 1, False).return_value
+    assert reward == [TOTAL_REWARD, 0, MIN_INIT_DELEGATE_VALUE]
+    assert stake_hub.getDelegatorMap(accounts[0])[1][0] == TOTAL_REWARD
+    tracker0 = get_tracker(accounts[0])
+    update_system_contract_address(core_agent, stake_hub=stake_hub)
+    stake_hub_claim_reward(accounts[0])
+    assert tracker0.delta() == TOTAL_REWARD
 
 
 @pytest.mark.parametrize("round", [0, 1, 2, 3])
@@ -1313,7 +1553,7 @@ def test_multi_round_coin_stake_success(core_agent, set_candidate, round):
     core_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE})
     turn_round()
     turn_round(consensuses, round_count=round)
-    reward = core_agent.collectCoinRewardMock(operators[0], accounts[0]).return_value
+    reward = core_agent.collectCoinRewardMock(operators[0], accounts[0], get_current_round() - 1).return_value
     assert reward == (TOTAL_REWARD * round, MIN_INIT_DELEGATE_VALUE * round)
 
 
@@ -1483,6 +1723,7 @@ def test_collect_coin_reward_success(validator_set, core_agent, stake_hub):
     turn_round([consensuses[0]], round_count=4, tx_fee=TX_FEE)
     delegator_tracker = get_tracker(accounts[0])
     reward_amount_m, acc_staked_amount = core_agent.collectCoinRewardMock(operators[0], accounts[0],
+                                                                          get_current_round() - 1,
                                                                           {'from': accounts[0]}).return_value
     result = core_agent.getDelegator(operators[0], accounts[0]).dict()
     assert reward_amount_m == actual_block_reward * 90 // 100 * 4
@@ -1729,7 +1970,7 @@ def test_revert_on_nonexistent_governance_param(core_agent):
 
 
 def __get_continuous_reward_end_rounds(candidate):
-    end_rounds = CORE_AGENT.getContinuousRewardEndRounds(candidate)
+    end_rounds = CORE_AGENT.getContinuousRewardEndRoundsByCandidate(candidate)
     return end_rounds
 
 
