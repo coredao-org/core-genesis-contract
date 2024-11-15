@@ -27,6 +27,8 @@ contract System {
   address public CORE_AGENT_ADDR;
   address public HASH_AGENT_ADDR;
   address public BTCLST_TOKEN_ADDR;
+  address public CONFIG_ADDR;
+  address public REV_SHARE_ADDR;
 
   struct SystemContractAddr {
     address validator;
@@ -46,6 +48,8 @@ contract System {
     address coreAgent;
     address hashAgent;
     address btcLstToken;
+    address lfmConfig;
+    address revShare;
   }
 
   function updateContractAddr(bytes memory _systemContractAddr) external {
@@ -67,6 +71,8 @@ contract System {
     CORE_AGENT_ADDR = systemContractAddr.coreAgent;
     HASH_AGENT_ADDR = systemContractAddr.hashAgent;
     BTCLST_TOKEN_ADDR = systemContractAddr.btcLstToken;
+    CONFIG_ADDR = systemContractAddr.lfmConfig;
+    REV_SHARE_ADDR = systemContractAddr.revShare;
   }
   
   function setAlreadyInit(bool value) external {
@@ -92,6 +98,9 @@ contract System {
   address public constant BTC_STAKE_ADDR = 0x0000000000000000000000000000000000001014;
   address public constant BTCLST_STAKE_ADDR = 0x0000000000000000000000000000000000001015;
   address public constant BTCLST_TOKEN_ADDR = 0x0000000000000000000000000000000000010001;
+
+  address public constant CONFIG_ADDR = 0x0000000000000000000000000000000000001016;
+  address public constant REV_SHARE_ADDR = 0x0000000000000000000000000000000000001017;
 {% endif %}
   modifier onlyCoinbase() {
   {% if not mock %}

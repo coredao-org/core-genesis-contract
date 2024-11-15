@@ -4,17 +4,23 @@ import "./System.sol";
 import "./interface/IParamSubscriber.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
+import "./lib/Address.sol";
 import "./interface/IBurn.sol";
 
 /// This contract burns CORE tokens up to pre defined CAP
 contract Burn is System, IBurn, IParamSubscriber {
   uint256 public constant BURN_CAP = 105e25;
+  uint256 private constant REV_SHARE_ACCURACY = 1000;
+
+  event BurnSumsReroutedToRevShare(uint indexed msgValue, uint indexed revSharePortionMillis, uint indexed revShareSum);
 
   uint256 public burnCap;
+  uint256 public revSharePortionMillis;
 
   /*********************** init **************************/
   function init() external onlyNotInit {
     burnCap = BURN_CAP;
+    revSharePortionMillis = 0; // start with no rev-share
     alreadyInit = true;
   }
 
@@ -24,18 +30,29 @@ contract Burn is System, IBurn, IParamSubscriber {
   /// Burn incoming CORE tokens
   /// Send back the portion which exceeds the cap
   function burn() external payable override {
-    uint256 v = msg.value;
+    uint msgValue = _rerouteRevSharePortion(msg.value);
+    uint256 v = msgValue;
     if (address(this).balance > burnCap) {
       uint256 remain = address(this).balance - burnCap;
-      if (remain >= msg.value) {
-        remain = msg.value;
+      if (remain >= msgValue) {
+        remain = msgValue;
         v = 0;
       } else {
-        v = msg.value - remain;
+        v = msgValue - remain;
       }
       payable(msg.sender).transfer(remain);
     }
     if (v != 0) emit burned(msg.sender, v);
+  }
+
+  function _rerouteRevSharePortion(uint msgValue) private returns(uint) {
+    if (msgValue == 0 || revSharePortionMillis == 0) {
+      return msgValue;
+    }
+    uint revShareSum = msgValue * revSharePortionMillis / REV_SHARE_ACCURACY;
+    Address.sendValue(payable(REV_SHARE_ADDR), revShareSum); //@safe
+    emit BurnSumsReroutedToRevShare(msgValue, revSharePortionMillis, revShareSum);
+    return msgValue - revShareSum;
   }
 
   /*********************** Param update ********************************/
@@ -52,6 +69,10 @@ contract Burn is System, IBurn, IParamSubscriber {
         revert OutOfBounds(key, newBurnCap, address(this).balance, type(uint256).max);
       }
       burnCap = newBurnCap;
+    } else if (Memory.compareStrings(key, "revSharePortionMillis")) {
+      uint256 newRevShareMillis = BytesToTypes.bytesToUint256(32, value);
+	    require(newRevShareMillis <= REV_SHARE_ACCURACY, "rev-share portion cannot exceed 100%");
+      revSharePortionMillis = newRevShareMillis;
     } else {
       revert UnsupportedGovParam(key);
     }

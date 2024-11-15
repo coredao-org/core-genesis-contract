@@ -29,6 +29,9 @@ contract System {
   address public constant BTCLST_STAKE_ADDR = 0x0000000000000000000000000000000000001015;
   address public constant BTCLST_TOKEN_ADDR = 0x0000000000000000000000000000000000010001;
 
+  address public constant CONFIG_ADDR = 0x0000000000000000000000000000000000001016;
+  address public constant REV_SHARE_ADDR = 0x0000000000000000000000000000000000001017;
+
   modifier onlyCoinbase() {
   
     require(msg.sender == block.coinbase, "the message sender must be the block producer");
