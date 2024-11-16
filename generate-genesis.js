@@ -163,6 +163,16 @@ Promise.all([
     "bitcoinLSTtoken",
     "contracts/BitcoinLSTToken.sol",
     "BitcoinLSTToken"
+  ),
+  compileContract(
+    "lfmConfiguration",
+    "contracts/LfmConfiguration.sol",
+    "LfmConfiguration"
+  ),
+  compileContract(
+    "revenueSharingVault",
+    "contracts/RevenueSharingVault.sol",
+    "RevenueSharingVault"
   )
 ]).then(result => {
 

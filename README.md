@@ -26,6 +26,8 @@ This repo holds all the genesis contracts on Core blockchain, which are part of 
 - [BitcoinStake.sol](./contracts/BitcoinStake.sol): This contract handles non-custodial BTC staking. 
 - [BitcoinLSTStake.sol](./contracts/BitcoinLSTStake.sol): This contract handles LST BTC staking.
 - [BitcoinLSTToken.sol](./contracts/BitcoinLSTToken.sol): ERC20 token contract of Core BTC LST.
+- [RevenueSharingVault.sol](./contracts/RevenueSharingVault.sol): Stores funds rerouted from SystemReward for network revenue sharing.
+- [LfmConfiguration.sol](./contracts/LfmConfiguration.sol): Configuration parameters for the local-Fee Market protocol logic.
 
 
 ## Prepare

@@ -3,9 +3,6 @@ pragma solidity 0.8.4;
 
 import "../lib/Memory.sol";
 import "../lib/BytesToTypes.sol";
-import "../interface/ILightClient.sol";
-import "../interface/ICandidateHub.sol";
-import "../interface/ISystemReward.sol";
 import "../interface/IParamSubscriber.sol";                  
 import "../System.sol";
 
@@ -40,8 +37,8 @@ abstract contract GovernanceDelegateManaged is System, IParamSubscriber {
 		emit SetGovernanceDelegate(oldDelegate, govDelegate);
     }
 
-	function governanceDelegate() public view returns(address) {
-		return govDelegate;
+    function governanceDelegate() public view returns(address) {
+        return govDelegate;
 	}
 
 	function _wasInitialized() internal view returns(bool) {
