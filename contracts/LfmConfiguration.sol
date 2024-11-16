@@ -35,7 +35,7 @@ contract LfmConfiguration is GovernanceDelegateManaged {
     error NonAscendingDiscountedArray(uint ind0, uint discountedPrice0, uint ind1, uint discountedPrice1);
     error GasFactorTooLow(uint factor, uint minGasFactor);
     error GasFactorTooHigh(uint factor, uint maxGasFactor);
-		error ContractAddressNotFound(address addr);
+	error ContractAddressNotFound(address addr);
 
     function init() external onlyNotInit {
         meanGasPrice = INITIAL_MEAN_GAS_PRICE;
@@ -53,9 +53,9 @@ contract LfmConfiguration is GovernanceDelegateManaged {
     function addNewDestinationContract(address newAddress, uint newGasFactor) external onlyGovDelegate {
         require(newAddress != address(0), "address cannot be null");
         _verifyAddressNotInArray(newAddress, destinationAddresses);
-				_validateGasFactor(newGasFactor);
+		_validateGasFactor(newGasFactor);
         destinationAddresses.push(newAddress);
-				s_destinationGasFactors.push(newGasFactor);
+		s_destinationGasFactors.push(newGasFactor);
         emit AddNewDestinationContract(newAddress, newGasFactor);
     }
 
@@ -67,7 +67,7 @@ contract LfmConfiguration is GovernanceDelegateManaged {
 
     function removeDestinationContract(address addrToRemove) external onlyGovDelegate {
         uint index = _safeRemoveFromAddressArr(addrToRemove, destinationAddresses);
-				_removeEntryByIndex(index, s_destinationGasFactors);
+		_removeEntryByIndex(index, s_destinationGasFactors);
         emit RemoveDestinationContract(addrToRemove);
     }
 
@@ -85,10 +85,10 @@ contract LfmConfiguration is GovernanceDelegateManaged {
     }
 
     function _removeEntryByIndex(uint ind, uint[] storage arr) private {
-				uint len = arr.length;
+		uint len = arr.length;
         require(ind < len, "bad index");
-				arr[ind] = arr[len-1]; // order is not important
-				arr.pop();
+		arr[ind] = arr[len-1]; // order is not important
+		arr.pop();
     }
 
     function setGasFactorLimits(uint newMin, uint newMax) external onlyGovDelegate {
@@ -107,7 +107,7 @@ contract LfmConfiguration is GovernanceDelegateManaged {
         for (uint i = 0; i < destinationAddresses.length; i++) {
             if (destinationAddresses[i] == addr) {
                 _updateGasFactor(i, addr, newGasFactor);
-								return;
+				return;
             }
         }
         revert ContractAddressNotFound(addr);
@@ -162,8 +162,8 @@ contract LfmConfiguration is GovernanceDelegateManaged {
         return corrected;
     }
 
-		function getEffectiveDestFactor(uint ind) external view returns (uint) {
-    		return _adjustGasFactorByLimits(s_destinationGasFactors[ind]);
+	function getEffectiveDestFactor(uint ind) external view returns (uint) {
+    	return _adjustGasFactorByLimits(s_destinationGasFactors[ind]);
     }
 
     function _adjustGasFactorByLimits(uint factor) private view returns (uint) {
@@ -186,7 +186,7 @@ contract LfmConfiguration is GovernanceDelegateManaged {
     }
 
     function _verifyGradientListsAreAscending(uint[] calldata newSteps, uint[] calldata newPrices) private pure {
-				uint len = newSteps.length;
+		uint len = newSteps.length;
         for (uint i = 0+1; i < len; i++) {
             if (newSteps[i] <= newSteps[i-1]) {
                 revert NonAscendingStepArray(i-1, newSteps[i-1], i, newSteps[i]);
@@ -195,7 +195,7 @@ contract LfmConfiguration is GovernanceDelegateManaged {
                 revert NonAscendingDiscountedArray(i-1, newPrices[i-1], i, newPrices[i]);
             }
         }
-		}
+	}
 
     function _validateGasFactor(uint factor) private view {
         if (factor < minGasFactor) {

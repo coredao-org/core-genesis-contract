@@ -1,5 +1,8 @@
 node_modules/
 build/
+cache/
+lib/
+out/
 .idea
 pids
 logs
