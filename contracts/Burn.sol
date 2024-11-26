@@ -32,8 +32,9 @@ contract Burn is System, IBurn, IParamSubscriber {
   function burn() external payable override {
     uint msgValue = _rerouteRevSharePortion(msg.value);
     uint256 v = msgValue;
-    if (address(this).balance > burnCap) {
-      uint256 remain = address(this).balance - burnCap;
+    uint balance = address(this).balance;
+    if (balance > burnCap) {
+      uint256 remain = balance - burnCap;
       if (remain >= msgValue) {
         remain = msgValue;
         v = 0;
@@ -65,8 +66,9 @@ contract Burn is System, IBurn, IParamSubscriber {
     }
     if (Memory.compareStrings(key, "burnCap")) {
       uint256 newBurnCap = BytesToTypes.bytesToUint256(32, value);
-      if (newBurnCap < address(this).balance) {
-        revert OutOfBounds(key, newBurnCap, address(this).balance, type(uint256).max);
+      uint balance = address(this).balance;
+      if (newBurnCap < balance) {
+        revert OutOfBounds(key, newBurnCap, balance, type(uint256).max);
       }
       burnCap = newBurnCap;
     } else if (Memory.compareStrings(key, "revSharePortionMillis")) {
