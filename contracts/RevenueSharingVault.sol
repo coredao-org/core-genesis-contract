@@ -61,6 +61,7 @@ contract RevenueSharingVault is GovernanceDelegateManaged, ReentryGuardUpgradeab
         // called by RevenueTarget to extract allocated revenues
         require(targetBalance[msg.sender].isSet, "not a target");
         require(targetBalance[msg.sender].balance >= sum, "not enough revenues in target account");
+        targetBalance[msg.sender].balance -= sum;
         Address.sendValue(payable(msg.sender), sum); // @attack: DoS will only affect the paid user hence meaningless
         emit RevenueExtracted(msg.sender, sum);
     }
