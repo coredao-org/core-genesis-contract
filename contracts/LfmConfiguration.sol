@@ -126,6 +126,7 @@ contract LfmConfiguration is GovernanceDelegateManaged {
     }
 
     function setNetworkConfigRefreshInterval(uint newInterval) external onlyGovDelegate {
+        require(newInterval > 0, "interval cannot be zero");
         uint oldInterval = refreshIntervalInBlocks;
         refreshIntervalInBlocks = newInterval;
         emit SetNetworkConfigRefreshInterval(oldInterval, refreshIntervalInBlocks);
