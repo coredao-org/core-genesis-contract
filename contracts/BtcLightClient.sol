@@ -16,6 +16,11 @@ import "./System.sol";
 contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
   // error codes for storeBlockHeader
+  bool public constant POW_ALLOW_MIN_DIFFICULTY_BLOCKS = true;
+  uint256 public constant POW_TARGET_SPACING = 600;
+  uint256 public constant POW_LIMIT = 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
+  bool public constant ENFORCE_BIP94 = true;
+
   int256 public constant ERR_DIFFICULTY = 10010; // difficulty didn't match current difficulty
   int256 public constant ERR_RETARGET = 10020;  // difficulty didn't match retarget
   int256 public constant ERR_NO_PREV_BLOCK = 10030;
@@ -25,13 +30,13 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
 
   // for verifying Bitcoin difficulty
   uint32 public constant DIFFICULTY_ADJUSTMENT_INTERVAL = 2016; // Bitcoin adjusts every 2 weeks
-  uint64 public constant TARGET_TIMESPAN = 14 * 24 * 60 * 60; // 2 weeks
-  uint64 public constant TARGET_TIMESPAN_DIV_4 = TARGET_TIMESPAN / 4;
-  uint64 public constant TARGET_TIMESPAN_MUL_4 = TARGET_TIMESPAN * 4;
+  int64 public constant TARGET_TIMESPAN = 14 * 24 * 60 * 60; // 2 weeks
+  int64 public constant TARGET_TIMESPAN_DIV_4 = TARGET_TIMESPAN / 4;
+  int64 public constant TARGET_TIMESPAN_MUL_4 = TARGET_TIMESPAN * 4;
   int256 public constant UNROUNDED_MAX_TARGET = 2**224 - 1; // different from (2**16-1)*2**208 http://bitcoin.stackexchange.com/questions/13803/how-exactly-was-the-original-coefficient-for-difficulty-determined
 
-  bytes public constant INIT_CONSENSUS_STATE_BYTES = hex"0000402089138e40cd8b4832beb8013bc80b1425c8bcbe10fc280400000000000000000058a06ab0edc5653a6ab78490675a954f8d8b4d4f131728dcf965cd0022a02cdde59f8e63303808176bbe3919";
-  uint32 public constant INIT_CHAIN_HEIGHT = 766080;
+  bytes public constant INIT_CONSENSUS_STATE_BYTES = hex"0000c0202c25970c5d4c832660f189c3e8b2f82f469e8d44084acebaf17e1c000000000093f6302671afde251bf8d1f93b7734c4651daba81def9c54efe4efe53394907123203667bf1516190b216793";
+  uint32 public constant INIT_CHAIN_HEIGHT = 54432;
 
   uint256 public highScore;
   bytes32 public heaviestBlock;
@@ -413,7 +418,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       return (blockHeight, scoreBlock, ERR_PROOF_OF_WORK);
     }
     blockHeight = 1 + getHeight(hashPrevBlock);
-    uint32 prevBits = getBits(hashPrevBlock);
+    uint32 expectBits;
     if (blockHeight % DIFFICULTY_ADJUSTMENT_INTERVAL != 0) {
       // since blockHeight is 1 more than blockNumber; OR clause is special case for 1st header
       /* we need to check prevBits isn't 0 otherwise the 1st header
@@ -422,25 +427,43 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
        * the initial parent, but as these forks will have lower score than
        * the main chain, they will not have impact.
        */
-      if (bits != prevBits && prevBits != 0) {
+      if (POW_ALLOW_MIN_DIFFICULTY_BLOCKS) {
+        uint64 blockTime = flip4Bytes(uint32(loadInt256(100, headerBytes)>>224));
+        uint64 prevBlockTime = getTimestamp(hashPrevBlock);
+        if (blockTime > prevBlockTime + POW_TARGET_SPACING*2)
+          expectBits = toCompactBits(POW_LIMIT);
+        else {
+          // Return the last non-special-min-difficulty-rules-block
+          bytes32 lastAdjustmentHash = adjustmentHashes[blockHeight - blockHeight % DIFFICULTY_ADJUSTMENT_INTERVAL];
+          expectBits = getBits(lastAdjustmentHash);
+        }
+      }
+      if (bits != expectBits && expectBits != 0) {
         return (blockHeight, scoreBlock, ERR_DIFFICULTY);
       }
     } else {
-      uint256 prevTarget = targetFromBits(prevBits);
-      uint64 prevTime = getTimestamp(hashPrevBlock);
+      uint256 prevTarget;
 
       // (blockHeight - DIFFICULTY_ADJUSTMENT_INTERVAL) is same as [getHeight(hashPrevBlock) - (DIFFICULTY_ADJUSTMENT_INTERVAL - 1)]
       bytes32 startBlock = getAdjustmentHash(hashPrevBlock);
       uint64 startTime = getTimestamp(startBlock);
 
       // compute new bits
-      uint64 actualTimespan = prevTime - startTime;
+      int64 actualTimespan = int64(getTimestamp(hashPrevBlock)) - int64(startTime);
       if (actualTimespan < TARGET_TIMESPAN_DIV_4) {
           actualTimespan = TARGET_TIMESPAN_DIV_4;
       }
       if (actualTimespan > TARGET_TIMESPAN_MUL_4) {
           actualTimespan = TARGET_TIMESPAN_MUL_4;
       }
+
+      if (ENFORCE_BIP94) {
+        bytes32 lastAdjustmentHash = adjustmentHashes[blockHeight - DIFFICULTY_ADJUSTMENT_INTERVAL];
+        prevTarget = targetFromBits(getBits(lastAdjustmentHash));
+      } else {
+        prevTarget = targetFromBits(getBits(hashPrevBlock));
+      }
+
       uint256 newTarget;
       assembly{
         newTarget := div(mul(actualTimespan, prevTarget), TARGET_TIMESPAN)
