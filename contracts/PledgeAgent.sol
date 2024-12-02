@@ -39,7 +39,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   uint256 public constant INIT_MIN_BTC_VALUE = 1e6;
   uint256 public constant INIT_BTC_FACTOR = 5e4;
   uint256 public constant BTC_STAKE_MAGIC = 0x5341542b;
-  uint256 public constant CHAINID = 1116;
+  uint256 public constant CHAINID = 1114;
   uint256 public constant FEE_FACTOR = 1e18;
   uint256 public constant BTC_UNIT_CONVERSION = 1e10;
   uint256 public constant INIT_DELEGATE_BTC_GAS_PRICE = 1e12;

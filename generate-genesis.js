@@ -9,7 +9,7 @@ const init_holders = require("./init_holders")
 const init_cycle = require("./init_cycle")
 
 
-program.option("-c, --chainid <chainid>", "chain id, mainnet 1116 testnet 1115 devnet 1112", "1116")
+program.option("-c, --chainid <chainid>", "chain id, mainnet 1116 testnet 1114 devnet 1112", "1114")
 
 program.option(
     "--initValidatorSetBytes <initValidatorSetBytes>",
