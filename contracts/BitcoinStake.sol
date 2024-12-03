@@ -113,7 +113,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /*********************** events **************************/
   event delegated(bytes32 indexed txid, address indexed candidate, address indexed delegator, bytes script, uint32 outputIndex, uint64 amount, uint256 fee);
   event undelegated(bytes32 indexed outpointHash, uint32 indexed outpointIndex, bytes32 usedTxid);
-  event migrated(bytes32 indexed txid);
   event transferredBtc(
     bytes32 indexed txid,
     address sourceCandidate,
@@ -127,25 +126,11 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// @param candidate Address of the validator candidate
   error InactiveCandidate(address candidate);
 
-  modifier onlyPledgeAgent() {
-    require(msg.sender == PLEDGE_AGENT_ADDR, "the sender must be pledge agent contract");
-    _;
-  }
-
   /*********************** Init ********************************/
   function init() external onlyNotInit {
     roundTag = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
     alreadyInit = true;
-  }
-
-  function _initializeFromPledgeAgent(address[] memory candidates, uint256[] memory amounts, uint256[] memory realtimeAmounts) external onlyPledgeAgent {
-    uint256 s = candidates.length;
-    for (uint256 i = 0; i < s; ++i) {
-      Candidate storage c = candidateMap[candidates[i]];
-      c.stakedAmount = amounts[i];
-      c.realtimeAmount = realtimeAmounts[i];
-    }
   }
 
   /*********************** External functions ********************************/
@@ -376,47 +361,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     emit transferredBtc(txid, candidate, targetCandidate, msg.sender, bt.amount);
   }
 
-  /// Migration
-  /// Fetch a list of BTC stake transaction data from `PledgeAgent.sol`
-  /// @param txids list of BTC stake transactions
-  function moveData(bytes32[] calldata txids) external{
-    uint256 txLength = txids.length;
-    bytes32 txid;
-    for (uint256 i = 0; i < txLength; i++) {
-      txid = txids[i];
-      (bool success, bytes memory data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("moveBtcData(bytes32)", txid));
-      require(success, "call PLEDGE_AGENT_ADDR.moveBtcData() failed.");
-      (address candidate, address delegator, uint256 amount, uint256 round, uint256 lockTime) = abi.decode(data, (address,address,uint256,uint256,uint256));
-      {
-        uint256 endRound = uint256(lockTime) / SatoshiPlusHelper.ROUND_INTERVAL;
-        if (endRound <= roundTag) {
-          continue;
-        }
-      }
-      BtcTx storage bt = btcTxMap[txid];
-      if (bt.amount != 0) {
-        continue;
-      }
-
-      // Set receiptMap
-      DepositReceipt storage dr = receiptMap[txids[i]];
-      dr.candidate = candidate;
-      dr.delegator = delegator;
-      dr.round = round;
-      bt.amount = uint64(amount);
-      bt.lockTime = uint32(lockTime);
-
-      // Set delegatorMap
-      Delegator storage d = delegatorMap[delegator];
-      d.txids.push(txid);
-
-      _addExpire(dr, uint32(lockTime), uint64(amount));
-
-      emit migrated(txid);
-    }
-  }
-
-   function getGrades() external view returns (LockLengthGrade[] memory) {
+  function getGrades() external view returns (LockLengthGrade[] memory) {
     return grades;
   }
 

@@ -91,15 +91,6 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     alreadyInit = true;
   }
 
-  function _initializeFromPledgeAgent(address[] memory candidates, uint256[] memory amounts, uint256[] memory realtimeAmounts) external onlyPledgeAgent {
-    uint256 s = candidates.length;
-    for (uint256 i = 0; i < s; ++i) {
-      Candidate storage c = candidateMap[candidates[i]];
-      c.amount = amounts[i];
-      c.realtimeAmount = realtimeAmounts[i];
-    }
-  }
-
   /*********************** IAgent implementations ***************************/
   /// Receive round rewards from StakeHub, which is triggered at the beginning of turn round.
   /// @param validators List of validator operator addresses

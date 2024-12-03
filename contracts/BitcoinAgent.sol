@@ -52,11 +52,6 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     uint32 percentage;
   }
 
-  modifier onlyPledgeAgent() {
-    require(msg.sender == PLEDGE_AGENT_ADDR, "the sender must be pledge agent contract");
-    _;
-  }
-
   event claimedBtcReward(address indexed delegator, uint256 amount, uint256 unclaimedAmount, int256 floatReward, uint256 accStakedAmount, uint256 dualStakingRate);
   event claimedBtcLstReward(address indexed delegator, uint256 amount, uint256 unclaimedAmount, int256 floatReward, uint256 accStakedAmount, uint256 percent);
 
@@ -64,13 +59,6 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
     assetWeight = DEFAULT_CORE_BTC_CONVERSION;
     lstGradePercentage = SatoshiPlusHelper.DENOMINATOR;
     alreadyInit = true;
-  }
-
-  function _initializeFromPledgeAgent(address[] memory candidates, uint256[] memory amounts) external onlyPledgeAgent {
-    uint256 s = candidates.length;
-    for (uint256 i = 0; i < s; ++i) {
-      candidateMap[candidates[i]].stakeAmount = amounts[i];
-    }
   }
 
   /*********************** IAgent implementations ***************************/
