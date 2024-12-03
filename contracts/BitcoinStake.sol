@@ -127,25 +127,11 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// @param candidate Address of the validator candidate
   error InactiveCandidate(address candidate);
 
-  modifier onlyPledgeAgent() {
-    require(msg.sender == PLEDGE_AGENT_ADDR, "the sender must be pledge agent contract");
-    _;
-  }
-
   /*********************** Init ********************************/
   function init() external onlyNotInit {
     roundTag = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
     alreadyInit = true;
-  }
-
-  function _initializeFromPledgeAgent(address[] memory candidates, uint256[] memory amounts, uint256[] memory realtimeAmounts) external onlyPledgeAgent {
-    uint256 s = candidates.length;
-    for (uint256 i = 0; i < s; ++i) {
-      Candidate storage c = candidateMap[candidates[i]];
-      c.stakedAmount = amounts[i];
-      c.realtimeAmount = realtimeAmounts[i];
-    }
   }
 
   /*********************** External functions ********************************/
