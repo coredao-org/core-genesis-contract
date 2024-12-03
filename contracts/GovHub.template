@@ -208,8 +208,14 @@ contract GovHub is System, IParamSubscriber {
   /// Execute the proposal
   /// @param proposalId The proposal Id
   function execute(uint256 proposalId) public payable onlyInit {
-    require(getState(proposalId) == ProposalState.Succeeded, "proposal can only be executed if it is succeeded");
+    require(members[msg.sender] != 0, "proposal can only be executed by members");
     Proposal storage proposal = proposals[proposalId];
+    ProposalState state = getState(proposalId);
+    if (state == ProposalState.Active) {
+      require(proposal.forVotes > proposal.againstVotes && proposal.forVotes > proposal.totalVotes / 2, "can only be executed when yes from majority of members");
+    } else {
+      require(state == ProposalState.Succeeded, "proposal can only be executed if it is succeeded");
+    }
     proposal.executed = true;
     uint256 targetSize = proposal.targets.length;
     for (uint256 i = 0; i < targetSize; i++) {
