@@ -187,8 +187,8 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
         if (stakeRate > 1e8) {
           revert OutOfBounds('stakeRate', stakeRate, 0, 1e8);
         }
-        if (percentage > SatoshiPlusHelper.DENOMINATOR * 10) {
-          revert OutOfBounds('percentage', percentage, 0, SatoshiPlusHelper.DENOMINATOR * 10);
+        if (percentage > SatoshiPlusHelper.DENOMINATOR * 100) {
+          revert OutOfBounds('percentage', percentage, 0, SatoshiPlusHelper.DENOMINATOR * 100);
         }
         if (i >= lastLength) {
           grades.push(DualStakingGrade(uint32(stakeRate), uint32(percentage)));
