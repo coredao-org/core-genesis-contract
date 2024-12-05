@@ -275,7 +275,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     Agent storage a = agentsMap[candidate];
     CoinDelegator storage d = a.cDelegatorMap[delegator];
     if (d.changeRound != 0) {
-      uint256 reward = _collectCoinReward(a, d);
+      uint256 reward = _collectCoinReward(a, d, delegator);
       if (reward != 0) {
         rewardMap[delegator] += reward;
       }
@@ -319,7 +319,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param a the validator candidate
   /// @param d the delegator
   /// @return rewardAmount the amount of reward to claim
-  function _collectCoinReward(Agent storage a, CoinDelegator storage d) internal returns (uint256 rewardAmount) {
+  function _collectCoinReward(Agent storage a, CoinDelegator storage d, address delegator) internal returns (uint256 rewardAmount) {
     uint256 changeRound = d.changeRound;
     uint256 curRound = roundTag;
     if (changeRound < curRound) {
@@ -344,12 +344,12 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       // the rewards from the DEBT will be collected and sent to the system reward contract
       if (rRound == changeRound) {
         uint256 transferOutDeposit = d.transferOutDeposit;
-        uint256 debt = debtDepositMap[rRound][msg.sender];
+        uint256 debt = debtDepositMap[rRound][delegator];
         if (transferOutDeposit > debt) {
           transferOutDeposit -= debt;
-          debtDepositMap[rRound][msg.sender] = 0;
+          debtDepositMap[rRound][delegator] = 0;
         } else {
-          debtDepositMap[rRound][msg.sender] -= transferOutDeposit;
+          debtDepositMap[rRound][delegator] -= transferOutDeposit;
           transferOutDeposit = 0;
         }
         if (transferOutDeposit != d.transferOutDeposit) {
