@@ -261,10 +261,9 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     }
 
     if (totalFloatReward > surplus.toInt256()) {
-      // move 10x from system reward as a buffer for the next claim calls
-      uint256 claimAmount = totalFloatReward.toUint256() * 10;
-      ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(STAKE_HUB_ADDR), claimAmount);
-      surplus += claimAmount;
+      uint256 claimAmount = totalFloatReward.toUint256() - surplus;
+      uint256 actualAmount = ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(STAKE_HUB_ADDR), claimAmount);
+      surplus += actualAmount;
     }
     surplus = (surplus.toInt256() - totalFloatReward).toUint256();
   }
