@@ -41,8 +41,9 @@ interface IBitcoinStake {
 
   /// Claim reward for delegator
   /// @param delegator the delegator address
+  /// @param settleRound the settlement round
   /// @return reward Amount claimed
   /// @return rewardUnclaimed Amount unclaimed
   /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
-  function claimReward(address delegator) external returns (uint256 reward, uint256 rewardUnclaimed, uint256 accStakedAmount);
+  function claimReward(address delegator, uint256 settleRound) external returns (uint256 reward, uint256 rewardUnclaimed, uint256 accStakedAmount);
 }
