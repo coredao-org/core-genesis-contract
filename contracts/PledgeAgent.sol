@@ -3,11 +3,9 @@ pragma solidity 0.8.4;
 
 import "./interface/IPledgeAgent.sol";
 import "./interface/IParamSubscriber.sol";
-import "./interface/ICandidateHub.sol";
 import "./interface/ISystemReward.sol";
 import "./lib/Address.sol";
 import "./lib/TypedMemView.sol";
-import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./lib/SatoshiPlusHelper.sol";
 import "./System.sol";
@@ -29,18 +27,18 @@ import "./System.sol";
 contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   using TypedMemView for *;
 
-  uint256 public constant INIT_REQUIRED_COIN_DEPOSIT = 1e18;
-  uint256 public constant ROUND_INTERVAL = 86400;
-
+  // Depreated in V-1.0.13, To be clear.
   // minimal CORE require to stake
   uint256 public requiredCoinDeposit;
 
+  // Depreated in V-1.0.13, To be clear.
   // powerFactor/10000 determines the weight of BTC hash power vs CORE stakes
   // the default value of powerFactor is set to 20000 
   // which means the overall BTC hash power takes 2/3 total weight 
   // when calculating hybrid score and distributing block rewards
   uint256 public powerFactor;
 
+  // Depreated in V-1.0.13, To be clear.
   // key: candidate's operateAddr
   mapping(address => Agent) public agentsMap;
 
@@ -66,27 +64,19 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   // debtDepositMap keeps delegator's amount of CORE which should be deducted when claiming rewards in every round
   mapping(uint256 => mapping(address => uint256)) public debtDepositMap;
 
-  // HARDFORK V-1.0.7
+  // Depreated in V-1.0.13, To be clear.
   // btcReceiptMap keeps all BTC staking receipts on Core
   mapping(bytes32 => BtcReceipt) public btcReceiptMap;
 
+  // Depreated in V-1.0.13, To be clear.
   // round2expireInfoMap keeps the amount of expired BTC staking value for each round
   mapping(uint256 => BtcExpireInfo) round2expireInfoMap;
 
-  // staking weight of each BTC vs. CORE
+  // Depreated in V-1.0.13, To be clear.
   uint256 public btcFactor;
-
-  // minimum rounds to stake for a BTC staking transaction
   uint256 public minBtcLockRound;
-
-  // the number of blocks to mark a BTC staking transaction as confirmed
   uint32 public btcConfirmBlock;
-
-  // minimum value to stake for a BTC staking transaction
   uint256 public minBtcValue;
-
-  // NOT USED
-  // Depreated in V-1.0.12
   uint256 public delegateBtcGasPrice;
 
   // reentrant lock
@@ -155,8 +145,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   event received(address indexed from, uint256 amount);
 
   function init() external onlyNotInit {
-    requiredCoinDeposit = INIT_REQUIRED_COIN_DEPOSIT;
-    roundTag = block.timestamp / ROUND_INTERVAL;
+    roundTag = block.timestamp / SatoshiPlusHelper.ROUND_INTERVAL;
     alreadyInit = true;
   }
 
@@ -396,12 +385,14 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }
-    if (Memory.compareStrings(key, "requiredCoinDeposit")) {
-      uint256 newRequiredCoinDeposit = BytesToTypes.bytesToUint256(32, value);
-      if (newRequiredCoinDeposit == 0) {
-        revert OutOfBounds(key, newRequiredCoinDeposit, 1, type(uint256).max);
-      }
-      requiredCoinDeposit = newRequiredCoinDeposit;
+    if (Memory.compareStrings(key, "clearDeprecatedMembers")) {
+      requiredCoinDeposit = 0;
+      powerFactor = 0;
+      btcFactor = 0;
+      minBtcLockRound = 0;
+      btcConfirmBlock = 0;
+      minBtcValue = 0;
+      delegateBtcGasPrice = 0;
     } else {
       revert UnsupportedGovParam(key);
     }
@@ -451,6 +442,10 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   function getExpireValue(uint256 round, address agent) external view returns (uint256){
     BtcExpireInfo storage expireInfo = round2expireInfoMap[round];
     return expireInfo.agent2valueMap[agent];
+  }
+
+  function getExpireList(uint256 round) external view returns (address[] memory){
+    return round2expireInfoMap[round].agentAddrList;
   }
 
   receive() external payable {
