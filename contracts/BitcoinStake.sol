@@ -5,6 +5,7 @@ import "./interface/IBitcoinStake.sol";
 import "./interface/ICandidateHub.sol";
 import "./interface/ILightClient.sol";
 import "./interface/IParamSubscriber.sol";
+import "./interface/IStakeHub.sol";
 import "./lib/BytesLib.sol";
 import "./lib/Memory.sol";
 import "./lib/BitcoinHelper.sol";
@@ -189,6 +190,8 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     dr.round = roundTag;
 
     _addExpire(dr, lockTime, btcAmount);
+
+    IStakeHub(STAKE_HUB_ADDR).onStakeChange(delegator);
   }
 
   /// Bitcoin undelegate, it is called by relayer
@@ -269,14 +272,15 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
   /// Claim reward for delegator
   /// @param delegator the delegator address
+  /// @param settleRound the settlement round
   /// @return reward Amount claimed
   /// @return rewardUnclaimed Amount unclaimed
   /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
-  function claimReward(address delegator) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed, uint256 accStakedAmount) {
+  function claimReward(address delegator, uint256 settleRound) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed, uint256 accStakedAmount) {
     bool expired;
     bytes32[] storage txids = delegatorMap[delegator].txids;
     for (uint256 i = txids.length; i != 0; i--) {
-      (, expired, ) = _collectReward(txids[i - 1]);
+      (, expired, ) = _collectReward(txids[i - 1], settleRound);
       if (expired) {
         if (i != txids.length) {
           txids[i - 1] = txids[txids.length - 1];
@@ -344,7 +348,8 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetCandidate)) {
       revert InactiveCandidate(targetCandidate);
     }
-    _collectReward(txid);
+    uint256 lastRoundTag = roundTag - 1;
+    _collectReward(txid, lastRoundTag);
 
     Candidate storage c = candidateMap[candidate];
     c.realtimeAmount -= amount;
@@ -564,18 +569,18 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
   /// collect rewards for a given BTC stake transaction & time grading is applied
   /// @param txid the BTC stake transaction id
+  /// @param settleRound the settlement round
   /// @return reward reward of the BTC stake transaction
   /// @return expired whether the stake is expired
   /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
-  function _collectReward(bytes32 txid) internal returns (uint256 reward, bool expired, uint256 accStakedAmount) {
+  function _collectReward(bytes32 txid, uint256 settleRound) internal returns (uint256 reward, bool expired, uint256 accStakedAmount) {
     BtcTx storage bt = btcTxMap[txid];
     DepositReceipt storage dr = receiptMap[txid];
     uint256 drRound = dr.round;
     require(drRound != 0, "invalid deposit receipt");
-    uint256 lastRound = roundTag - 1;
     uint256 unlockRound1 = bt.lockTime / SatoshiPlusHelper.ROUND_INTERVAL - 1;
-    if (drRound < lastRound && drRound < unlockRound1) {
-      uint256 minRound = lastRound < unlockRound1 ? lastRound : unlockRound1;
+    if (drRound < settleRound && drRound < unlockRound1) {
+      uint256 minRound = settleRound < unlockRound1 ? settleRound : unlockRound1;
       // full reward
       reward = (_getRoundAccruedReward(dr.candidate, minRound) - _getRoundAccruedReward(dr.candidate, drRound)) * bt.amount / SatoshiPlusHelper.BTC_DECIMAL;
       accStakedAmount = bt.amount * (minRound - drRound);
