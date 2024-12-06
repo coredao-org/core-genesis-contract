@@ -165,6 +165,10 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     }
     require(msg.value >= requiredCoinDeposit, "delegate amount is too small");
     uint256 realtimeAmount = _delegateCoin(candidate, msg.sender, msg.value, false);
+
+    (bool success,) = STAKE_HUB_ADDR.call(abi.encodeWithSignature("onStakeChange(address)", msg.sender));
+    require (success, "call STAKE_HUB_ADDR.onStakeChange() failed");
+
     emit delegatedCoin(candidate, msg.sender, msg.value, realtimeAmount);
   }
 
@@ -174,6 +178,10 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   function undelegateCoin(address candidate, uint256 amount) public {
     uint256 dAmount = _undelegateCoin(candidate, msg.sender, amount, false);
     _deductTransferredAmount(msg.sender, dAmount);
+
+    (bool success,) = STAKE_HUB_ADDR.call(abi.encodeWithSignature("onStakeChange(address)", msg.sender));
+    require (success, "call STAKE_HUB_ADDR.onStakeChange() failed");
+
     Address.sendValue(payable(msg.sender), amount);
     emit undelegatedCoin(candidate, msg.sender, amount);
   }

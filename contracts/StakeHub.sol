@@ -5,8 +5,8 @@ import "./interface/IParamSubscriber.sol";
 import "./interface/IStakeHub.sol";
 import "./interface/IAgent.sol";
 import "./interface/ISystemReward.sol";
-import "./interface/IValidatorSet.sol";
 import "./interface/IBitcoinStake.sol";
+import "./interface/ICandidateHub.sol";
 import "./System.sol";
 import "./lib/Address.sol";
 import "./lib/Memory.sol";
@@ -25,7 +25,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   // Supported asset types
   //  - CORE
   //  - Hash power (measured in BTC blocks)
-  //  - BTC 
+  //  - BTC
   Asset[] public assets;
 
   // key: candidate op address
@@ -47,6 +47,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   // if the current surplus is not enough to pay the next extra rewards, system reward contract will be called to refill
   uint256 public surplus;
 
+  // Delegator's map
+  // key: delegator
+  // value:  delegator's reward based on assert
+  mapping(address => Delegator) delegatorMap;
+
   struct Asset {
     string  name;
     address agent;
@@ -56,6 +61,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   struct AssetState {
     uint256 amount;
     uint256 factor;
+  }
+
+  struct Delegator {
+    uint256 changeRound;
+    uint256[] rewards;
   }
 
   /*********************** events **************************/
@@ -199,8 +209,17 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// Claim reward for delegator
   /// @return rewards Amounts claimed
   function claimReward() external returns (uint256[] memory rewards) {
+    // if reward.changeRound + 1 < currentRound
+    // step 1 calculateReward till changeRound + 1
+    // step 2 calculateReward after changeRound + 1
     address delegator = msg.sender;
     rewards = _calculateReward(delegator);
+
+    Delegator storage d  = delegatorMap[delegator];
+    for (uint256 i = 0; i < d.rewards.length; i++) {
+      rewards[i] += d.rewards[i];
+    }
+    delete delegatorMap[delegator];
 
     uint256 reward;
     for (uint256 i = 0; i < rewards.length; i++) {
@@ -218,11 +237,40 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   function proxyClaimReward(address delegator) external onlyPledgeAgent returns (uint256 reward) {
     uint256[] memory rewards = _calculateReward(delegator);
 
+    Delegator storage d  = delegatorMap[delegator];
+    for (uint256 i = 0; i < d.rewards.length; i++) {
+      rewards[i] += d.rewards[i];
+    }
+    delete delegatorMap[delegator];
+
     for (uint256 i = 0; i < rewards.length; i++) {
       reward += rewards[i];
     }
     if (reward != 0) {
       Address.sendValue(payable(PLEDGE_AGENT_ADDR), reward);
+    }
+  }
+
+  /// This method is invoked when any staked asset changed.
+  /// @param delegator delegator address
+  function onStakeChange(address delegator) external onlyAsset {
+    Delegator storage d = delegatorMap[delegator];
+    uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
+    if ((d.changeRound + 1) != currentRound) {
+      uint256[] memory rewards = _calculateReward(delegator);
+      for (uint256 i = 0; i < rewards.length; i++) {
+        if (d.rewards.length == i) {
+          d.rewards.push(rewards[i]);
+        } else {
+          d.rewards[i] += rewards[i];
+        }
+      }
+    }
+    // TODO
+    // if reward.changeRound + 1 < currentRound
+    // claim reward till reward.changeRound + 1
+    if (d.changeRound != currentRound) {
+      d.changeRound = currentRound;
     }
   }
 
