@@ -213,7 +213,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     // step 1 calculateReward till changeRound + 1
     // step 2 calculateReward after changeRound + 1
     address delegator = msg.sender;
-    rewards = _calculateReward(delegator);
+    uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
+    rewards = _calculateReward(delegator, currentRound - 1);
 
     Delegator storage d  = delegatorMap[delegator];
     for (uint256 i = 0; i < d.rewards.length; i++) {
@@ -235,7 +236,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// @param delegator delegator address
   /// @return reward Amounts claimed
   function proxyClaimReward(address delegator) external onlyPledgeAgent returns (uint256 reward) {
-    uint256[] memory rewards = _calculateReward(delegator);
+    uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
+    uint256[] memory rewards = _calculateReward(delegator, currentRound - 1);
 
     Delegator storage d  = delegatorMap[delegator];
     for (uint256 i = 0; i < d.rewards.length; i++) {
@@ -257,7 +259,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     Delegator storage d = delegatorMap[delegator];
     uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
     if ((d.changeRound + 1) != currentRound) {
-      uint256[] memory rewards = _calculateReward(delegator);
+      uint256[] memory rewards = _calculateReward(delegator, currentRound - 1);
       for (uint256 i = 0; i < rewards.length; i++) {
         if (d.rewards.length == i) {
           d.rewards.push(rewards[i]);
@@ -277,17 +279,17 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// Calculate reward for delegator
   /// @param delegator delegator address
   /// @return rewards Amounts claimed
-  function _calculateReward(address delegator) internal returns (uint256[] memory rewards) {
+  function _calculateReward(address delegator, uint256 settleRound) internal returns (uint256[] memory rewards) {
     uint256 assetSize = assets.length;
     rewards = new uint256[](assetSize);
     int256 floatReward;
     uint256 accStakedCoreAmount;
-    (rewards[0], floatReward, accStakedCoreAmount) = IAgent(assets[0].agent).claimReward(delegator, 0);
+    (rewards[0], floatReward, accStakedCoreAmount) = IAgent(assets[0].agent).claimReward(delegator, 0, settleRound);
 
     uint256 totalReward = rewards[0];
     int256 totalFloatReward = floatReward;
     for (uint256 i = 1; i < assetSize; ++i) {
-      (rewards[i], floatReward,) = IAgent(assets[i].agent).claimReward(delegator, accStakedCoreAmount);
+      (rewards[i], floatReward,) = IAgent(assets[i].agent).claimReward(delegator, accStakedCoreAmount, settleRound);
       totalReward += rewards[i];
       totalFloatReward += floatReward;
     }
