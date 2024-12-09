@@ -7,6 +7,7 @@ import "./interface/IAgent.sol";
 import "./interface/ISystemReward.sol";
 import "./interface/IBitcoinStake.sol";
 import "./interface/ICandidateHub.sol";
+import "./interface/IValidatorSet.sol";
 import "./System.sol";
 import "./lib/Address.sol";
 import "./lib/Memory.sol";
@@ -98,6 +99,29 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     operators[BTCLST_STAKE_ADDR] = true;
 
     alreadyInit = true;
+
+    // get stake summary of current round (snapshot values of last turn round)
+    address[] memory validators = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getValidatorOps();
+    uint256[] memory factors = new uint256[](3);
+    factors[0] = 1;
+    // HASH_UNIT_CONVERSION * 1e6
+    factors[1] = 1e18 * 1e6;
+    // BTC_UNIT_CONVERSION * 2e4
+    factors[2] = 1e10 * 2e4;
+    // initialize hybrid score based on data migrated from PledgeAgent.getStakeInfo()
+    uint256 validatorSize = validators.length;
+    for (uint256 i = 0; i < validatorSize; ++i) {
+      address validator = validators[i];
+      candidateScoresMap[validator].push(0);
+      candidateScoresMap[validator].push(0);
+      candidateScoresMap[validator].push(0);
+      candidateScoresMap[validator].push(0);
+    }
+
+    uint256 len = assets.length;
+    for (uint256 j = 0; j < len; j++) {
+      stateMap[assets[j].agent] = AssetState(0, factors[j]);
+    }
   }
 
   receive() external payable {
