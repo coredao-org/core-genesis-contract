@@ -86,6 +86,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   /*********************** events **************************/
   event StoreHeaderFailed(bytes32 indexed blockHash, int256 indexed returnCode);
   event StoreHeader(bytes32 indexed blockHash, address candidate, address indexed rewardAddr, uint32 indexed height, bytes32 bindingHash);
+  event AddMiner(bytes32 indexed blockHash, address indexed candidate, address indexed miner);
 
   /*********************** init **************************/
   /// Initialize 
@@ -224,6 +225,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       }
       r.powerMap[candidate].miners.push(miner);
       r.powerMap[candidate].btcBlocks.push(blockHash);
+      emit AddMiner(blockHash, candidate, miner);
     }
   }
 
