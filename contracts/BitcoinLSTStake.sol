@@ -317,7 +317,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
   /// @return reward Amount claimed
   /// @return rewardUnclaimed Amount unclaimed
   /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
-  function claimReward(address delegator, uint256 /*settleRound*/) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed, uint256 accStakedAmount) {
+  function claimReward(address delegator, uint256 /*settleRound*/, bool /*claim*/) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed, uint256 accStakedAmount) {
     if (paused()) {
       return (0, 0, 0);
     }
