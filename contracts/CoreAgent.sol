@@ -79,6 +79,8 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     uint256 realtimeAmount
   );
   event claimedCoinReward(address indexed delegator, uint256 amount, uint256 accStakedAmount);
+  event collectedReward(address indexed candidate, address indexed delegator, uint256 reward, uint256 accStakedAmount);
+  event storedReward(address indexed candidate, address indexed delegator, uint256 reward, uint256 accStakedAmount);
 
   modifier onlyPledgeAgent() {
     require(msg.sender == PLEDGE_AGENT_ADDR, "the sender must be PledgeAgent contract");
@@ -214,7 +216,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     for (uint256 i = candidateSize; i != 0; --i) {
       candidate = candidates[i - 1];
       CoinDelegator storage cd = candidateMap[candidate].cDelegatorMap[delegator];
-      (reward, accStakedAmount) = _collectRewardFromCandidate(candidate, cd, settleRound);
+      (reward, accStakedAmount) = _collectRewardFromCandidate(candidate, delegator, cd, settleRound);
       rewardSum += reward;
       accStakedAmountSum += accStakedAmount;
       if (cd.realtimeAmount == 0 && cd.transferredAmount == 0) {
@@ -251,7 +253,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       delegatorMap[delegator].candidates.push(candidate);
     } else if (changeRound != roundTag) {
       uint256 lastRoundTag = roundTag - 1;
-      (uint256 reward, uint256 accStakedAmount) = _collectRewardFromCandidate(candidate, cd, lastRoundTag);
+      (uint256 reward, uint256 accStakedAmount) = _collectRewardFromCandidate(candidate, delegator, cd, lastRoundTag);
       rewardMap[delegator].reward += reward;
       rewardMap[delegator].accStakedAmount += accStakedAmount;
     }
@@ -333,9 +335,10 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       delegatorMap[delegator].candidates.push(candidate);
     } else if (changeRound != roundTag) {
       uint256 lastRoundTag = roundTag - 1;
-      (uint256 reward, uint256 accStakedAmount) = _collectRewardFromCandidate(candidate, cd, lastRoundTag);
+      (uint256 reward, uint256 accStakedAmount) = _collectRewardFromCandidate(candidate, delegator, cd, lastRoundTag);
       rewardMap[delegator].reward += reward;
       rewardMap[delegator].accStakedAmount += accStakedAmount;
+      emit storedReward(candidate, delegator, reward, accStakedAmount);
     }
     a.realtimeAmount += amount;
     cd.realtimeAmount += amount;
@@ -360,9 +363,10 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     require(changeRound != 0, 'no delegator information found');
     if (changeRound != roundTag) {
       uint256 lastRoundTag = roundTag - 1;
-      (uint256 reward, uint256 accStakedAmount) = _collectRewardFromCandidate(candidate, cd, lastRoundTag);
+      (uint256 reward, uint256 accStakedAmount) = _collectRewardFromCandidate(candidate, delegator, cd, lastRoundTag);
       rewardMap[delegator].reward += reward;
       rewardMap[delegator].accStakedAmount += accStakedAmount;
+      emit storedReward(candidate, delegator, reward, accStakedAmount);
     }
 
     uint256 realtimeAmount = cd.realtimeAmount;
@@ -426,11 +430,23 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
 
   /// collect reward from a validator candidate
   /// @param candidate the validator candidate to collect rewards
+  /// @param delegator the address of delegator
+  /// @param settleRound the settlement round
+  /// @return reward The amount of CORE collected
+  /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
+  function viewCollectRewardFromCandidate(address candidate, address delegator, uint256 settleRound) external onlyStakeHub returns (uint256 reward, uint256 accStakedAmount) {
+    CoinDelegator storage cd = candidateMap[candidate].cDelegatorMap[delegator];
+    return _collectRewardFromCandidate(candidate, delegator, cd, settleRound);
+  }
+
+  /// collect reward from a validator candidate
+  /// @param candidate the validator candidate to collect rewards
+  /// @param delegator the address of delegator
   /// @param cd the structure stores user CORE stake information
   /// @param settleRound the settlement round
   /// @return reward The amount of CORE collected
   /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
-  function _collectRewardFromCandidate(address candidate, CoinDelegator storage cd, uint256 settleRound) internal returns (uint256 reward, uint256 accStakedAmount) {
+  function _collectRewardFromCandidate(address candidate, address delegator, CoinDelegator storage cd, uint256 settleRound) internal returns (uint256 reward, uint256 accStakedAmount) {
     uint256 stakedAmount = cd.stakedAmount;
     uint256 realtimeAmount = cd.realtimeAmount;
     uint256 transferredAmount = cd.transferredAmount;
@@ -445,6 +461,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       }
       cd.changeRound = settleRound + 1;
     }
+    emit collectedReward(candidate, delegator, reward, accStakedAmount);
   }
 
   /// collect rewards on a candidate with full parameters
@@ -583,5 +600,9 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// return the delegated candidates list of the delegator
   function getCandidateListByDelegator(address delegator) external view returns (address[] memory) {
     return delegatorMap[delegator].candidates;
+  }
+
+  function getContinuousRewardEndRoundsByCandidate(address candidate) external view returns(uint256[] memory) {
+    return candidateMap[candidate].continuousRewardEndRounds;
   }
 }
