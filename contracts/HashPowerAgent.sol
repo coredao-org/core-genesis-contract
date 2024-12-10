@@ -17,6 +17,7 @@ contract HashPowerAgent is IAgent, System, IParamSubscriber {
 
   /*********************** events **************************/
   event claimedHashReward(address indexed delegator, uint256 amount, uint256 accStakedAmount);
+  event validatorAvgReward(address indexed validator, uint256 avgReward);
 
   struct Reward {
     uint256 reward;
@@ -54,6 +55,7 @@ contract HashPowerAgent is IAgent, System, IParamSubscriber {
           rewardMap[miners[j]].reward += avgReward;
           rewardMap[miners[j]].accStakedAmount += 1;
         }
+        emit validatorAvgReward(validators[i], avgReward);
       }
     }
   }

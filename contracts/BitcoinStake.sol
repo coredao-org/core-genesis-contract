@@ -122,6 +122,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     uint256 amount
   );
   event btcExpired(bytes32 indexed txid, address indexed delegator);
+  event claimedReward(bytes32 indexed txid, uint256 reward, bool expired, uint256 accStakedAmount);
 
   /// The validator candidate is inactive, it is expected to be active
   /// @param candidate Address of the validator candidate
@@ -278,9 +279,12 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
   function claimReward(address delegator, uint256 settleRound) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed, uint256 accStakedAmount) {
     bool expired;
+    uint256 rewardPerTx;
+    uint256 accStakedAmountPerTx;
     bytes32[] storage txids = delegatorMap[delegator].txids;
     for (uint256 i = txids.length; i != 0; i--) {
-      (, expired, ) = _collectReward(txids[i - 1], settleRound);
+      (rewardPerTx, expired, accStakedAmountPerTx) = _collectReward(txids[i - 1], settleRound);
+      emit claimedReward(txids[i - 1], rewardPerTx, expired, accStakedAmountPerTx);
       if (expired) {
         if (i != txids.length) {
           txids[i - 1] = txids[txids.length - 1];
@@ -368,6 +372,19 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
   function getGrades() external view returns (LockLengthGrade[] memory) {
     return grades;
+  }
+
+  function getTxIdsByDelegator(address delegator) external view returns(bytes32[] memory) {
+    return delegatorMap[delegator].txids;
+  }
+
+  function getContinuousRewardEndRoundsByCandidate(address candidate) external view returns(uint256[] memory) {
+    return candidateMap[candidate].continuousRewardEndRounds;
+  }
+
+  function getExpireValue(uint256 round, address agent) external view returns (uint256){
+    ExpireInfo storage expireInfo = round2expireInfoMap[round];
+    return expireInfo.amountMap[agent];
   }
 
   /*********************** Governance ********************************/
@@ -565,6 +582,16 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       accruedRewardPerBTCMap[candidate][round] = reward;
     }
     return reward;
+  }
+
+  /// collect rewards for a given BTC stake transaction & time grading is applied
+  /// @param txid the BTC stake transaction id
+  /// @param settleRound the settlement round
+  /// @return reward reward of the BTC stake transaction
+  /// @return expired whether the stake is expired
+  /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
+  function viewCollectReward(bytes32 txid, uint256 settleRound) external onlyBtcAgent returns (uint256 reward, bool expired, uint256 accStakedAmount) {
+    return _collectReward(txid, settleRound);
   }
 
   /// collect rewards for a given BTC stake transaction & time grading is applied
