@@ -5,9 +5,10 @@ import "./interface/IParamSubscriber.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./interface/IBurn.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 /// This contract burns CORE tokens up to pre defined CAP
-contract Burn is System, IBurn, IParamSubscriber {
+contract Burn is System, IBurn, IParamSubscriber, ReentrancyGuard {
   uint256 public constant BURN_CAP = 105e25;
 
   uint256 public burnCap;
@@ -23,7 +24,7 @@ contract Burn is System, IBurn, IParamSubscriber {
 
   /// Burn incoming CORE tokens
   /// Send back the portion which exceeds the cap
-  function burn() external payable override {
+  function burn() external payable override nonReentrant {
     uint256 v = msg.value;
     if (address(this).balance > burnCap) {
       uint256 remain = address(this).balance - burnCap;
