@@ -601,7 +601,7 @@ contract BitcoinLSTStake is IBitcoinStake, System, IParamSubscriber, ReentrancyG
     // make sure the caller to send the rewards out
     // otherwise the rewards will be gone
     if (claim) {
-      if (rewardMap[userAddress].reward != 0) {
+      if (rewardMap[userAddress].reward != 0 || rewardMap[userAddress].accStakedAmount != 0) {
         reward += rewardMap[userAddress].reward;
         accStakedAmount += rewardMap[userAddress].accStakedAmount;
         delete rewardMap[userAddress];
