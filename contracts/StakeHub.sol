@@ -292,6 +292,24 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     }
   }
 
+  // Calculate reward for delegator.
+  /// @param delegator delegator address
+  function calculateReward(address delegator) external {
+    Delegator storage d = delegatorMap[delegator];
+    uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
+    uint256[] memory rewards = _calculateReward(delegator);
+    for (uint256 i = 0; i < rewards.length; i++) {
+      if (d.rewards.length == i) {
+        d.rewards.push(rewards[i]);
+      } else {
+        d.rewards[i] += rewards[i];
+      }
+    }
+    if (d.changeRound != currentRound) {
+      d.changeRound = currentRound;
+    }
+  }
+
   /// Calculate reward for delegator
   /// @param delegator delegator address
   /// @return rewards Amounts claimed
