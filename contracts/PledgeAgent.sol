@@ -27,18 +27,18 @@ import "./System.sol";
 contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   using TypedMemView for *;
 
-  // Depreated in V-1.0.13, To be clear.
+  // Depreated in V-1.0.13
   // minimal CORE require to stake
   uint256 public requiredCoinDeposit;
 
-  // Depreated in V-1.0.13, To be clear.
+  // Depreated in V-1.0.13
   // powerFactor/10000 determines the weight of BTC hash power vs CORE stakes
   // the default value of powerFactor is set to 20000 
   // which means the overall BTC hash power takes 2/3 total weight 
   // when calculating hybrid score and distributing block rewards
   uint256 public powerFactor;
 
-  // Depreated in V-1.0.13, To be clear.
+  // Depreated in V-1.0.13
   // key: candidate's operateAddr
   mapping(address => Agent) public agentsMap;
 
@@ -64,15 +64,15 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   // debtDepositMap keeps delegator's amount of CORE which should be deducted when claiming rewards in every round
   mapping(uint256 => mapping(address => uint256)) public debtDepositMap;
 
-  // Depreated in V-1.0.13, To be clear.
+  // Depreated in V-1.0.13
   // btcReceiptMap keeps all BTC staking receipts on Core
   mapping(bytes32 => BtcReceipt) public btcReceiptMap;
 
-  // Depreated in V-1.0.13, To be clear.
+  // Depreated in V-1.0.13
   // round2expireInfoMap keeps the amount of expired BTC staking value for each round
   mapping(uint256 => BtcExpireInfo) round2expireInfoMap;
 
-  // Depreated in V-1.0.13, To be clear.
+  // Depreated in V-1.0.13
   uint256 public btcFactor;
   uint256 public minBtcLockRound;
   uint32 public btcConfirmBlock;

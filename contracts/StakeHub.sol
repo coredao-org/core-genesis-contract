@@ -86,11 +86,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     assets.push(Asset("HASHPOWER", HASH_AGENT_ADDR, 2000));
     assets.push(Asset("BTC", BTC_AGENT_ADDR, 4000));
 
-    // Unit test should init stateMap for the first round.
-    // for (uint256 j = 0; j < assets.length; j++) {
-    //   stateMap[assets[j].agent] = AssetState(totalAmounts[j], factors[j]);
-    // }
-
     operators[PLEDGE_AGENT_ADDR] = true;
     operators[CORE_AGENT_ADDR] = true;
     operators[HASH_AGENT_ADDR] = true;
@@ -100,7 +95,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
     alreadyInit = true;
 
-    // get stake summary of current round (snapshot values of last turn round)
     address[] memory validators = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getValidatorOps();
     uint256[] memory factors = new uint256[](3);
     factors[0] = 1;
@@ -108,7 +102,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     factors[1] = 1e18 * 1e6;
     // BTC_UNIT_CONVERSION * 2e4
     factors[2] = 1e10 * 2e4;
-    // initialize hybrid score based on data migrated from PledgeAgent.getStakeInfo()
     uint256 validatorSize = validators.length;
     for (uint256 i = 0; i < validatorSize; ++i) {
       address validator = validators[i];
@@ -344,7 +337,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
     if (totalFloatReward > surplus.toInt256()) {
       // move from system reward as a buffer for the next claim calls
-      uint256 claimAmount = totalFloatReward.toUint256();
+      uint256 claimAmount = totalFloatReward.toUint256() - surplus;
       uint256 actualAmount = ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(STAKE_HUB_ADDR), claimAmount);
       surplus += actualAmount;
     }

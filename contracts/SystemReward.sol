@@ -8,6 +8,7 @@ import "./lib/BytesLib.sol";
 import "./lib/Memory.sol";
 import "./lib/RLPDecode.sol";
 import "./lib/SatoshiPlusHelper.sol";
+import "./lib/Address.sol";
 import "./System.sol";
 
 /// This smart contract manages funds for relayers and verifiers
@@ -66,7 +67,7 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
           uint256 toWhiteListValue = value * whiteListSet[i].percentage / SatoshiPlusHelper.DENOMINATOR;
           if (remain >= toWhiteListValue) {
             remain -= toWhiteListValue;
-            payable(whiteListSet[i].member).transfer(toWhiteListValue);
+            Address.sendValue(payable(whiteListSet[i].member), toWhiteListValue);
           }
         }
         if (remain != 0) {
@@ -142,13 +143,13 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
       }
     } else if (Memory.compareStrings(key, "addWhiteList")) {
       (address member, uint32 percentage) = _decodeWhiteList(key, value);
-      require(whiteLists[member] == 0, "white list member already exists");
+      require(whiteLists[member] == 0, "whitelist member already exists");
       whiteListSet.push(WhiteList(member, percentage));
       whiteLists[member] = whiteListSet.length;
       _checkPercentage();
     } else if (Memory.compareStrings(key, "modifyWhiteList")) {
       (address member, uint32 percentage) = _decodeWhiteList(key, value);
-      require(whiteLists[member] != 0, "white list member not exists");
+      require(whiteLists[member] != 0, "whitelist member does not exists");
       whiteListSet[whiteLists[member] - 1].percentage = percentage;
       _checkPercentage();
     } else if (Memory.compareStrings(key, "removeWhiteList")) {
@@ -156,9 +157,8 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
         revert MismatchParamLength(key);
       }
       address member = value.toAddress(0);
-      require(whiteLists[member] != 0, "white list member does not exist");
       uint256 index = whiteLists[member];
-      require(index != 0, "white list member does not exist");
+      require(index != 0, "whitelist member does not exist");
       if (index != whiteListSet.length) {
         WhiteList storage whiteList = whiteListSet[whiteListSet.length - 1];
         whiteListSet[index - 1] = whiteList;

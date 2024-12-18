@@ -212,9 +212,9 @@ contract GovHub is System, IParamSubscriber {
     Proposal storage proposal = proposals[proposalId];
     ProposalState state = getState(proposalId);
     if (state == ProposalState.Active) {
-      require(proposal.forVotes > proposal.againstVotes && proposal.forVotes > proposal.totalVotes / 2, "proposal was not agreed to");
+      require(proposal.forVotes > proposal.againstVotes && proposal.forVotes > proposal.totalVotes / 2, "can only be executed when yes from majority of members");
     } else {
-      require(getState(proposalId) == ProposalState.Succeeded, "proposal can only be executed if it is succeeded");
+      require(state == ProposalState.Succeeded, "proposal can only be executed if it is succeeded");
     }
     proposal.executed = true;
     uint256 targetSize = proposal.targets.length;
