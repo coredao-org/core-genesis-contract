@@ -338,11 +338,17 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }
-    uint256 newValue = value.toUint256(0);
-    if (!_updateHardcap(key, newValue)) {
-      revert UnsupportedGovParam(key);
+    if (Memory.compareStrings(key, "surplus")) {
+      uint256 newValue = value.toUint256(0);
+      require(newValue <= surplus, "surplus out of range");
+      surplus -= newValue;
+      Address.sendValue(payable(SYSTEM_REWARD_ADDR), newValue);
+    } else {
+      uint256 newValue = value.toUint256(0);
+      if (!_updateHardcap(key, newValue)) {
+        revert UnsupportedGovParam(key);
+      }
     }
-  
     emit paramChange(key, value);
   }
 
