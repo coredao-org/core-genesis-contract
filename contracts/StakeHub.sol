@@ -270,7 +270,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   function onStakeChange(address delegator) override external onlyAsset {
     Delegator storage d = delegatorMap[delegator];
     uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
-    if (d.changeRound != 0 && (d.changeRound + 1) < currentRound) {
+    if ((d.changeRound + 1) < currentRound) {
       uint256[] memory rewards = _calculateReward(delegator);
       for (uint256 i = 0; i < rewards.length; i++) {
         if (d.rewards.length == i) {
