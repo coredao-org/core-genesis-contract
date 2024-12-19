@@ -123,6 +123,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   );
   event btcExpired(bytes32 indexed txid, address indexed delegator);
   event claimedRewardPerTx(bytes32 indexed txid, uint256 reward, bool expired, uint256 accStakedAmount);
+  event storedRewardPerTx(bytes32 indexed txid, uint256 reward, bool expired, uint256 accStakedAmount);
 
   /// The validator candidate is inactive, it is expected to be active
   /// @param candidate Address of the validator candidate
@@ -275,10 +276,11 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// Claim reward for delegator
   /// @param delegator the delegator address
   /// @param settleRound the settlement round
+  /// @param claim claim or store claim
   /// @return reward Amount claimed
   /// @return rewardUnclaimed Amount unclaimed
   /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
-  function claimReward(address delegator, uint256 settleRound) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed, uint256 accStakedAmount) {
+  function claimReward(address delegator, uint256 settleRound, bool claim) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed, uint256 accStakedAmount) {
     reward = rewardMap[delegator].reward;
     rewardUnclaimed = rewardMap[delegator].unclaimedReward;
     accStakedAmount = rewardMap[delegator].accStakedAmount;
@@ -296,7 +298,12 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       reward += rewardPerTx;
       rewardUnclaimed += rewardUnclaimedPerTx;
       accStakedAmount += accStakedAmountPerTx;
-      emit claimedRewardPerTx(txids[i - 1], rewardPerTx, expired, accStakedAmountPerTx);
+      if (claim) {
+        emit claimedRewardPerTx(txids[i - 1], rewardPerTx, expired, accStakedAmountPerTx);
+      } else {
+        emit storedRewardPerTx(txids[i - 1], rewardPerTx, expired, accStakedAmountPerTx);
+      }
+
       if (expired) {
         if (i != txids.length) {
           txids[i - 1] = txids[txids.length - 1];
