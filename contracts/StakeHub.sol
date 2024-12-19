@@ -268,9 +268,15 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// This method is invoked when any staked asset changed.
   /// @param delegator delegator address
   function onStakeChange(address delegator) override external onlyAsset {
+    calculateReward(delegator);
+  }
+
+  // Calculate reward for delegator.
+  /// @param delegator delegator address
+  function calculateReward(address delegator) public {
     Delegator storage d = delegatorMap[delegator];
     uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
-    if ((d.changeRound + 1) < currentRound) {
+    if (d.changeRound != currentRound) {
       uint256[] memory rewards = _calculateReward(delegator);
       for (uint256 i = 0; i < rewards.length; i++) {
         if (d.rewards.length == i) {
@@ -279,26 +285,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
           d.rewards[i] += rewards[i];
         }
       }
-    }
-    if (d.changeRound != currentRound) {
-      d.changeRound = currentRound;
-    }
-  }
-
-  // Calculate reward for delegator.
-  /// @param delegator delegator address
-  function calculateReward(address delegator) external {
-    Delegator storage d = delegatorMap[delegator];
-    uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
-    uint256[] memory rewards = _calculateReward(delegator);
-    for (uint256 i = 0; i < rewards.length; i++) {
-      if (d.rewards.length == i) {
-        d.rewards.push(rewards[i]);
-      } else {
-        d.rewards[i] += rewards[i];
-      }
-    }
-    if (d.changeRound != currentRound) {
       d.changeRound = currentRound;
     }
   }

@@ -167,8 +167,8 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       revert InactiveCandidate(candidate);
     }
     require(msg.value >= requiredCoinDeposit, "delegate amount is too small");
-    uint256 realtimeAmount = _delegateCoin(candidate, msg.sender, msg.value, false);
     IStakeHub(STAKE_HUB_ADDR).onStakeChange(msg.sender);
+    uint256 realtimeAmount = _delegateCoin(candidate, msg.sender, msg.value, false);
     emit delegatedCoin(candidate, msg.sender, msg.value, realtimeAmount);
   }
 
@@ -176,9 +176,9 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param candidate The operator address of validator
   /// @param amount The amount of CORE to undelegate
   function undelegateCoin(address candidate, uint256 amount) public {
+    IStakeHub(STAKE_HUB_ADDR).onStakeChange(msg.sender);
     uint256 dAmount = _undelegateCoin(candidate, msg.sender, amount, false);
     _deductTransferredAmount(msg.sender, dAmount);
-    IStakeHub(STAKE_HUB_ADDR).onStakeChange(msg.sender);
     Address.sendValue(payable(msg.sender), amount);
     emit undelegatedCoin(candidate, msg.sender, amount);
   }
@@ -194,6 +194,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     if (sourceCandidate == targetCandidate) {
       revert SameCandidate(sourceCandidate);
     }
+    IStakeHub(STAKE_HUB_ADDR).onStakeChange(msg.sender);
     _undelegateCoin(sourceCandidate, msg.sender, amount, true);
     uint256 newDeposit = _delegateCoin(targetCandidate, msg.sender, amount, true);
 
@@ -280,6 +281,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       revert InactiveCandidate(candidate);
     }
     require(msg.value >= requiredCoinDeposit, "delegate amount is too small");
+    IStakeHub(STAKE_HUB_ADDR).onStakeChange(delegator);
     uint256 realtimeAmount = _delegateCoin(candidate, delegator, msg.value, false);
     emit delegatedCoin(candidate, delegator, msg.value, realtimeAmount);
   }
@@ -289,6 +291,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param delegator the delegator address
   /// @param amount the amount of CORE to unstake
   function proxyUnDelegate(address candidate, address delegator, uint256 amount) external onlyPledgeAgent returns(uint256) {
+    IStakeHub(STAKE_HUB_ADDR).onStakeChange(delegator);
     if (amount == 0) {
       amount = candidateMap[candidate].cDelegatorMap[delegator].realtimeAmount;
     }
@@ -311,6 +314,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     if (sourceCandidate == targetCandidate) {
       revert SameCandidate(sourceCandidate);
     }
+    IStakeHub(STAKE_HUB_ADDR).onStakeChange(delegator);
     if (amount == 0) {
       amount = candidateMap[sourceCandidate].cDelegatorMap[delegator].realtimeAmount;
     }
@@ -333,12 +337,6 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     if (changeRound == 0) {
       cd.changeRound = roundTag;
       delegatorMap[delegator].candidates.push(candidate);
-    } else if (changeRound != roundTag) {
-      uint256 lastRoundTag = roundTag - 1;
-      (uint256 reward, uint256 accStakedAmount) = _collectRewardFromCandidate(candidate, delegator, cd, lastRoundTag);
-      rewardMap[delegator].reward += reward;
-      rewardMap[delegator].accStakedAmount += accStakedAmount;
-      emit storedReward(candidate, delegator, reward, accStakedAmount);
     }
     a.realtimeAmount += amount;
     cd.realtimeAmount += amount;
@@ -361,13 +359,6 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     CoinDelegator storage cd = a.cDelegatorMap[delegator];
     uint256 changeRound = cd.changeRound;
     require(changeRound != 0, 'no delegator information found');
-    if (changeRound != roundTag) {
-      uint256 lastRoundTag = roundTag - 1;
-      (uint256 reward, uint256 accStakedAmount) = _collectRewardFromCandidate(candidate, delegator, cd, lastRoundTag);
-      rewardMap[delegator].reward += reward;
-      rewardMap[delegator].accStakedAmount += accStakedAmount;
-      emit storedReward(candidate, delegator, reward, accStakedAmount);
-    }
 
     uint256 realtimeAmount = cd.realtimeAmount;
     require(realtimeAmount >= amount, "Not enough staked tokens");
