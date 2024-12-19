@@ -160,13 +160,13 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     BtcTx storage bt = btcTxMap[txid];
     require(bt.amount == 0, "btc tx is already delegated.");
     uint32 lockTime = _parseLockTime(script);
+    uint64 blockTimestamp;
     {
-      (bool txChecked, uint64 blockTimestamp) = ILightClient(LIGHT_CLIENT_ADDR).checkTxProofAndGetTime(txid, blockHeight, btcConfirmBlock, nodes, index);
+      bool txChecked;
+      (txChecked, blockTimestamp) = ILightClient(LIGHT_CLIENT_ADDR).checkTxProofAndGetTime(txid, blockHeight, btcConfirmBlock, nodes, index);
       require(txChecked, "btc tx isn't confirmed");
       uint256 endRound = lockTime / SatoshiPlusHelper.ROUND_INTERVAL;
       require(endRound > roundTag + 1, "insufficient locking rounds");
-      bt.lockTime = lockTime;
-      bt.blockTimestamp = blockTimestamp;
     }
 
     DepositReceipt storage dr = receiptMap[txid];
@@ -179,6 +179,8 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
       (btcAmount, outputIndex, delegator, candidate) = _parseVout(voutView, script);
       require(IRelayerHub(RELAYER_HUB_ADDR).isRelayer(msg.sender) || msg.sender == delegator, "only delegator or relayer can submit the BTC transaction");
       IStakeHub(STAKE_HUB_ADDR).onStakeChange(delegator);
+      bt.lockTime = lockTime;
+      bt.blockTimestamp = blockTimestamp;
       bt.amount = btcAmount;
       bt.outputIndex = outputIndex;
       emit delegated(txid, candidate, delegator, script, outputIndex, btcAmount, 0);
@@ -277,6 +279,13 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// @return rewardUnclaimed Amount unclaimed
   /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
   function claimReward(address delegator, uint256 settleRound) external override onlyBtcAgent returns (uint256 reward, uint256 rewardUnclaimed, uint256 accStakedAmount) {
+    reward = rewardMap[delegator].reward;
+    rewardUnclaimed = rewardMap[delegator].unclaimedReward;
+    accStakedAmount = rewardMap[delegator].accStakedAmount;
+    if (reward != 0 || accStakedAmount != 0) {
+      delete rewardMap[delegator];
+    }
+
     bool expired;
     uint256 rewardPerTx;
     uint256 rewardUnclaimedPerTx;
@@ -294,12 +303,6 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
         }
         txids.pop();
       }
-    }
-    reward = rewardMap[delegator].reward;
-    rewardUnclaimed = rewardMap[delegator].unclaimedReward;
-    accStakedAmount = rewardMap[delegator].accStakedAmount;
-    if (reward != 0 || accStakedAmount != 0) {
-      delete rewardMap[delegator];
     }
   }
 

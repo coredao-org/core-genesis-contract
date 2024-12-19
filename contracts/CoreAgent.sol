@@ -80,7 +80,6 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   );
   event claimedCoinReward(address indexed delegator, uint256 amount, uint256 accStakedAmount);
   event collectedReward(address indexed candidate, address indexed delegator, uint256 reward, uint256 accStakedAmount);
-  event storedReward(address indexed candidate, address indexed delegator, uint256 reward, uint256 accStakedAmount);
 
   modifier onlyPledgeAgent() {
     require(msg.sender == PLEDGE_AGENT_ADDR, "the sender must be PledgeAgent contract");
