@@ -379,4 +379,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   function getAssets() external view returns (Asset[] memory) {
     return assets;
   }
+
+  function getDelegator(address delegator) external view returns(Delegator memory) {
+    return delegatorMap[delegator];
+  }
 }
