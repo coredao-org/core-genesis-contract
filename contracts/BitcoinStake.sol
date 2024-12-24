@@ -596,7 +596,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
     return reward;
   }
 
-  /// collect rewards for a given BTC stake transaction & time grading is applied
+  /// Exposed for staking API to do readonly calls, restricted to onlyBtcAgent() for safety reasons.
   /// @param txid the BTC stake transaction id
   /// @param settleRound the settlement round
   /// @return reward reward of the BTC stake transaction

@@ -93,11 +93,6 @@ contract System {
     _;
   }
 
-  modifier onlyAsset() {
-    require(msg.sender == CORE_AGENT_ADDR || msg.sender == BTC_STAKE_ADDR || msg.sender == HASH_AGENT_ADDR, "he msg sender must be assert contract");
-    _;
-  }
-
   /// The length of param mismatch. Default is 32 bytes.
   /// @param name the name of param.
   error MismatchParamLength(string name);

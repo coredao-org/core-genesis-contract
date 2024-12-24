@@ -432,7 +432,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
     }
   }
 
-  /// collect reward from a validator candidate
+  /// Exposed for staking API to do readonly calls, restricted to onlyStakeHub() for safety reasons.
   /// @param candidate the validator candidate to collect rewards
   /// @param delegator the address of delegator
   /// @param settleRound the settlement round

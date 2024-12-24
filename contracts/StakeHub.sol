@@ -267,7 +267,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
 
   /// This method is invoked whenever user CORE/BTC stake changes.
   /// @param delegator delegator address
-  function onStakeChange(address delegator) override external onlyAsset {
+  function onStakeChange(address delegator) override external {
     calculateReward(delegator);
   }
 
