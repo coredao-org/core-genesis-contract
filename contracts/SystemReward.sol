@@ -109,6 +109,10 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     return operators[addr];
   }
 
+  function getWhiteListSet() external view returns(WhiteList[] memory) {
+    return whiteListSet;
+  }
+
   /*********************** Param update ********************************/
   /// Update parameters through governance vote
   /// @param key The name of the parameter
