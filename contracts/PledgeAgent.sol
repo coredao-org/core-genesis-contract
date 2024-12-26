@@ -403,25 +403,18 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Get delegator information
   /// @param agent The operator address of validator
   /// @param delegator The delegator address
-  /// @return CoinDelegator Information of the delegator
-  function getDelegator(address agent, address delegator) external view returns (CoinDelegator memory) {
+  /// @return cd CoinDelegator Information of the delegator
+  function getDelegator(address agent, address delegator) external view returns (CoinDelegator memory cd) {
+      cd = agentsMap[agent].cDelegatorMap[delegator];
       (bool success, bytes memory result) = CORE_AGENT_ADDR.staticcall(abi.encodeWithSignature("getDelegator(address,address)", agent, delegator));
       require (success, "call CORE_AGENT_ADDR.getDelegator() failed");
       (uint256 stakedAmount, uint256 realtimeAmount, uint256 transferredAmount, uint256 changeRound) = abi.decode(result, (uint256,uint256,uint256,uint256));
-      CoinDelegator memory d;
       if (realtimeAmount != 0) {
-        d = CoinDelegator({
-          deposit: stakedAmount,
-          newDeposit: realtimeAmount,
-          changeRound: changeRound,
-          rewardIndex: 0,
-          transferOutDeposit: transferredAmount,
-          transferInDeposit: 0
-        });
-        return d;
-      } else {
-        d = agentsMap[agent].cDelegatorMap[delegator];
-        return d;
+        cd.deposit = cd.newDeposit + stakedAmount;
+        cd.newDeposit += realtimeAmount;
+        cd.changeRound = changeRound;
+        cd.transferOutDeposit = transferredAmount;
+        cd.transferInDeposit = 0;
       }
   }
 
