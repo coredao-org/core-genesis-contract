@@ -141,13 +141,13 @@ contract BitcoinAgent is IAgent, System, IParamSubscriber {
       floatReward = pReward.toInt256() - btcReward.toInt256();
       btcReward = pReward;
     }
+    if (btcRewardUnclaimed != 0) {
+      floatReward -= btcRewardUnclaimed.toInt256();
+    }
     if (claim) {
       emit claimedBtcReward(delegator, btcReward, btcRewardUnclaimed, floatReward, btcAccStakedAmount, p);
     } else {
       emit storedBtcReward(delegator, btcReward, btcRewardUnclaimed, floatReward, btcAccStakedAmount, p);
-    }
-    if (btcRewardUnclaimed != 0) {
-      floatReward -= btcRewardUnclaimed.toInt256();
     }
 
     (uint256 btclstReward, , uint256 btclstAccStakedAmount) = IBitcoinStake(BTCLST_STAKE_ADDR).claimReward(delegator, settleRound, claim);
