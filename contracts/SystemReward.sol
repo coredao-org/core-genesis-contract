@@ -50,6 +50,8 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   event rewardTo(address indexed to, uint256 amount);
   event rewardEmpty();
   event receiveDeposit(address indexed from, uint256 amount);
+  event whitelistTransferSuccess(address indexed member, uint256 value);
+  event whitelistTransferFailed(address indexed member, uint256 value);
 
   receive() external payable {
     if (msg.value != 0) {
@@ -67,7 +69,12 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
           uint256 toWhiteListValue = value * whiteListSet[i].percentage / SatoshiPlusHelper.DENOMINATOR;
           if (remain >= toWhiteListValue) {
             remain -= toWhiteListValue;
-            Address.sendValue(payable(whiteListSet[i].member), toWhiteListValue);
+            bool success = payable(whiteListSet[i].member).send(toWhiteListValue);
+            if (success) {
+              emit whitelistTransferSuccess(whiteListSet[i].member, toWhiteListValue);
+            } else {
+              emit whitelistTransferFailed(whiteListSet[i].member, toWhiteListValue);
+            }
           }
         }
         if (remain != 0) {
