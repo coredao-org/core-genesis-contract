@@ -233,7 +233,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     for (uint256 i = 0; i < d.rewards.length; i++) {
       rewards[i] += d.rewards[i];
     }
-    delete delegatorMap[delegator];
+    uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
+    if (d.changeRound != currentRound) {
+      d.changeRound = currentRound;
+    }
+    delete delegatorMap[delegator].rewards;
 
     uint256 reward;
     for (uint256 i = 0; i < rewards.length; i++) {
@@ -255,7 +259,12 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     for (uint256 i = 0; i < d.rewards.length; i++) {
       rewards[i] += d.rewards[i];
     }
-    delete delegatorMap[delegator];
+    uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
+    if (d.changeRound != currentRound) {
+      d.changeRound = currentRound;
+    }
+    delete delegatorMap[delegator].rewards;
+
 
     for (uint256 i = 0; i < rewards.length; i++) {
       reward += rewards[i];
