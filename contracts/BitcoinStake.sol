@@ -598,26 +598,32 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
   /// Exposed for staking API to do readonly calls, restricted to onlyBtcAgent() for safety reasons.
   /// @param txid the BTC stake transaction id
+  /// @param drRound the start round
   /// @param settleRound the settlement round
   /// @return reward reward of the BTC stake transaction
   /// @return expired whether the stake is expired
   /// @return rewardUnclaimed unclaimed reward of the BTC stake transaction
   /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
-  function viewCollectReward(bytes32 txid, uint256 settleRound) external onlyBtcAgent returns (uint256 reward, bool expired, uint256 rewardUnclaimed, uint256 accStakedAmount) {
-    return _collectReward(txid, settleRound);
+  function viewCollectReward(bytes32 txid, uint256 drRound, uint256 settleRound) external onlyBtcAgent returns (uint256 reward, bool expired, uint256 rewardUnclaimed, uint256 accStakedAmount) {
+    return _collectReward(txid, drRound, settleRound);
+  }
+
+  function _collectReward(bytes32 txid, uint256 settleRound) internal returns (uint256 reward, bool expired, uint256 rewardUnclaimed, uint256 accStakedAmount) {
+    DepositReceipt storage dr = receiptMap[txid];
+    return _collectReward(txid, dr.round, settleRound);
   }
 
   /// collect rewards for a given BTC stake transaction & time grading is applied
   /// @param txid the BTC stake transaction id
+  /// @param drRound the start round
   /// @param settleRound the settlement round
   /// @return reward reward of the BTC stake transaction
   /// @return expired whether the stake is expired
   /// @return rewardUnclaimed unclaimed reward of the BTC stake transaction
   /// @return accStakedAmount accumulated stake amount (multiplied by days), used for grading calculation
-  function _collectReward(bytes32 txid, uint256 settleRound) internal returns (uint256 reward, bool expired, uint256 rewardUnclaimed, uint256 accStakedAmount) {
+  function _collectReward(bytes32 txid, uint256 drRound, uint256 settleRound) internal returns (uint256 reward, bool expired, uint256 rewardUnclaimed, uint256 accStakedAmount) {
     BtcTx storage bt = btcTxMap[txid];
     DepositReceipt storage dr = receiptMap[txid];
-    uint256 drRound = dr.round;
     require(drRound != 0, "invalid deposit receipt");
     require(settleRound < roundTag, "invalid settle round");
     uint256 unlockRound1 = bt.lockTime / SatoshiPlusHelper.ROUND_INTERVAL - 1;
