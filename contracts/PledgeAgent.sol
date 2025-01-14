@@ -445,10 +445,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return debtDepositMap[round][delegator];
   }
 
-  function getExpireInfo(uint256 round) external view returns (address[] memory) {
-    return round2expireInfoMap[round].agentAddrList;
-  }
-
   receive() external payable {
     if (msg.value != 0) {
       emit received(msg.sender, msg.value);
