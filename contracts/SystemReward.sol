@@ -68,9 +68,9 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
         for (uint256 i = 0; i < whiteListSet.length; i++) {
           uint256 toWhiteListValue = value * whiteListSet[i].percentage / SatoshiPlusHelper.DENOMINATOR;
           if (remain >= toWhiteListValue) {
-            remain -= toWhiteListValue;
             bool success = payable(whiteListSet[i].member).send(toWhiteListValue);
             if (success) {
+              remain -= toWhiteListValue;
               emit whitelistTransferSuccess(whiteListSet[i].member, toWhiteListValue);
             } else {
               emit whitelistTransferFailed(whiteListSet[i].member, toWhiteListValue);
@@ -184,6 +184,9 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   }
 
   function _decodeWhiteList(string calldata key, bytes calldata value) internal pure returns(address, uint32) {
+    if (value.length > 25) {
+      revert MismatchParamLength(key);
+    }
     RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
     address member = RLPDecode.toAddress(items[0]);
     uint256 percentage = RLPDecode.toUint(items[1]);
