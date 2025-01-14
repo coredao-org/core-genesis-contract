@@ -409,7 +409,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       (bool success, bytes memory result) = CORE_AGENT_ADDR.staticcall(abi.encodeWithSignature("getDelegator(address,address)", agent, delegator));
       require (success, "call CORE_AGENT_ADDR.getDelegator() failed");
       (uint256 stakedAmount, uint256 realtimeAmount, uint256 transferredAmount, uint256 changeRound) = abi.decode(result, (uint256,uint256,uint256,uint256));
-      if (realtimeAmount != 0) {
+      if (realtimeAmount != 0 || transferredAmount != 0) {
         cd.deposit = cd.newDeposit + stakedAmount;
         cd.newDeposit += realtimeAmount;
         cd.changeRound = changeRound;
