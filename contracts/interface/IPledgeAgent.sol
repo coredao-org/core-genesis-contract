@@ -2,8 +2,11 @@
 pragma solidity 0.8.4;
 
 interface IPledgeAgent {
-  function addRoundReward(address[] calldata agentList, uint256[] calldata rewardList) payable external;
-  function getHybridScore(address[] calldata candidates, uint256[] calldata powers) external returns(uint256[] memory, uint256, uint256);
-  function setNewRound(address[] calldata validatorList, uint256 totalPower, uint256 totalCoin, uint256 round) external;
-  function distributePowerReward(address candidate, address[] calldata miners) external;
+  function delegateCoin(address agent) external payable;
+  function undelegateCoin(address agent) external;
+  function undelegateCoin(address agent, uint256 amount) external;
+  function transferCoin(address sourceAgent, address targetAgent) external;
+  function transferCoin(address sourceAgent, address targetAgent, uint256 amount) external;
+  function claimReward(address[] calldata agentList) external returns (uint256, bool);
+  function calculateReward(address[] calldata agentList, address delegator) external returns (uint256);
 }

@@ -1,18 +1,8 @@
-import secrets
-
 from brownie import *
 from .utils import random_address
 
 
 def register_candidate(consensus=None, fee_address=None, operator=None, commission=500, margin=None) -> str:
-    """
-    :param consensus:
-    :param fee_address:
-    :param operator:
-    :param commission:
-    :param margin:
-    :return: consensus address
-    """
     if consensus is None:
         consensus = random_address()
     if not operator:
@@ -33,7 +23,7 @@ def get_candidate(operator=None):
     idx = CandidateHubMock[0].operateMap(operator)
     if idx == 0:
         return None
-    return CandidateHubMock[0].candidateSet(idx-1).dict()
+    return CandidateHubMock[0].candidateSet(idx - 1).dict()
 
 
 def turn_round(miners: list = None, tx_fee=100, round_count=1):
@@ -44,10 +34,9 @@ def turn_round(miners: list = None, tx_fee=100, round_count=1):
 
     for _ in range(round_count):
         for miner in miners:
-            ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[-1]})
+            ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[99]})
         tx = CandidateHubMock[0].turnRound()
         chain.sleep(1)
-
     return tx
 
 
@@ -67,4 +56,37 @@ def register_relayer(relayer_address=None):
         relayer_address = accounts[0]
     RelayerHubMock[0].register({'from': relayer_address, 'value': RelayerHubMock[0].requiredDeposit()})
 
+
+def get_current_round():
+    round_tag = CandidateHubMock[0].roundTag()
+    return round_tag
+
+
+def set_round_tag(round_tag):
+    CandidateHubMock[0].setRoundTag(round_tag)
+    BitcoinStakeMock[0].setRoundTag(round_tag)
+    CoreAgentMock[0].setRoundTag(round_tag)
+    BitcoinLSTStakeMock[0].setRoundTag(round_tag)
+    BitcoinLSTStakeMock[0].setInitRound(round_tag)
+    PledgeAgentMock[0].setRoundTag(round_tag)
+
+
+def stake_hub_claim_reward(account):
+    tx = None
+    if isinstance(account, list):
+        for i in account:
+            tx = StakeHubMock[0].claimReward({'from': i})
+    else:
+        tx = StakeHubMock[0].claimReward({'from': account})
+    return tx
+
+
+def claim_stake_and_relay_reward(account):
+    tx0 = None
+    if isinstance(account, list):
+        for a in account:
+            tx0 = stake_hub_claim_reward(a)
+    else:
+        tx0 = stake_hub_claim_reward(account)
+    return tx0
 
