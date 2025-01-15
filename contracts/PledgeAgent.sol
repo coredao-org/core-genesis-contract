@@ -3,11 +3,9 @@ pragma solidity 0.8.4;
 
 import "./interface/IPledgeAgent.sol";
 import "./interface/IParamSubscriber.sol";
-import "./interface/ICandidateHub.sol";
 import "./interface/ISystemReward.sol";
 import "./lib/Address.sol";
-import "./lib/BitcoinHelper.sol";
-import "./lib/BytesToTypes.sol";
+import "./lib/TypedMemView.sol";
 import "./lib/Memory.sol";
 import "./lib/SatoshiPlusHelper.sol";
 import "./System.sol";
@@ -27,32 +25,20 @@ import "./System.sol";
 /// It is kept in the codebase for backward compatibiliy
 
 contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
-  using BitcoinHelper for *;
   using TypedMemView for *;
 
-  uint256 public constant INIT_REQUIRED_COIN_DEPOSIT = 1e18;
-  uint256 public constant INIT_HASH_POWER_FACTOR = 20000;
-  uint256 public constant POWER_BLOCK_FACTOR = 1e18;
-  uint32 public constant INIT_BTC_CONFIRM_BLOCK = 6;
-  uint256 public constant INIT_MIN_BTC_LOCK_ROUND = 7;
-  uint256 public constant ROUND_INTERVAL = 86400;
-  uint256 public constant INIT_MIN_BTC_VALUE = 1e6;
-  uint256 public constant INIT_BTC_FACTOR = 5e4;
-  uint256 public constant BTC_STAKE_MAGIC = 0x5341542b;
-  uint256 public constant CHAINID = 1114;
-  uint256 public constant FEE_FACTOR = 1e18;
-  uint256 public constant BTC_UNIT_CONVERSION = 1e10;
-  uint256 public constant INIT_DELEGATE_BTC_GAS_PRICE = 1e12;
-
+  // Deprecated in V-1.0.13
   // minimal CORE require to stake
   uint256 public requiredCoinDeposit;
 
+  // Deprecated in V-1.0.13
   // powerFactor/10000 determines the weight of BTC hash power vs CORE stakes
   // the default value of powerFactor is set to 20000 
   // which means the overall BTC hash power takes 2/3 total weight 
   // when calculating hybrid score and distributing block rewards
   uint256 public powerFactor;
 
+  // Deprecated in V-1.0.13
   // key: candidate's operateAddr
   mapping(address => Agent) public agentsMap;
 
@@ -78,27 +64,19 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   // debtDepositMap keeps delegator's amount of CORE which should be deducted when claiming rewards in every round
   mapping(uint256 => mapping(address => uint256)) public debtDepositMap;
 
-  // HARDFORK V-1.0.7
+  // Deprecated in V-1.0.13
   // btcReceiptMap keeps all BTC staking receipts on Core
   mapping(bytes32 => BtcReceipt) public btcReceiptMap;
 
+  // Deprecated in V-1.0.13
   // round2expireInfoMap keeps the amount of expired BTC staking value for each round
   mapping(uint256 => BtcExpireInfo) round2expireInfoMap;
 
-  // staking weight of each BTC vs. CORE
+  // Deprecated in V-1.0.13
   uint256 public btcFactor;
-
-  // minimum rounds to stake for a BTC staking transaction
   uint256 public minBtcLockRound;
-
-  // the number of blocks to mark a BTC staking transaction as confirmed
   uint32 public btcConfirmBlock;
-
-  // minimum value to stake for a BTC staking transaction
   uint256 public minBtcValue;
-
-  // NOT USED
-  // Depreated in V-1.0.12
   uint256 public delegateBtcGasPrice;
 
   // reentrant lock
@@ -164,19 +142,10 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
 
   /*********************** events **************************/
   event claimedReward(address indexed delegator, address indexed operator, uint256 amount, bool success);
-  event transferredBtcFee(bytes32 indexed txid, address payable feeReceiver, uint256 fee);
-  event failedTransferBtcFee(bytes32 indexed txid, address payable feeReceiver, uint256 fee);
-  event btcPledgeExpired(bytes32 indexed txid, address indexed delegator);
   event received(address indexed from, uint256 amount);
 
   function init() external onlyNotInit {
-    requiredCoinDeposit = INIT_REQUIRED_COIN_DEPOSIT;
-    powerFactor = INIT_HASH_POWER_FACTOR;
-    btcFactor = INIT_BTC_FACTOR;
-    minBtcLockRound = INIT_MIN_BTC_LOCK_ROUND;
-    btcConfirmBlock = INIT_BTC_CONFIRM_BLOCK;
-    minBtcValue = INIT_MIN_BTC_VALUE;
-    roundTag = block.timestamp / ROUND_INTERVAL;
+    roundTag = block.timestamp / SatoshiPlusHelper.ROUND_INTERVAL;
     alreadyInit = true;
   }
 
@@ -277,153 +246,8 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return rewardMap[delegator];
   }
 
-  // HARDFORK V-1.0.7 
-  /// claim BTC staking rewards
-  /// @param txidList the list of BTC staking transaction id to claim rewards 
-  /// @return rewardSum amount of reward claimed
-  function claimBtcReward(bytes32[] calldata txidList) external override returns (uint256 rewardSum) {
-    uint256 len = txidList.length;
-    for(uint256 i = 0; i < len; i++) {
-      bytes32 txid = txidList[i];
-      BtcReceipt storage br = btcReceiptMap[txid];
-      require(br.value != 0, "btc tx not found");
-      address delegator = br.delegator;
-      require(delegator == msg.sender, "not the delegator of this btc receipt");
-
-      uint256 reward = _collectBtcReward(txid);
-      rewardSum += reward;
-      if (br.value == 0) {
-        emit btcPledgeExpired(txid, delegator);
-      }
-    }
-
-    if (rewardSum != 0) {
-      rewardMap[msg.sender] += rewardSum;
-      _distributeReward(msg.sender);
-    }
-    return rewardSum;
-  }
-
   // HARDFORK V-1.0.12
   /*********************** Move data ***************************/
-  /// move BTC data to BitcoinStake by transaction id
-  /// the reward will be calculated and saved in rewardMap and the record will be deleted
-  /// this method is called by BitcoinStake.moveData
-  /// @param txid the BTC stake transaction id
-  /// @return candidate the validator candidate address
-  /// @return delegator the delegator address
-  /// @return amount the staked BTC amount
-  /// @return round the round of stake
-  /// @return lockTime the CLTV locktime value
-  function moveBtcData(bytes32 txid) external onlyBtcStake returns (address candidate, address delegator, uint256 amount, uint256 round, uint256 lockTime) {
-    BtcReceipt storage br = btcReceiptMap[txid];
-    if (br.value == 0) {
-      return (address(0), address(0), 0, 0, 0);
-    }
-
-    // set return values, which will be used by BitcoinStake to restore staking record
-    candidate = br.agent;
-    delegator = br.delegator;
-    amount = br.value;
-    lockTime = br.endRound * SatoshiPlusHelper.ROUND_INTERVAL;
-
-    Agent storage agent = agentsMap[br.agent];
-    if (br.rewardIndex == agent.rewardSet.length) {
-      round = roundTag;
-    } else {
-      Reward storage reward = agent.rewardSet[br.rewardIndex];
-      if (reward.round == 0) {
-        round = roundTag;
-      } else {
-        round = roundTag - 1;
-      }
-    }
-
-    // calculate and record rewards
-    uint256 rewardAmount = _collectBtcReward(txid);
-    rewardMap[delegator] += rewardAmount;
-
-    // Clean round2expireInfoMap
-    BtcExpireInfo storage expireInfo = round2expireInfoMap[br.endRound];
-    uint256 length = expireInfo.agentAddrList.length;
-    for (uint256 j = length; j != 0; j--) {
-      if (expireInfo.agentAddrList[j-1] == candidate) {
-        // agentsMap[candidate].totalBtc -= amount;
-        if (expireInfo.agent2valueMap[candidate] == amount) {
-          delete expireInfo.agent2valueMap[candidate];
-          delete expireInfo.agentExistMap[candidate];
-          if (j != length) {
-             expireInfo.agentAddrList[j-1] = expireInfo.agentAddrList[length - 1];
-          }
-          expireInfo.agentAddrList.pop();
-        } else {
-          expireInfo.agent2valueMap[candidate] -= amount;
-        }
-        break;
-      }
-    }
-    if (expireInfo.agentAddrList.length == 0) {
-      delete round2expireInfoMap[br.endRound];
-    }
-
-    // Clean btcReceiptMap
-    delete btcReceiptMap[txid];
-  }
-
-  /// Move active candidates data - this method is called by StakeHub to migrate data from PledgeAgent after 1.0.12 hardfork is activated
-  /// At the round of N where 1.0.12 takes effect at block S
-  /// All user staking actions happen on PledgeAgent when block number < S, and on StakeHub when block number >= S
-  /// After this method is called, StakeHub obtains full staking data with a smooth transition
-  /// @param candidates list of validator candidate addresses
-  function moveCandidateData(address[] memory candidates) external {
-    uint256 l = candidates.length;
-
-    uint256 count;
-    for (uint256 i = 0; i < l; ++i) {
-      Agent storage agent = agentsMap[candidates[i]];
-      if (!agent.moved && (agent.totalDeposit != 0 || agent.coin != 0 || agent.totalBtc != 0 || agent.btc != 0)) {
-        count++;
-      }
-    }
-    if (count == 0) {
-      return;
-    }
-    uint256[] memory amounts = new uint256[](count);
-    uint256[] memory realAmounts = new uint256[](count);
-    address[] memory targetCandidates = new address[](count);
-    uint j;
-
-    // move CORE stake data to CoreAgent
-    for (uint256 i = 0; i < l; ++i) {
-      Agent storage agent = agentsMap[candidates[i]];
-      if (!agent.moved && (agent.totalDeposit != 0 || agent.coin != 0 || agent.totalBtc != 0 || agent.btc != 0)) {
-        amounts[j] = agent.coin;
-        realAmounts[j] = agent.totalDeposit;
-        targetCandidates[j] = candidates[i];
-        j++;
-      }
-    }
-    (bool success,) = CORE_AGENT_ADDR.call(abi.encodeWithSignature("_initializeFromPledgeAgent(address[],uint256[],uint256[])", targetCandidates, amounts, realAmounts));
-    require (success, "call CORE_AGENT_ADDR._initializeFromPledgeAgent() failed");
-
-    // move BTC stake data to BitcoinStake
-    j = 0;
-    for (uint256 i = 0; i < l; ++i) {
-      Agent storage agent = agentsMap[candidates[i]];
-      if (!agent.moved && (agent.totalDeposit != 0 || agent.coin != 0 || agent.totalBtc != 0 || agent.btc != 0)) {
-        amounts[j] = agent.btc;
-        realAmounts[j] = agent.totalBtc;
-        agent.moved = true;
-        j++;
-      }
-    }
-    (success,) = BTC_STAKE_ADDR.call(abi.encodeWithSignature("_initializeFromPledgeAgent(address[],uint256[],uint256[])", targetCandidates, amounts, realAmounts));
-    require (success, "call BTC_STAKE_ADDR._initializeFromPledgeAgent() failed");
-
-    (success,) = BTC_AGENT_ADDR.call(abi.encodeWithSignature("_initializeFromPledgeAgent(address[],uint256[])", targetCandidates, amounts));
-    require (success, "call BTC_AGENT_ADDR._initializeFromPledgeAgent() failed");
-  }
-
   /// move delegator data to new contracts
   /// @param candidate the validator candidate address
   /// @param delegator the delegator address
@@ -451,7 +275,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     Agent storage a = agentsMap[candidate];
     CoinDelegator storage d = a.cDelegatorMap[delegator];
     if (d.changeRound != 0) {
-      uint256 reward = _collectCoinReward(a, d);
+      uint256 reward = _collectCoinReward(a, d, delegator);
       if (reward != 0) {
         rewardMap[delegator] += reward;
       }
@@ -495,7 +319,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// @param a the validator candidate
   /// @param d the delegator
   /// @return rewardAmount the amount of reward to claim
-  function _collectCoinReward(Agent storage a, CoinDelegator storage d) internal returns (uint256 rewardAmount) {
+  function _collectCoinReward(Agent storage a, CoinDelegator storage d, address delegator) internal returns (uint256 rewardAmount) {
     uint256 changeRound = d.changeRound;
     uint256 curRound = roundTag;
     if (changeRound < curRound) {
@@ -520,12 +344,12 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       // the rewards from the DEBT will be collected and sent to the system reward contract
       if (rRound == changeRound) {
         uint256 transferOutDeposit = d.transferOutDeposit;
-        uint256 debt = debtDepositMap[rRound][msg.sender];
+        uint256 debt = debtDepositMap[rRound][delegator];
         if (transferOutDeposit > debt) {
           transferOutDeposit -= debt;
-          debtDepositMap[rRound][msg.sender] = 0;
+          debtDepositMap[rRound][delegator] = 0;
         } else {
-          debtDepositMap[rRound][msg.sender] -= transferOutDeposit;
+          debtDepositMap[rRound][delegator] -= transferOutDeposit;
           transferOutDeposit = 0;
         }
         if (transferOutDeposit != d.transferOutDeposit) {
@@ -553,58 +377,6 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return rewardAmount;
   }
 
-  /// calculate reward for a BTC stake transaction
-  /// @param txid the BTC transaction id
-  function _collectBtcReward(bytes32 txid) internal returns (uint256) {
-    uint256 curRound = roundTag;
-    BtcReceipt storage br = btcReceiptMap[txid];
-    uint256 reward = 0;
-    Agent storage a = agentsMap[br.agent];
-    uint256 rewardIndex = br.rewardIndex;
-    uint256 rewardLength = a.rewardSet.length;
-    while (rewardIndex < rewardLength) {
-      Reward storage r = a.rewardSet[rewardIndex];
-      uint256 rRound = r.round;
-      if (rRound == curRound || br.endRound <= rRound) {
-        break;
-      }
-      uint256 deposit = br.value * stateMap[rRound].btcFactor;
-      reward += _collectFromRoundReward(r, deposit);
-      if (r.coin == 0) {
-        delete a.rewardSet[rewardIndex];
-      }
-      rewardIndex += 1;
-    }
-    
-    uint256 fee = br.fee;
-    uint256 feeReward;
-    if (fee != 0) {
-      if (fee <= reward) {
-        feeReward = fee;
-      } else {
-        feeReward = reward;
-      }
-
-      if (feeReward != 0) {
-        br.fee -= feeReward;
-        bool success = br.feeReceiver.send(feeReward);
-        if (success) {
-          reward -= feeReward;
-          emit transferredBtcFee(txid, br.feeReceiver, feeReward);
-        } else {
-          emit failedTransferBtcFee(txid, br.feeReceiver, feeReward);
-        }
-      }
-    }
-
-    if (br.endRound <= (rewardIndex == rewardLength ? curRound : a.rewardSet[rewardIndex].round)) {
-      delete btcReceiptMap[txid];
-    } else {
-      br.rewardIndex = rewardIndex;
-    }
-    return reward;
-  }
-
   /*********************** Governance ********************************/
   /// Update parameters through governance vote
   /// @param key The name of the parameter
@@ -613,48 +385,14 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }
-    if (Memory.compareStrings(key, "requiredCoinDeposit")) {
-      uint256 newRequiredCoinDeposit = BytesToTypes.bytesToUint256(32, value);
-      if (newRequiredCoinDeposit == 0) {
-        revert OutOfBounds(key, newRequiredCoinDeposit, 1, type(uint256).max);
-      }
-      requiredCoinDeposit = newRequiredCoinDeposit;
-    } else if (Memory.compareStrings(key, "powerFactor")) {
-      uint256 newHashPowerFactor = BytesToTypes.bytesToUint256(32, value);
-      if (newHashPowerFactor == 0) {
-        revert OutOfBounds(key, newHashPowerFactor, 1, type(uint256).max);
-      }
-      powerFactor = newHashPowerFactor;
-    } else if (Memory.compareStrings(key, "btcFactor")) {
-      uint256 newBtcFactor = BytesToTypes.bytesToUint256(32, value);
-      if (newBtcFactor == 0) {
-        revert OutOfBounds(key, newBtcFactor, 1, type(uint256).max);
-      }
-      btcFactor = newBtcFactor;
-    } else if (Memory.compareStrings(key, "minBtcLockRound")) {
-      uint256 newMinBtcLockRound = BytesToTypes.bytesToUint256(32, value);
-      if (newMinBtcLockRound == 0) {
-        revert OutOfBounds(key, newMinBtcLockRound, 1, type(uint256).max);
-      }
-      minBtcLockRound = newMinBtcLockRound;
-    } else if (Memory.compareStrings(key, "btcConfirmBlock")) {
-      uint256 newBtcConfirmBlock = BytesToTypes.bytesToUint256(32, value);
-      if (newBtcConfirmBlock == 0) {
-        revert OutOfBounds(key, newBtcConfirmBlock, 1, type(uint256).max);
-      }
-      btcConfirmBlock = uint32(newBtcConfirmBlock);
-    } else if (Memory.compareStrings(key, "minBtcValue")) {
-      uint256 newMinBtcValue = BytesToTypes.bytesToUint256(32, value);
-      if (newMinBtcValue == 0) {
-        revert OutOfBounds(key, newMinBtcValue, 1e4, type(uint256).max);
-      }
-      minBtcValue = newMinBtcValue;
-    } else if (Memory.compareStrings(key,"delegateBtcGasPrice")) {
-      uint256 newDelegateBtcGasPrice = BytesToTypes.bytesToUint256(32, value);
-      if (newDelegateBtcGasPrice < 1e9) {
-        revert OutOfBounds(key, newDelegateBtcGasPrice, 1e9, type(uint256).max);
-      }
-      delegateBtcGasPrice = newDelegateBtcGasPrice;
+    if (Memory.compareStrings(key, "clearDeprecatedMembers")) {
+      requiredCoinDeposit = 0;
+      powerFactor = 0;
+      btcFactor = 0;
+      minBtcLockRound = 0;
+      btcConfirmBlock = 0;
+      minBtcValue = 0;
+      delegateBtcGasPrice = 0;
     } else {
       revert UnsupportedGovParam(key);
     }
@@ -665,10 +403,19 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /// Get delegator information
   /// @param agent The operator address of validator
   /// @param delegator The delegator address
-  /// @return CoinDelegator Information of the delegator
-  function getDelegator(address agent, address delegator) external view returns (CoinDelegator memory) {
-    CoinDelegator memory d = agentsMap[agent].cDelegatorMap[delegator];
-    return d;
+  /// @return cd CoinDelegator Information of the delegator
+  function getDelegator(address agent, address delegator) external view returns (CoinDelegator memory cd) {
+      cd = agentsMap[agent].cDelegatorMap[delegator];
+      (bool success, bytes memory result) = CORE_AGENT_ADDR.staticcall(abi.encodeWithSignature("getDelegator(address,address)", agent, delegator));
+      require (success, "call CORE_AGENT_ADDR.getDelegator() failed");
+      (uint256 stakedAmount, uint256 realtimeAmount, uint256 transferredAmount, uint256 changeRound) = abi.decode(result, (uint256,uint256,uint256,uint256));
+      if (realtimeAmount != 0 || transferredAmount != 0) {
+        cd.deposit = cd.newDeposit + stakedAmount;
+        cd.newDeposit += realtimeAmount;
+        cd.changeRound = changeRound;
+        cd.transferOutDeposit = transferredAmount;
+        cd.transferInDeposit = 0;
+      }
   }
 
   /// Get reward information of a validator by index
@@ -690,27 +437,12 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     return expireInfo.agent2valueMap[agent];
   }
 
-  /// Get stake information - this method is called by StakeHub to migrate data from PledgeAgent after 1.0.12 hardfork is activated
-  /// At the round of N where 1.0.12 takes effect at block S
-  /// All user staking actions happen on PledgeAgent when block number < S, and on StakeHub when block number >= S
-  /// After this method is called, StakeHub obtains full staking data with a smooth transition
-  /// Note only data of active validators in round N are migrated at block S
-  /// @param candidates list of validator candidate addresses
-  /// @return cores list of CORE staked value of the given candidates
-  /// @return hashs list of BTC hash powered staked (measured in blocks) of the given candidates
-  /// @return btcs list of BTC staked value of the given candidates
-  function getStakeInfo(address[] memory candidates) external view returns (uint256[] memory cores, uint256[] memory hashs, uint256[] memory btcs) {
-    uint256 l = candidates.length;
-    cores = new uint256[](l);
-    hashs = new uint256[](l);
-    btcs = new uint256[](l);
+  function getExpireList(uint256 round) external view returns (address[] memory){
+    return round2expireInfoMap[round].agentAddrList;
+  }
 
-    for (uint256 i = 0; i < l; ++i) {
-      Agent storage agent = agentsMap[candidates[i]];
-      cores[i] = agent.coin;
-      hashs[i] = agent.power / POWER_BLOCK_FACTOR;
-      btcs[i] = agent.btc;
-    }
+  function getDebt(uint256 round, address delegator) external view returns (uint256) {
+    return debtDepositMap[round][delegator];
   }
 
   receive() external payable {

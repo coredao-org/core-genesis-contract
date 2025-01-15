@@ -500,4 +500,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   function isJailed(address operateAddr) external view returns (bool) {
     return jailMap[operateAddr] >= roundTag;
   }
+
+  /// Get round interval
+  /// @return round interval
+  function getRoundInterval() external pure returns(uint256) {
+    return SatoshiPlusHelper.ROUND_INTERVAL;
+  }
 }

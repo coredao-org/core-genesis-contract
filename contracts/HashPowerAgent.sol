@@ -17,6 +17,8 @@ contract HashPowerAgent is IAgent, System, IParamSubscriber {
 
   /*********************** events **************************/
   event claimedHashReward(address indexed delegator, uint256 amount, uint256 accStakedAmount);
+  event validatorAvgReward(address indexed validator, uint256 avgReward);
+  event storedHashReward(address indexed delegator, uint256 amount, uint256 accStakedAmount);
 
   struct Reward {
     uint256 reward;
@@ -54,6 +56,7 @@ contract HashPowerAgent is IAgent, System, IParamSubscriber {
           rewardMap[miners[j]].reward += avgReward;
           rewardMap[miners[j]].accStakedAmount += 1;
         }
+        emit validatorAvgReward(validators[i], avgReward);
       }
     }
   }
@@ -78,16 +81,21 @@ contract HashPowerAgent is IAgent, System, IParamSubscriber {
 
   /// Claim reward for delegator
   /// @param delegator the delegator address
+  /// @param claim claim or store claim
   /// @return reward Amount claimed
   /// @return floatReward floating reward amount
   /// @return accStakedAmount accumulated stake amount (multiplied by rounds), used for grading calculation
-  function claimReward(address delegator, uint256 /*coreAmount*/) external override onlyStakeHub returns (uint256 reward, int256 floatReward, uint256 accStakedAmount) {
+  function claimReward(address delegator, uint256 /*coreAmount*/, uint256 /*settleRound*/, bool claim) external override onlyStakeHub returns (uint256 reward, int256 floatReward, uint256 accStakedAmount) {
     reward = rewardMap[delegator].reward;
     if (reward != 0) {
       accStakedAmount = rewardMap[delegator].accStakedAmount;
       delete rewardMap[delegator];
     }
-    emit claimedHashReward(delegator, reward, accStakedAmount);
+    if (claim) {
+      emit claimedHashReward(delegator, reward, accStakedAmount);
+    } else {
+      emit storedHashReward(delegator, reward, accStakedAmount);
+    }
     return (reward, 0, accStakedAmount);
   }
 

@@ -6,10 +6,16 @@ import "./interface/IParamSubscriber.sol";
 import "./interface/IBurn.sol";
 import "./lib/BytesLib.sol";
 import "./lib/Memory.sol";
+import "./lib/RLPDecode.sol";
+import "./lib/SatoshiPlusHelper.sol";
+import "./lib/Address.sol";
+import "./System.sol";
 
 /// This smart contract manages funds for relayers and verifiers
 contract SystemReward is System, ISystemReward, IParamSubscriber {
   using BytesLib for *;
+  using RLPDecode for bytes;
+  using RLPDecode for RLPDecode.RLPItem;
   uint256 public constant INCENTIVE_BALANCE_CAP = 1e25;
 
   uint256 public incentiveBalanceCap;
@@ -17,6 +23,14 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   uint256 public numOperator;
   mapping(address => bool) public operators;
   bool public isBurn;
+
+  mapping(address => uint256) public whiteLists;
+  WhiteList[] public whiteListSet;
+
+  struct WhiteList {
+    address member;
+    uint32 percentage;
+  }
 
   /*********************** init **************************/
   function init() external onlyNotInit {
@@ -36,6 +50,8 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   event rewardTo(address indexed to, uint256 amount);
   event rewardEmpty();
   event receiveDeposit(address indexed from, uint256 amount);
+  event whitelistTransferSuccess(address indexed member, uint256 value);
+  event whitelistTransferFailed(address indexed member, uint256 value);
 
   receive() external payable {
     if (msg.value != 0) {
@@ -48,10 +64,25 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
     if (msg.value != 0) {
       if (address(this).balance > incentiveBalanceCap) {
         uint256 value = address(this).balance - incentiveBalanceCap;
-        if (isBurn) {
-          IBurn(BURN_ADDR).burn{ value: value }();
-        } else {
-          payable(FOUNDATION_ADDR).transfer(value);
+        uint256 remain = value;
+        for (uint256 i = 0; i < whiteListSet.length; i++) {
+          uint256 toWhiteListValue = value * whiteListSet[i].percentage / SatoshiPlusHelper.DENOMINATOR;
+          if (remain >= toWhiteListValue) {
+            bool success = payable(whiteListSet[i].member).send(toWhiteListValue);
+            if (success) {
+              remain -= toWhiteListValue;
+              emit whitelistTransferSuccess(whiteListSet[i].member, toWhiteListValue);
+            } else {
+              emit whitelistTransferFailed(whiteListSet[i].member, toWhiteListValue);
+            }
+          }
+        }
+        if (remain != 0) {
+          if (isBurn) {
+            IBurn(BURN_ADDR).burn{ value: remain }();
+          } else {
+            payable(FOUNDATION_ADDR).transfer(remain);
+          }
         }
       }
       emit receiveDeposit(msg.sender, msg.value);
@@ -83,6 +114,10 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
   /// @return true/false
   function isOperator(address addr) external view returns (bool) {
     return operators[addr];
+  }
+
+  function getWhiteListSet() external view returns(WhiteList[] memory) {
+    return whiteListSet;
   }
 
   /*********************** Param update ********************************/
@@ -117,9 +152,55 @@ contract SystemReward is System, ISystemReward, IParamSubscriber {
         operators[newOperator] = true;
         numOperator++;
       }
+    } else if (Memory.compareStrings(key, "addWhiteList")) {
+      (address member, uint32 percentage) = _decodeWhiteList(key, value);
+      require(whiteLists[member] == 0, "whitelist member already exists");
+      whiteListSet.push(WhiteList(member, percentage));
+      whiteLists[member] = whiteListSet.length;
+      _checkPercentage();
+    } else if (Memory.compareStrings(key, "modifyWhiteList")) {
+      (address member, uint32 percentage) = _decodeWhiteList(key, value);
+      require(whiteLists[member] != 0, "whitelist member does not exist");
+      whiteListSet[whiteLists[member] - 1].percentage = percentage;
+      _checkPercentage();
+    } else if (Memory.compareStrings(key, "removeWhiteList")) {
+      if (value.length != 20) {
+        revert MismatchParamLength(key);
+      }
+      address member = value.toAddress(0);
+      uint256 index = whiteLists[member];
+      require(index != 0, "whitelist member does not exist");
+      if (index != whiteListSet.length) {
+        WhiteList storage whiteList = whiteListSet[whiteListSet.length - 1];
+        whiteListSet[index - 1] = whiteList;
+        whiteLists[whiteList.member] = index;
+      }
+      whiteListSet.pop();
+      delete whiteLists[member];
     } else {
       revert UnsupportedGovParam(key);
     }
     emit paramChange(key, value);
+  }
+
+  function _decodeWhiteList(string calldata key, bytes calldata value) internal pure returns(address, uint32) {
+    if (value.length > 25) {
+      revert MismatchParamLength(key);
+    }
+    RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+    address member = RLPDecode.toAddress(items[0]);
+    uint256 percentage = RLPDecode.toUint(items[1]);
+    if (percentage == 0 || percentage > SatoshiPlusHelper.DENOMINATOR) {
+      revert OutOfBounds(key, percentage, 1, SatoshiPlusHelper.DENOMINATOR);
+    }
+    return (member, uint32(percentage));
+  }
+
+  function _checkPercentage() internal view{
+    uint32 totalPercentage = 0;
+    for (uint256 i = 0; i < whiteListSet.length; i++) {
+      totalPercentage += whiteListSet[i].percentage;
+    }
+    require(totalPercentage <= SatoshiPlusHelper.DENOMINATOR, "total precentage exceeds the upper limit");
   }
 }

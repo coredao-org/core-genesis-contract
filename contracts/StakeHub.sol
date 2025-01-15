@@ -5,8 +5,9 @@ import "./interface/IParamSubscriber.sol";
 import "./interface/IStakeHub.sol";
 import "./interface/IAgent.sol";
 import "./interface/ISystemReward.sol";
-import "./interface/IValidatorSet.sol";
 import "./interface/IBitcoinStake.sol";
+import "./interface/IValidatorSet.sol";
+import "./interface/ICandidateHub.sol";
 import "./System.sol";
 import "./lib/Address.sol";
 import "./lib/Memory.sol";
@@ -25,7 +26,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   // Supported asset types
   //  - CORE
   //  - Hash power (measured in BTC blocks)
-  //  - BTC 
+  //  - BTC
   Asset[] public assets;
 
   // key: candidate op address
@@ -47,6 +48,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   // if the current surplus is not enough to pay the next extra rewards, system reward contract will be called to refill
   uint256 public surplus;
 
+  // Delegator's map
+  // key: delegator
+  // value:  delegator's reward based on assert
+  mapping(address => Delegator) public delegatorMap;
+
   struct Asset {
     string  name;
     address agent;
@@ -56,6 +62,11 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   struct AssetState {
     uint256 amount;
     uint256 factor;
+  }
+
+  struct Delegator {
+    uint256 changeRound;
+    uint256[] rewards;
   }
 
   /*********************** events **************************/
@@ -75,8 +86,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     assets.push(Asset("HASHPOWER", HASH_AGENT_ADDR, 2000));
     assets.push(Asset("BTC", BTC_AGENT_ADDR, 4000));
 
-    _initializeFromPledgeAgent();
-
     operators[PLEDGE_AGENT_ADDR] = true;
     operators[CORE_AGENT_ADDR] = true;
     operators[HASH_AGENT_ADDR] = true;
@@ -85,6 +94,27 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     operators[BTCLST_STAKE_ADDR] = true;
 
     alreadyInit = true;
+
+    address[] memory validators = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getValidatorOps();
+    uint256[] memory factors = new uint256[](3);
+    factors[0] = 1;
+    // HASH_UNIT_CONVERSION * 1e6
+    factors[1] = 1e18 * 1e6;
+    // BTC_UNIT_CONVERSION * 2e4
+    factors[2] = 1e10 * 2e4;
+    uint256 validatorSize = validators.length;
+    for (uint256 i = 0; i < validatorSize; ++i) {
+      address validator = validators[i];
+      candidateScoresMap[validator].push(0);
+      candidateScoresMap[validator].push(0);
+      candidateScoresMap[validator].push(0);
+      candidateScoresMap[validator].push(0);
+    }
+
+    uint256 len = assets.length;
+    for (uint256 j = 0; j < len; j++) {
+      stateMap[assets[j].agent] = AssetState(0, factors[j]);
+    }
   }
 
   receive() external payable {
@@ -197,7 +227,17 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// @return rewards Amounts claimed
   function claimReward() external returns (uint256[] memory rewards) {
     address delegator = msg.sender;
-    rewards = _calculateReward(delegator);
+    rewards = _calculateReward(delegator, true);
+
+    Delegator storage d  = delegatorMap[delegator];
+    for (uint256 i = 0; i < d.rewards.length; i++) {
+      rewards[i] += d.rewards[i];
+    }
+    uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
+    if (d.changeRound != currentRound) {
+      d.changeRound = currentRound;
+    }
+    delete delegatorMap[delegator].rewards;
 
     uint256 reward;
     for (uint256 i = 0; i < rewards.length; i++) {
@@ -213,7 +253,18 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// @param delegator delegator address
   /// @return reward Amounts claimed
   function proxyClaimReward(address delegator) external onlyPledgeAgent returns (uint256 reward) {
-    uint256[] memory rewards = _calculateReward(delegator);
+    uint256[] memory rewards = _calculateReward(delegator, true);
+
+    Delegator storage d  = delegatorMap[delegator];
+    for (uint256 i = 0; i < d.rewards.length; i++) {
+      rewards[i] += d.rewards[i];
+    }
+    uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
+    if (d.changeRound != currentRound) {
+      d.changeRound = currentRound;
+    }
+    delete delegatorMap[delegator].rewards;
+
 
     for (uint256 i = 0; i < rewards.length; i++) {
       reward += rewards[i];
@@ -223,29 +274,67 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     }
   }
 
+  /// This method is invoked whenever user CORE/BTC stake changes.
+  /// @param delegator delegator address
+  function onStakeChange(address delegator) override external {
+    calculateReward(delegator);
+  }
+
+  // Calculate reward for delegator.
+  /// @param delegator delegator address
+  function calculateReward(address delegator) public {
+    Delegator storage d = delegatorMap[delegator];
+    uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
+    if (d.changeRound != currentRound) {
+      uint256[] memory rewards = _calculateReward(delegator, false);
+      for (uint256 i = 0; i < rewards.length; i++) {
+        if (d.rewards.length == i) {
+          d.rewards.push(rewards[i]);
+        } else {
+          d.rewards[i] += rewards[i];
+        }
+      }
+      d.changeRound = currentRound;
+    }
+  }
+
   /// Calculate reward for delegator
   /// @param delegator delegator address
+  /// @param claim claim or store claim
   /// @return rewards Amounts claimed
-  function _calculateReward(address delegator) internal returns (uint256[] memory rewards) {
+  function _calculateReward(address delegator, bool claim) internal returns (uint256[] memory rewards) {
+    uint256 lastRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag() - 1;
+    Delegator storage d = delegatorMap[delegator];
+
     uint256 assetSize = assets.length;
     rewards = new uint256[](assetSize);
+    int256 totalFloatReward;
     int256 floatReward;
     uint256 accStakedCoreAmount;
-    (rewards[0], floatReward, accStakedCoreAmount) = IAgent(assets[0].agent).claimReward(delegator, 0);
+    if (d.changeRound != 0 && d.changeRound < lastRound) {
+      (rewards[0], floatReward, accStakedCoreAmount) = IAgent(assets[0].agent).claimReward(delegator, 0, d.changeRound, claim);
+      totalFloatReward += floatReward;
+      (rewards[2], floatReward,) = IAgent(assets[2].agent).claimReward(delegator, accStakedCoreAmount, d.changeRound, claim);
+      totalFloatReward += floatReward;
+    }
+
+    uint256 tempReward;
+    (tempReward, floatReward, accStakedCoreAmount) = IAgent(assets[0].agent).claimReward(delegator, 0, lastRound, claim);
+    totalFloatReward += floatReward;
+    rewards[0] += tempReward;
 
     uint256 totalReward = rewards[0];
-    int256 totalFloatReward = floatReward;
     for (uint256 i = 1; i < assetSize; ++i) {
-      (rewards[i], floatReward,) = IAgent(assets[i].agent).claimReward(delegator, accStakedCoreAmount);
+      (tempReward, floatReward,) = IAgent(assets[i].agent).claimReward(delegator, accStakedCoreAmount, lastRound, claim);
+      rewards[i] += tempReward;
       totalReward += rewards[i];
       totalFloatReward += floatReward;
     }
 
     if (totalFloatReward > surplus.toInt256()) {
-      // move 10x from system reward as a buffer for the next claim calls
-      uint256 claimAmount = totalFloatReward.toUint256() * 10;
-      ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(STAKE_HUB_ADDR), claimAmount);
-      surplus += claimAmount;
+      uint256 claimAmount = totalFloatReward.toUint256() - surplus;
+      uint256 actualAmount = ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(STAKE_HUB_ADDR), claimAmount);
+      surplus += actualAmount;
     }
     surplus = (surplus.toInt256() - totalFloatReward).toUint256();
   }
@@ -258,11 +347,17 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     if (value.length != 32) {
       revert MismatchParamLength(key);
     }
-    uint256 newValue = value.toUint256(0);
-    if (!_updateHardcap(key, newValue)) {
-      revert UnsupportedGovParam(key);
+    if (Memory.compareStrings(key, "surplus")) {
+      uint256 newValue = value.toUint256(0);
+      require(newValue <= surplus, "value should be equal to or less than surplus");
+      surplus -= newValue;
+      Address.sendValue(payable(SYSTEM_REWARD_ADDR), newValue);
+    } else {
+      uint256 newValue = value.toUint256(0);
+      if (!_updateHardcap(key, newValue)) {
+        revert UnsupportedGovParam(key);
+      }
     }
-  
     emit paramChange(key, value);
   }
 
@@ -294,48 +389,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     return assets;
   }
 
-  /*********************** Internal methods ********************************/
-  function _initializeFromPledgeAgent() internal {
-    // get stake summary of current round (snapshot values of last turn round)
-    address[] memory validators = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getValidatorOps();
-    (bool success, bytes memory data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("getStakeInfo(address[])", validators));
-    require (success, "call PLEDGE_AGENT_ADDR.getStakeInfo() failed");
-    (uint256[] memory cores, uint256[] memory hashs, uint256[] memory btcs) = abi.decode(data, (uint256[], uint256[], uint256[]));
-
-    uint256[] memory factors = new uint256[](3);
-    factors[0] = 1;
-    // HASH_UNIT_CONVERSION * 1e6
-    factors[1] = 1e18 * 1e6;
-    // BTC_UNIT_CONVERSION * 2e4
-    factors[2] = 1e10 * 2e4;
-    // initialize hybrid score based on data migrated from PledgeAgent.getStakeInfo()
-    uint256 validatorSize = validators.length;
-    uint256[] memory totalAmounts = new uint256[](3);
-    for (uint256 i = 0; i < validatorSize; ++i) {
-      address validator = validators[i];
-
-      totalAmounts[0] += cores[i];
-      totalAmounts[1] += hashs[i];
-      totalAmounts[2] += btcs[i];
-
-      candidateScoresMap[validator].push(cores[i] * factors[0] + hashs[i] * factors[1] + btcs[i] * factors[2]);
-      candidateScoresMap[validator].push(cores[i] * factors[0]);
-      candidateScoresMap[validator].push(hashs[i] * factors[1]);
-      candidateScoresMap[validator].push(btcs[i] * factors[2]);
-    }
-
-    uint256 len = assets.length;
-    for (uint256 j = 0; j < len; j++) {
-      stateMap[assets[j].agent] = AssetState(totalAmounts[j], factors[j]);
-    }
-
-    // get active candidates.
-    (success, data) = CANDIDATE_HUB_ADDR.call(abi.encodeWithSignature("getCandidates()"));
-    require (success, "call CANDIDATE_HUB.getCandidates() failed");
-    address[] memory candidates = abi.decode(data, (address[]));
-
-    // move candidate amount.
-    (success,) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("moveCandidateData(address[])", candidates));
-    require (success, "call PLEDGE_AGENT_ADDR.moveCandidateData() failed");
+  function getDelegator(address delegator) external view returns(Delegator memory) {
+    return delegatorMap[delegator];
   }
 }
