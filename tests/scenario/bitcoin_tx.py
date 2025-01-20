@@ -176,6 +176,8 @@ class StakeTx(BitcoinTx):
 
     def get_delegatee(self):
         return self.delegatee
+    def get_delegator(self):
+        return self.delegator
 
     def set_delegatee(self, delegatee):
         self.delegatee = delegatee

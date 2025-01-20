@@ -2,7 +2,7 @@ import brownie
 import pytest
 from web3 import constants
 from .calc_reward import set_delegate, parse_delegation
-from .common import register_candidate, turn_round, get_current_round, stake_hub_claim_reward
+from .common import register_candidate, turn_round, get_current_round, stake_hub_claim_reward, set_round_tag
 from .delegate import delegate_btc_success, transfer_btc_success, get_btc_script, build_btc_tx, set_last_round_tag
 from .utils import *
 
@@ -165,6 +165,7 @@ def test_distribute_rewards_to_multiple_addresses(btc_stake, set_candidate):
 
 
 def test_claim_rewards_for_multiple_coin_staking(btc_stake, core_agent, set_candidate):
+    set_round_tag(7)
     operators, consensuses = set_candidate
     delegate_amount = 50000
     core_agent.delegateCoin(operators[0], {"value": delegate_amount, "from": accounts[2]})
@@ -175,7 +176,7 @@ def test_claim_rewards_for_multiple_coin_staking(btc_stake, core_agent, set_cand
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[1])
-    stake_hub_claim_reward(accounts[:2])
+    tx = stake_hub_claim_reward(accounts[:2])
     _, _, account_rewards, _ = parse_delegation([{
         "address": operators[0],
         "active": True,
@@ -442,8 +443,7 @@ def test_multiple_btc_receipts_to_single_address(btc_stake, set_candidate):
         "coin": [set_delegate(accounts[1], delegate_amount)],
         "btc": [set_delegate(accounts[0], BTC_VALUE), set_delegate(accounts[0], BTC_VALUE)]
     }], BLOCK_REWARD // 2)
-    reward = BTC_VALUE * round_reward['btc'][operators[2]] * 2 // Utils.BTC_DECIMAL * 2
-    assert tracker0.delta() == reward - FEE * 2
+    assert tracker0.delta() == account_rewards[accounts[0]] * 2
 
 
 def test_multiple_reward_transfers_in_multiple_rounds(btc_stake, set_candidate):
@@ -1169,7 +1169,7 @@ def __get_btc_tx_map_info(tx_id):
 
 
 def __get_delegator_btc_map(delegator):
-    data = BTC_STAKE.getDelegatorBtcMap(delegator)
+    data = BTC_STAKE.getTxIdsByDelegator(delegator)
     return data
 
 

@@ -300,16 +300,12 @@ class ChainChecker:
 
     def check_btc_stake_history_reward(self, delegator):
         claimable_reward = self.chain.get_delegator_stake_state().get_btc_stake_history_reward(delegator)
-        unclaimable_reward = self.chain.get_delegator_stake_state().get_btc_stake_history_unclaimable_reward(delegator)
 
         reward_on_chain = self.chain.get_btc_stake_history_reward_on_chain(delegator)
-        claimable_reward_on_chain = reward_on_chain[0]
-        unclaimable_reward_on_chain = reward_on_chain[1]
+        claimable_reward_on_chain = reward_on_chain
 
         assert_result(addr_to_name(delegator) + "_btc_stake_claimable_reward", claimable_reward,
                       claimable_reward_on_chain)
-        assert_result(addr_to_name(delegator) + "_btc_stake_unclaimable_reward", unclaimable_reward,
-                      unclaimable_reward_on_chain)
 
     def check_power_history_reward(self, delegator):
         reward = self.chain.get_delegator_stake_state().get_power_history_reward(delegator)
