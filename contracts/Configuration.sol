@@ -101,6 +101,7 @@ contract Configuration is System {
             _addDiscount(contractAddr, discountRate, userDiscountRate, rewards);
         } else if (Memory.compareStrings(key, "removeDiscount")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+            if (items.length != 1) revert MismatchParamLength(key); 
             address contractAddr = items[0].toAddress();
             _removeDiscount(contractAddr);
         } else if (Memory.compareStrings(key, "updateDiscount")) {
