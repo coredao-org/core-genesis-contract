@@ -193,8 +193,6 @@ contract Configuration is System {
         if (discountConfigs[contractAddr].timestamp == 0) {
             revert AddressNotFound(contractAddr);
         }
-
-        DiscountConfig storage config = discountConfigs[contractAddr];
         
         // Remove from discountAddresses array
         for (uint i = 0; i < discountAddresses.length; i++) {
@@ -273,6 +271,8 @@ contract Configuration is System {
         }
 
         config.timestamp = block.timestamp;
+        emit DiscountUpdated(contractAddr, oldRate, newRate);
+
     }
 
     /**
