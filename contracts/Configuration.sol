@@ -322,12 +322,14 @@ contract Configuration is System {
      * @dev Returns the discount configuration for a given contract address.
      * @param contractAddr The address of the contract.
      * @return discountRate The discount rate.
+     * @return userDiscountRate The user discount rate.
      * @return isActive The active status.
      * @return timestamp The timestamp of the last update.
      * @return rewards The list of rewards.
      */
     function getDiscountConfig(address contractAddr) external view returns (
         uint256 discountRate,
+        uint256 userDiscountRate,
         bool isActive,
         uint256 timestamp,
         Reward[] memory rewards
@@ -335,6 +337,7 @@ contract Configuration is System {
         DiscountConfig storage config = discountConfigs[contractAddr];
         return (
             config.discountRate,
+            config.userDiscountRate,
             config.isActive,
             config.timestamp,
             config.rewards
