@@ -20,6 +20,9 @@ contract Configuration is System {
         uint256 rewardPercentage; 
     }
 
+    // Governance-controlled minimum
+    uint256 public minimum;
+
     // DAO Address
     address public daoAddress;
 
@@ -29,19 +32,25 @@ contract Configuration is System {
         uint256 discountRate;
         uint256 userDiscountRate;
         bool isActive;
-        uint256 timestamp; 
+        uint256 timestamp;
+        address discountAddress; 
     }
 
     // Constants
     uint256 public constant DENOMINATOR = 10000;   
 
-    // Storage
-    mapping(address => DiscountConfig) public discountConfigs;  
+    uint256 public constant MINIMUM = 1000;
+
+    // EOA Discount Rate
+    uint256 public eoADiscountRate;
+
+
+    DiscountConfig[] public discountConfigs;
+
     mapping(address => uint256) public issuerDiscountCount;  
-    address[] private discountAddresses;
 
     // Events
-    event DiscountAdded(address indexed contractAddress, Reward[] rewards, uint256 discountRate, uint256 userDiscountRate, uint256 timestamp);
+    event DiscountAdded(address indexed contractAddress, uint256 discountRate, uint256 userDiscountRate, uint256 timestamp);
     event DiscountRemoved(address indexed contractAddress);
     event DiscountUpdated(address indexed contractAddress, uint256 oldRate, uint256 newRate);
     event DiscountStatusChanged(address indexed contractAddress, bool isActive);
@@ -71,6 +80,18 @@ contract Configuration is System {
     function init() external onlyNotInit {
         alreadyInit = true;
     }
+
+
+    // Helper function to find a config by address
+    function _findConfigIndex(address contractAddr) internal view returns (uint256) {
+        for (uint256 i = 0; i < discountConfigs.length; i++) {
+            if (discountConfigs[i].discountAddress == contractAddr) {
+                return i;
+            }
+        }
+        revert AddressNotFound(contractAddr);
+    }
+
 
     /**
      * @dev Updates a parameter based on the provided key and value.
@@ -139,12 +160,36 @@ contract Configuration is System {
             address contractAddr = items[0].toAddress();
             bool isActive = items[1].toBoolean();
             _setDiscountStatus(contractAddr, isActive);
-        } else {
+        } else if (Memory.compareStrings(key, "updateMinimum")) {
+            RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+            if (items.length != 1) revert MismatchParamLength(key);
+
+            uint256 newMinimum = items[0].toUint();
+            require(newMinimum >= MINIMUM, "Minimum cannot be below hardcoded limit");
+            minimum = newMinimum;
+        } else if (Memory.compareStrings(key, "updateEoADiscountRate")) {
+            RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+            if (items.length != 1) revert MismatchParamLength(key);
+
+            uint256 newEoADiscountRate = items[0].toUint();
+            _validateDiscountRate(newEoADiscountRate); // Validate the new EOA discount rate
+            eoADiscountRate = newEoADiscountRate;
+        }else {
             revert UnsupportedGovParam(key);
         }
     }
-
+    
+    
     /**
+     * @dev Internal function to validate the discount rate.
+     * @param discountRate The discount rate to validate.
+     */
+    function _validateDiscountRate(uint256 discountRate) internal view {
+        require(discountRate <= (DENOMINATOR - minimum), "Discount rate exceeds allowed limit");
+    }
+
+
+   /**
      * @dev Internal function to add a discount configuration.
      * @param contractAddr The address of the contract to add the discount to.
      * @param discountRate The discount rate to apply.
@@ -157,16 +202,16 @@ contract Configuration is System {
         uint256 userDiscountRate,
         Reward[] memory rewards
     ) internal {
-        if (discountConfigs[contractAddr].timestamp != 0) {
-            revert AddressAlreadyExists(contractAddr);
+        _validateDiscountRate(discountRate);
+
+        // Check if the discount configuration for the given contract already exists.
+        for (uint i = 0; i < discountConfigs.length; i++) {
+            if (discountConfigs[i].discountAddress == contractAddr) {
+                revert AddressAlreadyExists(contractAddr);
+            }
         }
 
-        DiscountConfig storage config = discountConfigs[contractAddr];
-        config.discountRate = discountRate;
-        config.userDiscountRate = userDiscountRate;
-        config.isActive = true;
-        config.timestamp = block.timestamp;
-
+        // Validate rewards and calculate total percentage.
         uint256 totalPercentage;
         for (uint i = 0; i < rewards.length; i++) {
             if (rewards[i].rewardAddress == address(0)) revert InvalidIssuer(rewards[i].rewardAddress);
@@ -174,36 +219,47 @@ contract Configuration is System {
                 revert InvalidRewardPercentage(rewards[i].rewardPercentage);
             }
             totalPercentage += rewards[i].rewardPercentage;
-            config.rewards.push(rewards[i]);
         }
 
+        // Ensure total percentage + userDiscountRate equals discountRate.
         if (totalPercentage + userDiscountRate != discountRate || discountRate >= DENOMINATOR) {
             revert InvalidRewardPercentage(totalPercentage);
         }
 
-        discountAddresses.push(contractAddr);
-        emit DiscountAdded(contractAddr, rewards, discountRate, userDiscountRate, block.timestamp);
+        DiscountConfig storage p = discountConfigs.push();
+        p.discountRate = discountRate;
+        p.userDiscountRate = userDiscountRate;
+        p.isActive = true;
+        p.timestamp = block.timestamp;
+        p.discountAddress = contractAddr;
+
+        uint256 configIndex = discountConfigs.length - 1;
+
+        // Initialize the rewards array in storage.
+        for (uint i = 0; i < rewards.length; i++) {
+            // Create a new Reward struct in storage and assign values.
+            Reward memory newReward = Reward({
+                rewardAddress: rewards[i].rewardAddress,
+                rewardPercentage: rewards[i].rewardPercentage
+            });
+            p.rewards.push(newReward);
+        }
+
+        emit DiscountAdded(contractAddr, discountRate, userDiscountRate, block.timestamp);
     }
+
 
     /**
      * @dev Internal function to remove a discount configuration.
      * @param contractAddr The address of the contract to remove the discount from.
      */
     function _removeDiscount(address contractAddr) internal {
-        if (discountConfigs[contractAddr].timestamp == 0) {
-            revert AddressNotFound(contractAddr);
-        }
-        
-        // Remove from discountAddresses array
-        for (uint i = 0; i < discountAddresses.length; i++) {
-            if (discountAddresses[i] == contractAddr) {
-                discountAddresses[i] = discountAddresses[discountAddresses.length - 1];
-                discountAddresses.pop();
-                break;
-            }
-        }
+        uint256 index = _findConfigIndex(contractAddr);
 
-        delete discountConfigs[contractAddr];
+        // Remove by swapping with the last element
+        discountConfigs[index] = discountConfigs[discountConfigs.length - 1];
+        discountConfigs.pop();
+
         emit DiscountRemoved(contractAddr);
     }
 
@@ -213,8 +269,8 @@ contract Configuration is System {
      * @param issuer The address of the issuer to remove.
      */
     function _removeIssuer(address contractAddr, address issuer) internal {
-        DiscountConfig storage config = discountConfigs[contractAddr];
-        if (config.timestamp == 0) revert AddressNotFound(contractAddr);
+        uint256 index = _findConfigIndex(contractAddr);
+        DiscountConfig storage config = discountConfigs[index];
 
         bool found = false;
         for (uint i = 0; i < config.rewards.length; i++) {
@@ -244,8 +300,9 @@ contract Configuration is System {
         uint256 newUserDiscountRate,
         Reward[] memory newRewards
     ) internal {
-        DiscountConfig storage config = discountConfigs[contractAddr];
-        if (config.timestamp == 0) revert AddressNotFound(contractAddr);
+        _validateDiscountRate(newRate);
+        uint256 index = _findConfigIndex(contractAddr);
+        DiscountConfig storage config = discountConfigs[index];
 
         uint256 oldRate = config.discountRate;
         config.discountRate = newRate;
@@ -255,24 +312,23 @@ contract Configuration is System {
         delete config.rewards;
 
         uint256 totalPercentage;
-        // Validate new rewards
+        // Validate new rewards and copy them to storage
         for (uint i = 0; i < newRewards.length; i++) {
-            if (newRewards[i].rewardAddress == address(0)) revert InvalidIssuer(newRewards[i].rewardAddress); // Check for zero address
+            if (newRewards[i].rewardAddress == address(0)) revert InvalidIssuer(newRewards[i].rewardAddress);
             if (newRewards[i].rewardPercentage == 0 || newRewards[i].rewardPercentage > newRate) {
-                revert InvalidRewardPercentage(newRewards[i].rewardPercentage); // Check for valid percentage
+                revert InvalidRewardPercentage(newRewards[i].rewardPercentage);
             }
-            totalPercentage += newRewards[i].rewardPercentage; // Calculate total percentage
+            totalPercentage += newRewards[i].rewardPercentage;
             config.rewards.push(newRewards[i]); // Push each reward to storage
         }
 
         // Check that the total percentage plus user discount rate equals the new discount rate
         if (totalPercentage + newUserDiscountRate != newRate || newRate >= DENOMINATOR) {
-            revert InvalidRewardPercentage(totalPercentage); // Ensure total percentage is valid
+            revert InvalidRewardPercentage(totalPercentage);
         }
 
         config.timestamp = block.timestamp;
         emit DiscountUpdated(contractAddr, oldRate, newRate);
-
     }
 
     /**
@@ -281,63 +337,33 @@ contract Configuration is System {
      * @param isActive The new active status to set.
      */
     function _setDiscountStatus(address contractAddr, bool isActive) internal {
-        DiscountConfig storage config = discountConfigs[contractAddr];
-        if (config.timestamp == 0) revert AddressNotFound(contractAddr);
+        uint256 index = _findConfigIndex(contractAddr);
+        DiscountConfig storage config = discountConfigs[index];
 
         config.isActive = isActive;
         config.timestamp = block.timestamp;
-        
+
         emit DiscountStatusChanged(contractAddr, isActive);
-    }
-
-
-    /**
-    * @dev Returns all available discount configurations.
-    * @return configs An array of tuples containing discount configurations for each address.
-    */
-    function getAllAvailableDiscountConfigs() external view returns (DiscountConfig[] memory configs) {
-        uint256 count = 0;
-
-        // Count the number of available discount configurations
-        for (uint i = 0; i < discountAddresses.length; i++) {
-            if (discountConfigs[discountAddresses[i]].timestamp != 0) {
-                count++;
-            }
-        }
-
-        // Create an array to hold the configurations
-        configs = new DiscountConfig[](count);
-        uint256 index = 0;
-
-        // Populate the array with available discount configurations
-        for (uint i = 0; i < discountAddresses.length; i++) {
-            if (discountConfigs[discountAddresses[i]].timestamp != 0) {
-                configs[index] = discountConfigs[discountAddresses[i]];
-                index++;
-            }
-        }
     }
 
     /**
      * @dev Returns the discount configuration for a given contract address.
      * @param contractAddr The address of the contract.
      * @return discountRate The discount rate.
-     * @return userDiscountRate The user discount rate.
      * @return isActive The active status.
      * @return timestamp The timestamp of the last update.
      * @return rewards The list of rewards.
      */
     function getDiscountConfig(address contractAddr) external view returns (
         uint256 discountRate,
-        uint256 userDiscountRate,
         bool isActive,
         uint256 timestamp,
         Reward[] memory rewards
     ) {
-        DiscountConfig storage config = discountConfigs[contractAddr];
+        uint256 index = _findConfigIndex(contractAddr);
+        DiscountConfig storage config = discountConfigs[index];
         return (
             config.discountRate,
-            config.userDiscountRate,
             config.isActive,
             config.timestamp,
             config.rewards
@@ -351,7 +377,8 @@ contract Configuration is System {
      * @return True if the address is an issuer, false otherwise.
      */
     function isIssuerForDiscount(address contractAddr, address issuer) external view returns (bool) {
-        DiscountConfig storage config = discountConfigs[contractAddr];
+        uint256 index = _findConfigIndex(contractAddr);
+        DiscountConfig storage config = discountConfigs[index];
         for (uint i = 0; i < config.rewards.length; i++) {
             if (config.rewards[i].rewardAddress == issuer) {
                 return true;
@@ -359,53 +386,6 @@ contract Configuration is System {
         }
         return false;
     }
-
-    /**
-     * @dev Returns all active discount addresses.
-     * @return activeAddresses The list of active discount addresses.
-     */
-    function getAllActiveDiscounts() external view returns (address[] memory activeAddresses) {
-        uint256 count;
-        for (uint i = 0; i < discountAddresses.length; i++) {
-            if (discountConfigs[discountAddresses[i]].isActive) count++;
-        }
-        
-        activeAddresses = new address[](count);
-        uint256 index;
-        for (uint i = 0; i < discountAddresses.length; i++) {
-            if (discountConfigs[discountAddresses[i]].isActive) {
-                activeAddresses[index++] = discountAddresses[i];
-            }
-        }
-    }
-
-    /**
-     * @dev Returns all discount addresses.
-     * @return The list of all discount addresses.
-     */
-    function getAllDiscountAddresses() external view returns (address[] memory) {
-        return discountAddresses;
-    }
-
-    /**
-     * @dev Returns the number of discounts an issuer is associated with.
-     * @param issuer The address of the issuer.
-     * @return The number of discounts.
-     */
-    function getIssuerDiscounts(address issuer) external view returns (uint256) {
-        uint256 count;
-        for (uint i = 0; i < discountAddresses.length; i++) {
-            DiscountConfig storage config = discountConfigs[discountAddresses[i]];
-            for (uint j = 0; j < config.rewards.length; j++) {
-                if (config.rewards[j].rewardAddress == issuer) {
-                    count++;
-                    break;
-                }
-            }
-        }
-        return count;
-    }
-
 
     /**
      * @dev External function for the DAO to add a discount.
@@ -448,4 +428,3 @@ contract Configuration is System {
     }
 
 }
-
