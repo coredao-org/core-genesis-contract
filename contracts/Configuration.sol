@@ -46,6 +46,8 @@ contract Configuration is System {
     // State variable to define the maximum number of reward addresses
     uint256 public maxRewardAddress = 5;
 
+    bool private isEOADiscountSet;
+
     DiscountConfig[] public discountConfigs;
 
     mapping(address => uint256) public issuerDiscountCount;  
@@ -67,7 +69,7 @@ contract Configuration is System {
     error IssuerNotFound(address issuer);
     error NoIssuersProvided();
     error InvalidRewardPercentage(uint256 percentage);
-
+    error EOADiscountAlreadySet();
 
     // Modifier to restrict access to DAO
     modifier onlyDAO() {
@@ -213,6 +215,10 @@ contract Configuration is System {
             }
         }
 
+        if (isEOADiscountSet) {
+            revert EOADiscountAlreadySet();
+        }
+
         // Validate rewards and calculate total percentage.
         uint256 totalPercentage;
         for (uint i = 0; i < rewards.length; i++) {
@@ -235,6 +241,12 @@ contract Configuration is System {
         p.timestamp = block.timestamp;
         p.discountAddress = contractAddr;
         p.minimumValidatorShare = minimumValidatorShare;
+
+
+        if(isEOADiscount) {
+            isEOADiscountSet = true;
+        }
+
         p.isEOADiscount = isEOADiscount;
 
         // Initialize the rewards array in storage.
