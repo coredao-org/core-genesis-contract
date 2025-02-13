@@ -21,7 +21,7 @@ contract Configuration is System {
     }
 
     // Governance-controlled minimum
-    uint256 public minimumValidatorShare;
+    uint256 public minimumValidatorShare = 1000;
 
     // DAO Address
     address public daoAddress;
@@ -41,6 +41,9 @@ contract Configuration is System {
     uint256 public constant DENOMINATOR = 10000;   
 
     uint256 public constant MINIMUM_VALIDATOR_SHARE = 1000;
+
+    // State variable to define the maximum number of reward addresses
+    uint256 public maxRewardAddress = 5;
 
     // EOA Discount Rate
     uint256 public eoADiscountRate;
@@ -161,6 +164,12 @@ contract Configuration is System {
             address contractAddr = items[0].toAddress();
             bool isActive = items[1].toBoolean();
             _setDiscountStatus(contractAddr, isActive);
+        } else if (Memory.compareStrings(key, "updatedMaximumRewardAddress")) {
+            RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+            if (items.length != 1) revert MismatchParamLength(key);
+
+            uint256 newMaxRewardAddress = items[0].toUint();
+            maxRewardAddress = newMaxRewardAddress;
         } else if (Memory.compareStrings(key, "updateMinimumValidatorShare")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
             if (items.length != 1) revert MismatchParamLength(key);
@@ -204,6 +213,7 @@ contract Configuration is System {
         Reward[] memory rewards
     ) internal {
         _validateDiscountRate(discountRate);
+    require(rewards.length <= maxRewardAddress, "Exceeds maximum number of reward addresses");
 
         // Check if the discount configuration for the given contract already exists.
         for (uint i = 0; i < discountConfigs.length; i++) {
@@ -313,6 +323,8 @@ contract Configuration is System {
 
         uint256 totalPercentage;
         // Validate new rewards and copy them to storage
+        require(newRewards.length <= maxRewardAddress, "Exceeds maximum number of reward addresses");
+
         for (uint i = 0; i < newRewards.length; i++) {
             if (newRewards[i].rewardAddress == address(0)) revert InvalidIssuer(newRewards[i].rewardAddress);
             if (newRewards[i].rewardPercentage == 0 || newRewards[i].rewardPercentage > newRate) {
