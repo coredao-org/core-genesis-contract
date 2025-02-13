@@ -300,22 +300,22 @@ contract Configuration is System {
     /**
      * @dev Internal function to update the discount rate and user discount rate of a configuration.
      * @param contractAddr The address of the contract.
-     * @param newRate The new discount rate to set.
+     * @param newDiscountRate The new discount rate to set.
      * @param newUserDiscountRate The new user discount rate to set.
      * @param newRewards The new list of rewards to set.
      */
     function _updateDiscountRate(
         address contractAddr,
-        uint256 newRate,
+        uint256 newDiscountRate,
         uint256 newUserDiscountRate,
         Reward[] memory newRewards
     ) internal {
-        _validateDiscountRate(newRate);
+        _validateDiscountRate(newDiscountRate);
         uint256 index = _findConfigIndex(contractAddr);
         DiscountConfig storage config = discountConfigs[index];
 
         uint256 oldRate = config.discountRate;
-        config.discountRate = newRate;
+        config.discountRate = newDiscountRate;
         config.userDiscountRate = newUserDiscountRate;
 
         // Clear existing rewards
@@ -327,20 +327,17 @@ contract Configuration is System {
 
         for (uint i = 0; i < newRewards.length; i++) {
             if (newRewards[i].rewardAddress == address(0)) revert InvalidIssuer(newRewards[i].rewardAddress);
-            if (newRewards[i].rewardPercentage == 0 || newRewards[i].rewardPercentage > newRate) {
-                revert InvalidRewardPercentage(newRewards[i].rewardPercentage);
-            }
             totalPercentage += newRewards[i].rewardPercentage;
             config.rewards.push(newRewards[i]); // Push each reward to storage
         }
 
         // Check that the total percentage plus user discount rate equals the new discount rate
-        if (totalPercentage + newUserDiscountRate != newRate || newRate >= DENOMINATOR) {
+        if (totalPercentage + newUserDiscountRate != newDiscountRate || newDiscountRate >= DENOMINATOR) {
             revert InvalidRewardPercentage(totalPercentage);
         }
 
         config.timestamp = block.timestamp;
-        emit DiscountUpdated(contractAddr, oldRate, newRate);
+        emit DiscountUpdated(contractAddr, oldRate, newDiscountRate);
     }
 
     /**
