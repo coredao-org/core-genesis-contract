@@ -206,7 +206,9 @@ contract Configuration is System {
         bool isEOADiscount
     ) internal {
         _validateDiscountRate(discountRate);
-        require(rewards.length <= maxRewardAddress, "Exceeds maximum number of reward addresses");
+        if(rewards.length > maxRewardAddress) {
+            revert TooManyIssuers();
+        }
 
         // Check if the discount configuration for the given contract already exists.
         for (uint i = 0; i < discountConfigs.length; i++) {
@@ -326,8 +328,10 @@ contract Configuration is System {
         delete config.rewards;
 
         uint256 totalPercentage;
-        // Validate new rewards and copy them to storage
-        require(newRewards.length <= maxRewardAddress, "Exceeds maximum number of reward addresses");
+
+        if(newRewards.length > maxRewardAddress) {
+            revert TooManyIssuers();
+        }
 
         for (uint i = 0; i < newRewards.length; i++) {
             if (newRewards[i].rewardAddress == address(0)) revert InvalidIssuer(newRewards[i].rewardAddress);
