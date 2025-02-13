@@ -21,7 +21,7 @@ contract Configuration is System {
     }
 
     // Governance-controlled minimum
-    uint256 public minimum;
+    uint256 public minimumValidatorShare;
 
     // DAO Address
     address public daoAddress;
@@ -39,7 +39,7 @@ contract Configuration is System {
     // Constants
     uint256 public constant DENOMINATOR = 10000;   
 
-    uint256 public constant MINIMUM = 1000;
+    uint256 public constant MINIMUM_VALIDATOR_SHARE = 1000;
 
     // EOA Discount Rate
     uint256 public eoADiscountRate;
@@ -160,13 +160,13 @@ contract Configuration is System {
             address contractAddr = items[0].toAddress();
             bool isActive = items[1].toBoolean();
             _setDiscountStatus(contractAddr, isActive);
-        } else if (Memory.compareStrings(key, "updateMinimum")) {
+        } else if (Memory.compareStrings(key, "updateMinimumValidatorShare")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
             if (items.length != 1) revert MismatchParamLength(key);
 
-            uint256 newMinimum = items[0].toUint();
-            require(newMinimum >= MINIMUM, "Minimum cannot be below hardcoded limit");
-            minimum = newMinimum;
+            uint256 newMinimumValidatorShare = items[0].toUint();
+            require(newMinimumValidatorShare >= MINIMUM_VALIDATOR_SHARE, "Minimum validator sharecannot be below hardcoded limit");
+            minimumValidatorShare = newMinimumValidatorShare;
         } else if (Memory.compareStrings(key, "updateEoADiscountRate")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
             if (items.length != 1) revert MismatchParamLength(key);
@@ -185,7 +185,7 @@ contract Configuration is System {
      * @param discountRate The discount rate to validate.
      */
     function _validateDiscountRate(uint256 discountRate) internal view {
-        require(discountRate <= (DENOMINATOR - minimum), "Discount rate exceeds allowed limit");
+        require(discountRate <= (DENOMINATOR - minimumValidatorShare), "Discount rate exceeds allowed limit");
     }
 
 
@@ -232,8 +232,6 @@ contract Configuration is System {
         p.isActive = true;
         p.timestamp = block.timestamp;
         p.discountAddress = contractAddr;
-
-        uint256 configIndex = discountConfigs.length - 1;
 
         // Initialize the rewards array in storage.
         for (uint i = 0; i < rewards.length; i++) {
