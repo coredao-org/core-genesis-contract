@@ -35,6 +35,7 @@ contract Configuration is System {
         uint256 timestamp;
         address discountAddress; 
         uint256 minimumValidatorShare;
+        bool isEOADiscount;
     }
 
     // Constants
@@ -44,10 +45,6 @@ contract Configuration is System {
 
     // State variable to define the maximum number of reward addresses
     uint256 public maxRewardAddress = 5;
-
-    // EOA Discount Rate
-    uint256 public eoADiscountRate;
-
 
     DiscountConfig[] public discountConfigs;
 
@@ -105,13 +102,13 @@ contract Configuration is System {
     function updateParam(string calldata key, bytes calldata value) external onlyInit onlyGov {
         if (Memory.compareStrings(key, "addDiscount")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
-            if (items.length != 4) revert MismatchParamLength(key);
+            if (items.length != 5) revert MismatchParamLength(key);
 
             address contractAddr = items[0].toAddress();
             uint256 discountRate = items[1].toUint();
             uint256 userDiscountRate = items[2].toUint();
             RLPDecode.RLPItem[] memory rewardsItems = items[3].toList();
-
+            bool isEOADiscount = items[4].toBoolean();
             Reward[] memory rewards = new Reward[](rewardsItems.length);
             uint256 totalPercentage;
             for (uint i = 0; i < rewardsItems.length; i++) {
@@ -123,7 +120,7 @@ contract Configuration is System {
                 totalPercentage += rewards[i].rewardPercentage;
             }
 
-            _addDiscount(contractAddr, discountRate, userDiscountRate, rewards);
+            _addDiscount(contractAddr, discountRate, userDiscountRate, rewards, isEOADiscount);
         } else if (Memory.compareStrings(key, "removeDiscount")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
             if (items.length != 1) revert MismatchParamLength(key); 
@@ -177,14 +174,7 @@ contract Configuration is System {
             uint256 newMinimumValidatorShare = items[0].toUint();
             require(newMinimumValidatorShare >= MINIMUM_VALIDATOR_SHARE, "Minimum validator sharecannot be below hardcoded limit");
             minimumValidatorShare = newMinimumValidatorShare;
-        } else if (Memory.compareStrings(key, "updateEoADiscountRate")) {
-            RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
-            if (items.length != 1) revert MismatchParamLength(key);
-
-            uint256 newEoADiscountRate = items[0].toUint();
-            _validateDiscountRate(newEoADiscountRate); // Validate the new EOA discount rate
-            eoADiscountRate = newEoADiscountRate;
-        }else {
+        } else {
             revert UnsupportedGovParam(key);
         }
     }
@@ -210,10 +200,11 @@ contract Configuration is System {
         address contractAddr,
         uint256 discountRate,
         uint256 userDiscountRate,
-        Reward[] memory rewards
+        Reward[] memory rewards,
+        bool isEOADiscount
     ) internal {
         _validateDiscountRate(discountRate);
-    require(rewards.length <= maxRewardAddress, "Exceeds maximum number of reward addresses");
+        require(rewards.length <= maxRewardAddress, "Exceeds maximum number of reward addresses");
 
         // Check if the discount configuration for the given contract already exists.
         for (uint i = 0; i < discountConfigs.length; i++) {
@@ -244,6 +235,7 @@ contract Configuration is System {
         p.timestamp = block.timestamp;
         p.discountAddress = contractAddr;
         p.minimumValidatorShare = minimumValidatorShare;
+        p.isEOADiscount = isEOADiscount;
 
         // Initialize the rewards array in storage.
         for (uint i = 0; i < rewards.length; i++) {
@@ -407,9 +399,10 @@ contract Configuration is System {
         address contractAddr,
         uint256 discountRate,
         uint256 userDiscountRate,
-        Reward[] memory rewards
+        Reward[] memory rewards,
+        bool isEOADiscount
     ) external onlyDAO onlyInit {
-        _addDiscount(contractAddr, discountRate, userDiscountRate, rewards);
+        _addDiscount(contractAddr, discountRate, userDiscountRate, rewards, isEOADiscount);
     }
 
     /**
@@ -437,4 +430,3 @@ contract Configuration is System {
     }
 
 }
-
