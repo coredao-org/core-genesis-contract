@@ -34,6 +34,7 @@ contract Configuration is System {
         bool isActive;
         uint256 timestamp;
         address discountAddress; 
+        uint256 minimumValidatorShare;
     }
 
     // Constants
@@ -232,6 +233,7 @@ contract Configuration is System {
         p.isActive = true;
         p.timestamp = block.timestamp;
         p.discountAddress = contractAddr;
+        p.minimumValidatorShare = minimumValidatorShare;
 
         // Initialize the rewards array in storage.
         for (uint i = 0; i < rewards.length; i++) {
@@ -426,3 +428,4 @@ contract Configuration is System {
     }
 
 }
+
