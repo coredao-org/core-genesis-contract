@@ -248,8 +248,11 @@ contract Configuration is System {
         p.isActive = true;
         p.timestamp = block.timestamp;
         p.discountAddress = contractAddr;
-        p.minimumValidatorShare = minimumValidatorShare;
-
+        if(minimumValidatorShare == 0) {
+            minimumValidatorShare = MINIMUM_VALIDATOR_SHARE;
+        } else {
+            p.minimumValidatorShare = minimumValidatorShare;
+        }
 
         if(isEOADiscount) {
             isEOADiscountSet = true;
@@ -338,7 +341,7 @@ contract Configuration is System {
         if(maxRewardAddress == 0) {
             maxRewardAddress = MAX_REWARD_ADDRESS;
         }
-        
+
         if(newRewards.length > maxRewardAddress) {
             revert TooManyIssuers();
         }
