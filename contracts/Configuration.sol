@@ -404,7 +404,7 @@ contract Configuration is System {
         uint256 timestamp,
         address discountAddress,
         bool isEOADiscount,
-        uint256 minimumValidatorShare,
+        uint256 minimumValidatorSharesOfValidator,
         Reward[] memory rewards
     ) {
         uint256 index = _findConfigIndex(contractAddr);
@@ -481,4 +481,3 @@ contract Configuration is System {
     }
 
 }
-
