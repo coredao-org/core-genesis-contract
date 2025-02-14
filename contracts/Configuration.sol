@@ -363,6 +363,38 @@ contract Configuration is System {
         emit DiscountStatusChanged(contractAddr, isActive);
     }
 
+    // Function to get all discount configurations
+    function getAllDiscountConfigs() public view returns (
+        uint256[] memory,
+        uint256[] memory,
+        bool[] memory,
+        uint256[] memory,
+        address[] memory,
+        Reward[][] memory // Array of arrays to hold rewards
+    ) {
+        uint256 length = discountConfigs.length;
+        uint256[] memory discountRates = new uint256[](length);
+        uint256[] memory userDiscountRates = new uint256[](length);
+        bool[] memory isActive = new bool[](length);
+        uint256[] memory timestamps = new uint256[](length);
+        address[] memory discountAddresses = new address[](length);
+        Reward[][] memory allRewards = new Reward[][](length); // Array to hold rewards for each config
+
+        for (uint256 i = 0; i < length; i++) {
+            DiscountConfig storage config = discountConfigs[i];
+            discountRates[i] = config.discountRate;
+            userDiscountRates[i] = config.userDiscountRate;
+            isActive[i] = config.isActive;
+            timestamps[i] = config.timestamp;
+            discountAddresses[i] = config.discountAddress;
+
+            // Store rewards directly from the rewards array
+            allRewards[i] = config.rewards; // Store the rewards array
+        }
+
+        return (discountRates, userDiscountRates, isActive, timestamps, discountAddresses, allRewards);
+    }
+
     /**
      * @dev Returns the discount configuration for a given contract address.
      * @param contractAddr The address of the contract.
@@ -446,3 +478,4 @@ contract Configuration is System {
     }
 
 }
+
