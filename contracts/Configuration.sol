@@ -28,7 +28,6 @@ contract Configuration is System {
 
     /// @dev Struct to store discount configuration details.
     struct DiscountConfig {
-        Reward[] rewards;  // List of reward addresses and their percentages
         uint256 discountRate;
         uint256 userDiscountRate;
         bool isActive;
@@ -36,6 +35,7 @@ contract Configuration is System {
         address discountAddress; 
         uint256 minimumValidatorShare;
         bool isEOADiscount;
+        Reward[] rewards;  // List of reward addresses and their percentages
     }
 
     // Constants
@@ -122,7 +122,7 @@ contract Configuration is System {
                 totalPercentage += rewards[i].rewardPercentage;
             }
 
-            _addDiscount(contractAddr, discountRate, userDiscountRate, rewards, isEOADiscount);
+            _addDiscount(contractAddr, discountRate, userDiscountRate, isEOADiscount, rewards);
         } else if (Memory.compareStrings(key, "removeDiscount")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
             if (items.length != 1) revert MismatchParamLength(key); 
@@ -202,8 +202,8 @@ contract Configuration is System {
         address contractAddr,
         uint256 discountRate,
         uint256 userDiscountRate,
-        Reward[] memory rewards,
-        bool isEOADiscount
+        bool isEOADiscount,
+        Reward[] memory rewards
     ) internal {
         _validateDiscountRate(discountRate);
         if(rewards.length > maxRewardAddress) {
@@ -422,10 +422,10 @@ contract Configuration is System {
         address contractAddr,
         uint256 discountRate,
         uint256 userDiscountRate,
-        Reward[] memory rewards,
-        bool isEOADiscount
+        bool isEOADiscount,
+        Reward[] memory rewards
     ) external onlyDAO onlyInit {
-        _addDiscount(contractAddr, discountRate, userDiscountRate, rewards, isEOADiscount);
+        _addDiscount(contractAddr, discountRate, userDiscountRate, isEOADiscount, rewards);
     }
 
     /**
