@@ -363,37 +363,9 @@ contract Configuration is System {
         emit DiscountStatusChanged(contractAddr, isActive);
     }
 
-    struct DiscountConfigDetails {
-        uint256 discountRate;
-        uint256 userDiscountRate;
-        bool isActive;
-        uint256 timestamp;
-        address discountAddress;
-        bool isEOADiscount;
-        uint256 minimumValidatorShare;
-        Reward[] rewards; // Store rewards directly
-    }
-
     // Function to get all discount configurations
-    function getAllDiscountConfigs() public view returns (DiscountConfigDetails[] memory) {
-        uint256 length = discountConfigs.length;
-        DiscountConfigDetails[] memory allConfigs = new DiscountConfigDetails[](length);
-
-        for (uint256 i = 0; i < length; i++) {
-            DiscountConfig storage config = discountConfigs[i];
-            allConfigs[i] = DiscountConfigDetails({
-                discountRate: config.discountRate,
-                userDiscountRate: config.userDiscountRate,
-                isActive: config.isActive,
-                timestamp: config.timestamp,
-                discountAddress: config.discountAddress,
-                isEOADiscount: config.isEOADiscount,
-                minimumValidatorShare: config.minimumValidatorShare,
-                rewards: config.rewards // Store rewards directly
-            });
-        }
-
-        return allConfigs;
+    function getAllDiscountConfigs() public view returns (DiscountConfig[] memory) {
+        return discountConfigs;
     }
 
     // Function to get the discount configuration for a given contract address
