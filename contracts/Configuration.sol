@@ -21,7 +21,7 @@ contract Configuration is System {
     }
 
     // Governance-controlled minimum
-    uint256 public minimumValidatorShare = 1000;
+    uint256 public minimumValidatorShare;
 
     // DAO Address
     address public daoAddress;
@@ -43,8 +43,9 @@ contract Configuration is System {
 
     uint256 public constant MINIMUM_VALIDATOR_SHARE = 1000;
 
-    // State variable to define the maximum number of reward addresses
-    uint256 public maxRewardAddress = 5;
+    uint256 public constant MAX_REWARD_ADDRESS = 5;
+
+    uint256 public maxRewardAddress;
 
     bool private isEOADiscountSet;
 
@@ -82,6 +83,8 @@ contract Configuration is System {
      */
     function init() external onlyNotInit {
         alreadyInit = true;
+        maxRewardAddress = MAX_REWARD_ADDRESS;
+        minimumValidatorShare = MINIMUM_VALIDATOR_SHARE;
     }
 
 
@@ -206,6 +209,9 @@ contract Configuration is System {
         Reward[] memory rewards
     ) internal {
         _validateDiscountRate(discountRate);
+        if(maxRewardAddress == 0) {
+            maxRewardAddress = MAX_REWARD_ADDRESS;
+        }
         if(rewards.length > maxRewardAddress) {
             revert TooManyIssuers();
         }
@@ -329,6 +335,10 @@ contract Configuration is System {
 
         uint256 totalPercentage;
 
+        if(maxRewardAddress == 0) {
+            maxRewardAddress = MAX_REWARD_ADDRESS;
+        }
+        
         if(newRewards.length > maxRewardAddress) {
             revert TooManyIssuers();
         }
