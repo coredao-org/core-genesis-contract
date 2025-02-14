@@ -223,8 +223,10 @@ contract Configuration is System {
             }
         }
 
-        if (isEOADiscountSet) {
+        if (isEOADiscount && isEOADiscountSet) {
             revert EOADiscountAlreadySet();
+        } else if (isEOADiscount && !isEOADiscountSet) {
+            isEOADiscountSet = true;
         }
 
         // Validate rewards and calculate total percentage.
@@ -252,10 +254,6 @@ contract Configuration is System {
             p.minimumValidatorShare = MINIMUM_VALIDATOR_SHARE;
         } else {
             p.minimumValidatorShare = minimumValidatorShare;
-        }
-
-        if(isEOADiscount) {
-            isEOADiscountSet = true;
         }
 
         p.isEOADiscount = isEOADiscount;
