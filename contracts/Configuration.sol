@@ -363,58 +363,61 @@ contract Configuration is System {
         emit DiscountStatusChanged(contractAddr, isActive);
     }
 
+    struct DiscountConfigDetails {
+        uint256 discountRate;
+        uint256 userDiscountRate;
+        bool isActive;
+        uint256 timestamp;
+        address discountAddress;
+        bool isEOADiscount;
+        uint256 minimumValidatorShare;
+        Reward[] rewards; // Store rewards directly
+    }
+
     // Function to get all discount configurations
-    function getAllDiscountConfigs() public view returns (
-        uint256[] memory,
-        uint256[] memory,
-        bool[] memory,
-        uint256[] memory,
-        address[] memory,
-        Reward[][] memory // Array of arrays to hold rewards
-    ) {
+    function getAllDiscountConfigs() public view returns (DiscountConfigDetails[] memory) {
         uint256 length = discountConfigs.length;
-        uint256[] memory discountRates = new uint256[](length);
-        uint256[] memory userDiscountRates = new uint256[](length);
-        bool[] memory isActive = new bool[](length);
-        uint256[] memory timestamps = new uint256[](length);
-        address[] memory discountAddresses = new address[](length);
-        Reward[][] memory allRewards = new Reward[][](length); // Array to hold rewards for each config
+        DiscountConfigDetails[] memory allConfigs = new DiscountConfigDetails[](length);
 
         for (uint256 i = 0; i < length; i++) {
             DiscountConfig storage config = discountConfigs[i];
-            discountRates[i] = config.discountRate;
-            userDiscountRates[i] = config.userDiscountRate;
-            isActive[i] = config.isActive;
-            timestamps[i] = config.timestamp;
-            discountAddresses[i] = config.discountAddress;
-
-            // Store rewards directly from the rewards array
-            allRewards[i] = config.rewards; // Store the rewards array
+            allConfigs[i] = DiscountConfigDetails({
+                discountRate: config.discountRate,
+                userDiscountRate: config.userDiscountRate,
+                isActive: config.isActive,
+                timestamp: config.timestamp,
+                discountAddress: config.discountAddress,
+                isEOADiscount: config.isEOADiscount,
+                minimumValidatorShare: config.minimumValidatorShare,
+                rewards: config.rewards // Store rewards directly
+            });
         }
 
-        return (discountRates, userDiscountRates, isActive, timestamps, discountAddresses, allRewards);
+        return allConfigs;
     }
 
-    /**
-     * @dev Returns the discount configuration for a given contract address.
-     * @param contractAddr The address of the contract.
-     * @return discountRate The discount rate.
-     * @return isActive The active status.
-     * @return timestamp The timestamp of the last update.
-     * @return rewards The list of rewards.
-     */
+    // Function to get the discount configuration for a given contract address
     function getDiscountConfig(address contractAddr) external view returns (
         uint256 discountRate,
+        uint256 userDiscountRate,
         bool isActive,
         uint256 timestamp,
+        address discountAddress,
+        bool isEOADiscount,
+        uint256 minimumValidatorShare,
         Reward[] memory rewards
     ) {
         uint256 index = _findConfigIndex(contractAddr);
         DiscountConfig storage config = discountConfigs[index];
+        
         return (
             config.discountRate,
+            config.userDiscountRate,
             config.isActive,
             config.timestamp,
+            config.discountAddress,
+            config.isEOADiscount,
+            config.minimumValidatorShare,
             config.rewards
         );
     }
