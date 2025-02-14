@@ -249,7 +249,7 @@ contract Configuration is System {
         p.timestamp = block.timestamp;
         p.discountAddress = contractAddr;
         if(minimumValidatorShare == 0) {
-            minimumValidatorShare = MINIMUM_VALIDATOR_SHARE;
+            p.minimumValidatorShare = MINIMUM_VALIDATOR_SHARE;
         } else {
             p.minimumValidatorShare = minimumValidatorShare;
         }
