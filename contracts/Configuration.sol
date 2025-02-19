@@ -31,7 +31,6 @@ contract Configuration is System {
         uint256 discountRate;
         uint256 userDiscountRate;
         bool isActive;
-        uint256 timestamp;
         address discountAddress; 
         uint256 minimumValidatorShare;
         bool isEOADiscount;
@@ -248,7 +247,6 @@ contract Configuration is System {
         p.discountRate = discountRate;
         p.userDiscountRate = userDiscountRate;
         p.isActive = true;
-        p.timestamp = block.timestamp;
         p.discountAddress = contractAddr;
         if(minimumValidatorShare == 0) {
             p.minimumValidatorShare = MINIMUM_VALIDATOR_SHARE;
@@ -355,7 +353,6 @@ contract Configuration is System {
             revert InvalidRewardPercentage(totalPercentage);
         }
 
-        config.timestamp = block.timestamp;
         emit DiscountUpdated(contractAddr, oldRate, newDiscountRate);
     }
 
@@ -369,8 +366,6 @@ contract Configuration is System {
         DiscountConfig storage config = discountConfigs[index];
 
         config.isActive = isActive;
-        config.timestamp = block.timestamp;
-
         emit DiscountStatusChanged(contractAddr, isActive);
     }
 
@@ -384,7 +379,6 @@ contract Configuration is System {
         uint256 discountRate,
         uint256 userDiscountRate,
         bool isActive,
-        uint256 timestamp,
         address discountAddress,
         bool isEOADiscount,
         uint256 minimumValidatorSharesOfValidator,
@@ -397,7 +391,6 @@ contract Configuration is System {
             config.discountRate,
             config.userDiscountRate,
             config.isActive,
-            config.timestamp,
             config.discountAddress,
             config.isEOADiscount,
             config.minimumValidatorShare,
