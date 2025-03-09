@@ -7,7 +7,7 @@ import "./lib/RLPDecode.sol";
 
 /**
  * @title Configuration
- * @dev Contract for managing config configurations with multiple reward addresses and percentages.
+ * @dev Contract for managing configs with multiple reward addresses and percentages.
  */
 contract Configuration is System {
     using RLPDecode for bytes;
@@ -23,7 +23,7 @@ contract Configuration is System {
     // DAO Address
     address public daoAddress;
 
-    /// @dev Struct to store config configuration details.
+    /// @dev Struct to store config details.
     struct Config {
         uint256 configRate;
         uint256 userConfigRate;
@@ -164,7 +164,7 @@ contract Configuration is System {
     }
 
    /**
-     * @dev Internal function to add a config configuration.
+     * @dev Internal function to add a config.
      * @param contractAddr The address of the contract to add the config to.
      * @param configRate The config rate to apply.
      * @param userConfigRate The user config rate to apply.
@@ -183,7 +183,7 @@ contract Configuration is System {
             revert TooManyIssuers();
         }
 
-        // Check if the config configuration for the given contract already exists.
+        // Check if the config for the given contract already exists.
         for (uint i = 0; i < configs.length; i++) {
             if (configs[i].configAddress == contractAddr) {
                 revert AddressAlreadyExists(contractAddr);
@@ -227,7 +227,7 @@ contract Configuration is System {
 
 
     /**
-     * @dev Internal function to remove a config configuration.
+     * @dev Internal function to remove a config.
      * @param contractAddr The address of the contract to remove the config from.
      */
     function _removeConfig(address contractAddr) internal {
@@ -241,7 +241,7 @@ contract Configuration is System {
     }
 
     /**
-     * @dev Internal function to remove an issuer from a config configuration.
+     * @dev Internal function to remove an issuer from a config.
      * @param contractAddr The address of the contract.
      * @param issuer The address of the issuer to remove.
      */
@@ -312,7 +312,7 @@ contract Configuration is System {
     }
 
     /**
-     * @dev Internal function to set the active status of a config configuration.
+     * @dev Internal function to set the active status of a config.
      * @param contractAddr The address of the contract.
      * @param isActive The new active status to set.
      */
@@ -324,12 +324,12 @@ contract Configuration is System {
         emit ConfigStatusChanged(contractAddr, isActive);
     }
 
-    // Function to get all config configurations
+    // Function to get all configs
     function getAllconfigs() public view returns (Config[] memory) {
         return configs;
     }
 
-    // Function to get the config configuration for a given contract address
+    // Function to get the config for a given contract address
     function getConfig(address contractAddr) external view returns (
         uint256 configRate,
         uint256 userConfigRate,
@@ -350,7 +350,7 @@ contract Configuration is System {
     }
 
     /**
-     * @dev Checks if an address is an issuer for a given config configuration.
+     * @dev Checks if an address is an issuer for a given config.
      * @param contractAddr The address of the contract.
      * @param issuer The address of the issuer.
      * @return True if the address is an issuer, false otherwise.
