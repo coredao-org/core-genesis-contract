@@ -44,7 +44,7 @@ contract Configuration is System {
     mapping(address => uint256) public issuerConfigCount;  
 
     // Events
-    event ConfigAdded(address indexed contractAddress, uint256 configRate, uint256 userConfigRate, uint256 timestamp);
+    event ConfigAdded(address indexed contractAddress, uint256 configRate, uint256 userConfigRate);
     event ConfigRemoved(address indexed contractAddress);
     event ConfigUpdated(address indexed contractAddress, uint256 oldRate, uint256 newRate);
     event ConfigStatusChanged(address indexed contractAddress, bool isActive);
@@ -222,7 +222,7 @@ contract Configuration is System {
             p.rewards.push(newReward);
         }
 
-        emit ConfigAdded(contractAddr, configRate, userConfigRate, block.timestamp);
+        emit ConfigAdded(contractAddr, configRate, userConfigRate);
     }
 
 
