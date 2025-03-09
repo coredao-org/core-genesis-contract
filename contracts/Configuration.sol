@@ -56,9 +56,7 @@ contract Configuration is System {
     error AddressNotFound(address addr);
     error InvalidIssuer(address issuer);
     error TooManyIssuers();
-    error IssuerAlreadyExists(address issuer);
     error IssuerNotFound(address issuer);
-    error NoIssuersProvided();
     error InvalidRewardPercentage(uint256 percentage);
     error EOAConfigAlreadySet();
 
