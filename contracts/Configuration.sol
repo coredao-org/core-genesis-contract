@@ -41,8 +41,6 @@ contract Configuration is System {
 
     Config[] public configs;
 
-    mapping(address => uint256) public issuerConfigCount;  
-
     // Events
     event ConfigAdded(address indexed contractAddress, uint256 configRate, uint256 userConfigRate);
     event ConfigRemoved(address indexed contractAddress);
