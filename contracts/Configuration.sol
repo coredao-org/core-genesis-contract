@@ -19,21 +19,21 @@ contract Configuration is System {
     /// @dev Struct to store reward address and its percentage. 
     struct Reward {
         address rewardAddr;
-        uint256 rewardPercentage;
+        uint16 rewardPercentage;
     }
 
     /// @dev Struct to store event details.
     struct Event {
         Reward[] rewards;
         bytes32 eventSignature;
-        uint256 gas;
+        uint32 gas;
     }
 
     /// @dev Struct to store function signature and gas details.
     struct FunctionSignatures {
         Reward[] rewards;
         bytes32 functionSignature;
-        uint256 gas;
+        uint16 gas;
     }
 
     /// @dev Struct to store config details.
@@ -109,9 +109,9 @@ contract Configuration is System {
     function addConfig(
         address contractAddr,
         bytes32[] memory eventSignatures,
-        uint256[] memory eventGas,
+        uint32[] memory eventGas,
         address[] memory rewardAddrs,
-        uint256[] memory rewardPercentages,
+        uint16[] memory rewardPercentages,
         bool isActive
     ) public {
         require(eventSignatures.length == eventGas.length, "Event arrays length mismatch");
