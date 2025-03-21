@@ -33,7 +33,7 @@ contract Configuration is System {
     struct FunctionSignatures {
         Reward[] rewards;
         bytes32 functionSignature;
-        uint16 gas;
+        uint32 gas;
     }
 
     /// @dev Struct to store config details.
