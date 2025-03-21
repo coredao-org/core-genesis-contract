@@ -5,6 +5,7 @@ import "./System.sol";
 import "./lib/Memory.sol";
 import "./lib/RLPDecode.sol";
 
+
 /**
  * @title Configuration
  * @dev Contract for managing configs with multiple reward addresses and percentages.
@@ -16,21 +17,34 @@ contract Configuration is System {
 
     /// @dev Struct to store reward address and its percentage. 
     struct Reward {
-        address rewardAddress;
-        uint256 rewardPercentage; 
+        address rewardAddr;
+        uint256 rewardPercentage;
+    }
+
+    /// @dev Struct to store event details.
+    struct Event {
+        Reward[] rewards;
+        bytes32 eventSignature;
+        uint256 gas;
+    }
+
+    /// @dev Struct to store function signature and gas details.
+    struct FunctionSignatures {
+        Reward[] rewards;
+        bytes32 functionSignature;
+        uint256 gas;
+    }
+
+    /// @dev Struct to store config details.
+    struct Config {
+        Event[] events;
+        FunctionSignatures[] functionSignatures;
+        address configAddress;
+        bool isActive;
     }
 
     // DAO Address
     address public daoAddress;
-
-    /// @dev Struct to store config details.
-    struct Config {
-        uint256 configRate;
-        uint256 userConfigRate;
-        bool isActive;
-        address configAddress; 
-        Reward[] rewards;  // List of reward addresses and their percentages
-    }
 
     // Constants
     uint256 public constant DENOMINATOR = 10000;   
@@ -41,12 +55,8 @@ contract Configuration is System {
 
     Config[] public configs;
 
-    // Events
-    event ConfigAdded(address indexed contractAddress, uint256 configRate, uint256 userConfigRate);
-    event ConfigRemoved(address indexed contractAddress);
-    event ConfigUpdated(address indexed contractAddress, uint256 oldRate, uint256 newRate);
-    event ConfigStatusChanged(address indexed contractAddress, bool isActive);
-    event IssuerRemoved(address indexed contractAddress, address indexed issuer);
+    // Event to signal config updates
+    event ConfigUpdated(address indexed configAddress, uint256 eventCount, uint256 functionSignatureCount);
 
     // Errors
     error InvalidConfigRate(uint256 rate);
@@ -92,24 +102,49 @@ contract Configuration is System {
     function updateParam(string calldata key, bytes calldata value) external onlyInit onlyGov {
         if (Memory.compareStrings(key, "addConfig")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
-            if (items.length != 5) revert MismatchParamLength(key);
+            if (items.length != 3) revert MismatchParamLength(key); // Updated length check
 
             address contractAddr = items[0].toAddress();
-            uint256 configRate = items[1].toUint();
-            uint256 userConfigRate = items[2].toUint();
-            RLPDecode.RLPItem[] memory rewardsItems = items[3].toList();
-            Reward[] memory rewards = new Reward[](rewardsItems.length);
-            uint256 totalPercentage;
-            for (uint i = 0; i < rewardsItems.length; i++) {
-                RLPDecode.RLPItem[] memory rewardItem = rewardsItems[i].toList();
-                rewards[i] = Reward({
-                    rewardAddress: rewardItem[0].toAddress(),
-                    rewardPercentage: rewardItem[1].toUint()
+            RLPDecode.RLPItem[] memory eventsItems = items[1].toList(); // New events items
+            RLPDecode.RLPItem[] memory functionSignaturesItems = items[2].toList(); // New function signatures items
+
+            Event[] memory events = new Event[](eventsItems.length);
+            for (uint i = 0; i < eventsItems.length; i++) {
+                RLPDecode.RLPItem[] memory eventItem = eventsItems[i].toList();
+                Reward[] memory rewards = new Reward[](eventItem[0].toList().length);
+                for (uint j = 0; j < rewards.length; j++) {
+                    RLPDecode.RLPItem[] memory rewardItem = eventItem[0].toList()[j].toList();
+                    rewards[j] = Reward({
+                        rewardAddr: rewardItem[0].toAddress(),
+                        rewardPercentage: rewardItem[1].toUint()
+                    });
+                }
+                events[i] = Event({
+                    rewards: rewards,
+                    eventSignature: toBytes32(eventItem[1]),
+                    gas: eventItem[2].toUint()
                 });
-                totalPercentage += rewards[i].rewardPercentage;
             }
 
-            _addConfig(contractAddr, configRate, userConfigRate, rewards);
+            FunctionSignatures[] memory functionSignatures = new FunctionSignatures[](functionSignaturesItems.length);
+            for (uint i = 0; i < functionSignaturesItems.length; i++) {
+                RLPDecode.RLPItem[] memory functionItem = functionSignaturesItems[i].toList();
+                Reward[] memory rewards = new Reward[](functionItem[0].toList().length);
+                for (uint j = 0; j < rewards.length; j++) {
+                    RLPDecode.RLPItem[] memory rewardItem = functionItem[0].toList()[j].toList();
+                    rewards[j] = Reward({
+                        rewardAddr: rewardItem[0].toAddress(),
+                        rewardPercentage: rewardItem[1].toUint()
+                    });
+                }
+                functionSignatures[i] = FunctionSignatures({
+                    rewards: rewards,
+                    functionSignature: toBytes32(functionItem[1]),
+                    gas: functionItem[2].toUint()
+                });
+            }
+
+            _addConfig(contractAddr, events, functionSignatures, true); // Assuming active status is true
         } else if (Memory.compareStrings(key, "removeConfig")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
             if (items.length != 1) revert MismatchParamLength(key); 
@@ -117,22 +152,49 @@ contract Configuration is System {
             _removeConfig(contractAddr);
         } else if (Memory.compareStrings(key, "updateConfig")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
-            if (items.length != 4) revert MismatchParamLength(key); // Updated length check
+            if (items.length != 3) revert MismatchParamLength(key); // Updated length check
 
             address contractAddr = items[0].toAddress();
-            uint256 newRate = items[1].toUint();
-            uint256 newUserConfigRate = items[2].toUint();
-            RLPDecode.RLPItem[] memory rewardsItems = items[3].toList(); // New rewards items
+            RLPDecode.RLPItem[] memory eventsItems = items[1].toList(); // New events items
+            RLPDecode.RLPItem[] memory functionSignaturesItems = items[2].toList(); // New function signatures items
 
-            Reward[] memory newRewards = new Reward[](rewardsItems.length); // Create new rewards array
-            for (uint i = 0; i < rewardsItems.length; i++) {
-                RLPDecode.RLPItem[] memory rewardItem = rewardsItems[i].toList();
-                newRewards[i] = Reward({
-                    rewardAddress: rewardItem[0].toAddress(),
-                    rewardPercentage: rewardItem[1].toUint()
+            Event[] memory events = new Event[](eventsItems.length);
+            for (uint i = 0; i < eventsItems.length; i++) {
+                RLPDecode.RLPItem[] memory eventItem = eventsItems[i].toList();
+                Reward[] memory rewards = new Reward[](eventItem[0].toList().length);
+                for (uint j = 0; j < rewards.length; j++) {
+                    RLPDecode.RLPItem[] memory rewardItem = eventItem[0].toList()[j].toList();
+                    rewards[j] = Reward({
+                        rewardAddr: rewardItem[0].toAddress(),
+                        rewardPercentage: rewardItem[1].toUint()
+                    });
+                }
+                events[i] = Event({
+                    rewards: rewards,
+                    eventSignature: toBytes32(eventItem[1]),
+                    gas: eventItem[2].toUint()
                 });
             }
-            _updateConfigRate(contractAddr, newRate, newUserConfigRate, newRewards); 
+
+            FunctionSignatures[] memory functionSignatures = new FunctionSignatures[](functionSignaturesItems.length);
+            for (uint i = 0; i < functionSignaturesItems.length; i++) {
+                RLPDecode.RLPItem[] memory functionItem = functionSignaturesItems[i].toList();
+                Reward[] memory rewards = new Reward[](functionItem[0].toList().length);
+                for (uint j = 0; j < rewards.length; j++) {
+                    RLPDecode.RLPItem[] memory rewardItem = functionItem[0].toList()[j].toList();
+                    rewards[j] = Reward({
+                        rewardAddr: rewardItem[0].toAddress(),
+                        rewardPercentage: rewardItem[1].toUint()
+                    });
+                }
+                functionSignatures[i] = FunctionSignatures({
+                    rewards: rewards,
+                    functionSignature: toBytes32(functionItem[1]),
+                    gas: functionItem[2].toUint()
+                });
+            }
+
+            _updateConfig(contractAddr, events, functionSignatures); 
         } else if (Memory.compareStrings(key, "removeIssuer")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
             if (items.length != 2) revert MismatchParamLength(key);
@@ -156,7 +218,7 @@ contract Configuration is System {
 
             uint256 newMaxRewardAddress = items[0].toUint();
             maxRewardAddress = newMaxRewardAddress;
-        }  else {
+        } else {
             revert UnsupportedGovParam(key);
         }
     }
@@ -164,20 +226,20 @@ contract Configuration is System {
    /**
      * @dev Internal function to add a config.
      * @param contractAddr The address of the contract to add the config to.
-     * @param configRate The config rate to apply.
-     * @param userConfigRate The user config rate to apply.
-     * @param rewards The list of reward addresses and their percentages.
+     * @param events The list of events to apply.
+     * @param functionSignatures The list of function signatures to apply.
+     * @param isActive The active status of the config.
      */
     function _addConfig(
         address contractAddr,
-        uint256 configRate,
-        uint256 userConfigRate,
-        Reward[] memory rewards
+        Event[] memory events,
+        FunctionSignatures[] memory functionSignatures,
+        bool isActive
     ) internal {
         if(maxRewardAddress == 0) {
             maxRewardAddress = MAX_REWARD_ADDRESS;
         }
-        if(rewards.length > maxRewardAddress) {
+        if(events.length > maxRewardAddress || functionSignatures.length > maxRewardAddress) {
             revert TooManyIssuers();
         }
 
@@ -188,39 +250,13 @@ contract Configuration is System {
             }
         }
 
-        // Validate rewards and calculate total percentage.
-        uint256 totalPercentage;
-        for (uint i = 0; i < rewards.length; i++) {
-            if (rewards[i].rewardAddress == address(0)) revert InvalidIssuer(rewards[i].rewardAddress);
-            if (rewards[i].rewardPercentage == 0 || rewards[i].rewardPercentage > configRate) {
-                revert InvalidRewardPercentage(rewards[i].rewardPercentage);
-            }
-            totalPercentage += rewards[i].rewardPercentage;
-        }
-
-        // Ensure total percentage + userConfigRate equals configRate.
-        if (totalPercentage + userConfigRate != configRate || configRate >= DENOMINATOR) {
-            revert InvalidRewardPercentage(totalPercentage);
-        }
-
         Config storage p = configs.push();
-        p.configRate = configRate;
-        p.userConfigRate = userConfigRate;
-        p.isActive = true;
+        p.events = events;
+        p.functionSignatures = functionSignatures;
         p.configAddress = contractAddr;
+        p.isActive = isActive;
 
-
-        // Initialize the rewards array in storage.
-        for (uint i = 0; i < rewards.length; i++) {
-            // Create a new Reward struct in storage and assign values.
-            Reward memory newReward = Reward({
-                rewardAddress: rewards[i].rewardAddress,
-                rewardPercentage: rewards[i].rewardPercentage
-            });
-            p.rewards.push(newReward);
-        }
-
-        emit ConfigAdded(contractAddr, configRate, userConfigRate);
+        emit ConfigUpdated(contractAddr, events.length, functionSignatures.length);
     }
 
 
@@ -235,7 +271,7 @@ contract Configuration is System {
         configs[index] = configs[configs.length - 1];
         configs.pop();
 
-        emit ConfigRemoved(contractAddr);
+        emit ConfigUpdated(contractAddr, 0, 0);
     }
 
     /**
@@ -248,65 +284,31 @@ contract Configuration is System {
         Config storage config = configs[index];
 
         bool found = false;
-        for (uint i = 0; i < config.rewards.length; i++) {
-            if (config.rewards[i].rewardAddress == issuer) {
-                config.rewards[i] = config.rewards[config.rewards.length - 1];
-                config.rewards.pop();
-                found = true;
-                break;
+        for (uint i = 0; i < config.events.length; i++) {
+            for (uint j = 0; j < config.events[i].rewards.length; j++) {
+                if (config.events[i].rewards[j].rewardAddr == issuer) {
+                    config.events[i].rewards[j] = config.events[i].rewards[config.events[i].rewards.length - 1];
+                    config.events[i].rewards.pop();
+                    found = true;
+                    break;
+                }
+            }
+        }
+
+        for (uint i = 0; i < config.functionSignatures.length; i++) {
+            for (uint j = 0; j < config.functionSignatures[i].rewards.length; j++) {
+                if (config.functionSignatures[i].rewards[j].rewardAddr == issuer) {
+                    config.functionSignatures[i].rewards[j] = config.functionSignatures[i].rewards[config.functionSignatures[i].rewards.length - 1];
+                    config.functionSignatures[i].rewards.pop();
+                    found = true;
+                    break;
+                }
             }
         }
 
         if (!found) revert IssuerNotFound(issuer);
 
-        emit IssuerRemoved(contractAddr, issuer);
-    }
-
-    /**
-     * @dev Internal function to update the config rate and user config rate of a configuration.
-     * @param contractAddr The address of the contract.
-     * @param newConfigRate The new config rate to set.
-     * @param newUserConfigRate The new user config rate to set.
-     * @param newRewards The new list of rewards to set.
-     */
-    function _updateConfigRate(
-        address contractAddr,
-        uint256 newConfigRate,
-        uint256 newUserConfigRate,
-        Reward[] memory newRewards
-    ) internal {
-        uint256 index = _findConfigIndex(contractAddr);
-        Config storage config = configs[index];
-
-        uint256 oldRate = config.configRate;
-        config.configRate = newConfigRate;
-        config.userConfigRate = newUserConfigRate;
-
-        // Clear existing rewards
-        delete config.rewards;
-
-        uint256 totalPercentage;
-
-        if(maxRewardAddress == 0) {
-            maxRewardAddress = MAX_REWARD_ADDRESS;
-        }
-
-        if(newRewards.length > maxRewardAddress) {
-            revert TooManyIssuers();
-        }
-
-        for (uint i = 0; i < newRewards.length; i++) {
-            if (newRewards[i].rewardAddress == address(0)) revert InvalidIssuer(newRewards[i].rewardAddress);
-            totalPercentage += newRewards[i].rewardPercentage;
-            config.rewards.push(newRewards[i]); // Push each reward to storage
-        }
-
-        // Check that the total percentage plus user config rate equals the new config rate
-        if (totalPercentage + newUserConfigRate != newConfigRate || newConfigRate >= DENOMINATOR) {
-            revert InvalidRewardPercentage(totalPercentage);
-        }
-
-        emit ConfigUpdated(contractAddr, oldRate, newConfigRate);
+        emit ConfigUpdated(contractAddr, config.events.length, config.functionSignatures.length);
     }
 
     /**
@@ -319,7 +321,7 @@ contract Configuration is System {
         Config storage config = configs[index];
 
         config.isActive = isActive;
-        emit ConfigStatusChanged(contractAddr, isActive);
+        emit ConfigUpdated(contractAddr, config.events.length, config.functionSignatures.length);
     }
 
     // Function to get all configs
@@ -329,22 +331,22 @@ contract Configuration is System {
 
     // Function to get the config for a given contract address
     function getConfig(address contractAddr) external view returns (
-        uint256 configRate,
-        uint256 userConfigRate,
         bool isActive,
         address configAddress,
-        Reward[] memory rewards
+        Event[] memory events,
+        FunctionSignatures[] memory functionSignatures
     ) {
-        uint256 index = _findConfigIndex(contractAddr);
-        Config storage config = configs[index];
-        
-        return (
-            config.configRate,
-            config.userConfigRate,
-            config.isActive,
-            config.configAddress,
-            config.rewards
-        );
+        for (uint256 i = 0; i < configs.length; i++) {
+            if (configs[i].configAddress == contractAddr) {
+                return (
+                    configs[i].isActive,
+                    configs[i].configAddress,
+                    configs[i].events,
+                    configs[i].functionSignatures
+                );
+            }
+        }
+        revert("Config not found");
     }
 
     /**
@@ -356,9 +358,18 @@ contract Configuration is System {
     function isIssuerForConfig(address contractAddr, address issuer) external view returns (bool) {
         uint256 index = _findConfigIndex(contractAddr);
         Config storage config = configs[index];
-        for (uint i = 0; i < config.rewards.length; i++) {
-            if (config.rewards[i].rewardAddress == issuer) {
-                return true;
+        for (uint i = 0; i < config.events.length; i++) {
+            for (uint j = 0; j < config.events[i].rewards.length; j++) {
+                if (config.events[i].rewards[j].rewardAddr == issuer) {
+                    return true;
+                }
+            }
+        }
+        for (uint i = 0; i < config.functionSignatures.length; i++) {
+            for (uint j = 0; j < config.functionSignatures[i].rewards.length; j++) {
+                if (config.functionSignatures[i].rewards[j].rewardAddr == issuer) {
+                    return true;
+                }
             }
         }
         return false;
@@ -367,17 +378,15 @@ contract Configuration is System {
     /**
      * @dev External function for the DAO to add a config.
      * @param contractAddr The address of the contract to add the config to.
-     * @param configRate The config rate to apply.
-     * @param userConfigRate The user config rate to apply.
-     * @param rewards The list of reward addresses and their percentages.
+     * @param events The list of events to apply.
+     * @param functionSignatures The list of function signatures to apply.
      */
     function addConfig(
         address contractAddr,
-        uint256 configRate,
-        uint256 userConfigRate,
-        Reward[] memory rewards
+        Event[] memory events,
+        FunctionSignatures[] memory functionSignatures
     ) external onlyDAO onlyInit {
-        _addConfig(contractAddr, configRate, userConfigRate, rewards);
+        _addConfig(contractAddr, events, functionSignatures, true);
     }
 
     /**
@@ -388,20 +397,44 @@ contract Configuration is System {
         _removeConfig(contractAddr);
     }
 
+    // Example function to retrieve rewards from an event
+    function getEventRewards(uint256 configIndex, uint256 eventIndex) external view returns (Reward[] memory) {
+        require(configIndex < configs.length, "Config index out of bounds");
+        require(eventIndex < configs[configIndex].events.length, "Event index out of bounds");
+
+        return configs[configIndex].events[eventIndex].rewards;
+    }
+
     /**
-     * @dev External function for the DAO to update a config.
+     * @dev Internal function to update the config with new events and function signatures.
      * @param contractAddr The address of the contract to update the config for.
-     * @param newRate The new config rate to set.
-     * @param newUserConfigRate The new user config rate to set.
-     * @param newRewards The new list of rewards to set.
+     * @param events The new list of events to set.
+     * @param functionSignatures The new list of function signatures to set.
      */
-    function updateConfig (
+    function _updateConfig(
         address contractAddr,
-        uint256 newRate,
-        uint256 newUserConfigRate,
-        Reward[] memory newRewards
-    ) external onlyDAO onlyInit {
-        _updateConfigRate(contractAddr, newRate, newUserConfigRate, newRewards);
+        Event[] memory events,
+        FunctionSignatures[] memory functionSignatures
+    ) internal {
+        uint256 index = _findConfigIndex(contractAddr); // Assuming you have this function to find the index
+        Config storage config = configs[index];
+
+        // Update the events and function signatures
+        config.events = events;
+        config.functionSignatures = functionSignatures;
+
+        // Emit the ConfigUpdated event
+        emit ConfigUpdated(contractAddr, events.length, functionSignatures.length);
+    }
+
+    function toBytes32(RLPDecode.RLPItem memory item) internal pure returns (bytes32) {
+        bytes memory data = item.toBytes(); // Convert RLPItem to bytes
+        require(data.length == 32, "Invalid bytes length for bytes32 conversion");
+        bytes32 result;
+        assembly {
+            result := mload(add(data, 32)) // Load the bytes into a bytes32 variable
+        }
+        return result;
     }
 
 }
