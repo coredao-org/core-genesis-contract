@@ -44,7 +44,7 @@ contract Configuration is System {
     }
 
     // DAO Address
-    address public daoAddress = address(0x1);
+    address public daoAddress;
 
     // Constants
     uint256 public constant DENOMINATOR = 10000;   
