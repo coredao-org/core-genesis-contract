@@ -50,12 +50,11 @@ contract Configuration is System {
     // Constants
     uint256 public constant DENOMINATOR = 10000;   
 
-    uint256 public constant MAX_REWARD_ADDRESS = 5;
+    uint256 public MAX_REWARD_ADDRESS;
 
-    uint256 public constant MAX_EVENTS = 5;
+    uint256 public MAX_EVENTS;
 
-    uint256 public constant MAX_FUNCTION_SIGNATURES = 5;
-    uint256 public maxRewardAddress;
+    uint256 public MAX_FUNCTION_SIGNATURES;
 
     Config[] public configs;
 
@@ -83,7 +82,9 @@ contract Configuration is System {
      */
     function init() external onlyNotInit {
         alreadyInit = true;
-        maxRewardAddress = MAX_REWARD_ADDRESS;
+        MAX_REWARD_ADDRESS = 5;
+        MAX_EVENTS = 5;
+        MAX_FUNCTION_SIGNATURES = 5;
     }
 
 
@@ -117,11 +118,6 @@ contract Configuration is System {
         require(eventSignatures.length == eventGas.length, "Event arrays length mismatch");
         require(rewardAddrs.length == rewardPercentages.length, "Reward arrays length mismatch");
         
-        // Ensure even distribution of rewards across events
-        require(rewardAddrs.length % eventSignatures.length == 0, "Rewards must be evenly divisible by events");
-        
-        uint256 rewardsPerEvent = rewardAddrs.length / eventSignatures.length;
-        
         if(maxRewardAddress == 0) {
             maxRewardAddress = MAX_REWARD_ADDRESS;
         }
@@ -146,18 +142,14 @@ contract Configuration is System {
             Event storage newEvent = p.events.push();
             newEvent.eventSignature = eventSignatures[i];
             newEvent.gas = eventGas[i];
-            
-            // Add rewards for this event
-            uint256 startIndex = i * rewardsPerEvent;
-            for (uint j = 0; j < rewardsPerEvent; j++) {
-                uint256 rewardIndex = startIndex + j;
+
+            for (uint j = 0; j < rewardAddrs.length; j++) {
                 Reward storage newReward = newEvent.rewards.push();
-                newReward.rewardAddr = rewardAddrs[rewardIndex];
-                newReward.rewardPercentage = rewardPercentages[rewardIndex];
+                newReward.rewardAddr = rewardAddrs[j];
+                newReward.rewardPercentage = rewardPercentages[j];
             }
         }
         
-        emit ConfigUpdated(contractAddr, eventSignatures.length, 0); // No function signatures
+        emit ConfigUpdated(contractAddr, eventSignatures.length, 0); 
     }
-
 }
