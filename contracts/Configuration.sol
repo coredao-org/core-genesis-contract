@@ -66,7 +66,8 @@ contract Configuration is System {
     error AddressAlreadyExists(address addr);
     error AddressNotFound(address addr);
     error InvalidIssuer(address issuer);
-    error TooManyIssuers();
+    error TooManyEvents();
+    error TooManyRewardAddresses();
     error IssuerNotFound(address issuer);
     error InvalidRewardPercentage(uint256 percentage);
     error EOAConfigAlreadySet();
@@ -118,11 +119,11 @@ contract Configuration is System {
         require(eventSignatures.length == eventGas.length, "Event arrays length mismatch");
         require(rewardAddrs.length == rewardPercentages.length, "Reward arrays length mismatch");
         
-        if(maxRewardAddress == 0) {
-            maxRewardAddress = MAX_REWARD_ADDRESS;
+        if(rewardAddrs.length > MAX_REWARD_ADDRESS) {
+            revert TooManyRewardAddresses();
         }
         if(eventSignatures.length > MAX_EVENTS) {
-            revert TooManyIssuers();
+            revert TooManyEvents();
         }
 
         // Check if the config for the given contract already exists.
@@ -152,4 +153,5 @@ contract Configuration is System {
         
         emit ConfigUpdated(contractAddr, eventSignatures.length, 0); 
     }
+
 }
