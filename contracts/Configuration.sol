@@ -55,6 +55,8 @@ contract Configuration is System {
 
     uint256 public MAX_FUNCTION_SIGNATURES;
 
+    uint256 public MAX_GAS;
+
     Config[] public configs;
 
     // Event to signal config updates
@@ -66,6 +68,7 @@ contract Configuration is System {
     error InvalidIssuer(address issuer);
     error TooManyEvents();
     error TooManyRewardAddresses();
+    error InvalidGasValue(uint gas);
     error IssuerNotFound(address issuer);
     error InvalidRewardPercentage(uint256 percentage);
 
@@ -83,6 +86,7 @@ contract Configuration is System {
         MAX_REWARD_ADDRESS = 5;
         MAX_EVENTS = 5;
         MAX_FUNCTION_SIGNATURES = 5;
+        MAX_GAS = 1000000;
     }
 
 
@@ -227,7 +231,13 @@ contract Configuration is System {
 
             uint256 newMaxEvents = items[0].toUint();
             MAX_EVENTS = newMaxEvents;
-        } else if (Memory.compareStrings(key, "updateMaxFunctionSignatures")) {
+        } else if (Memory.compareStrings(key, "updateMaxGas")) {
+            RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+            if (items.length != 1) revert MismatchParamLength(key);
+
+            uint256 newMaxGas = items[0].toUint();
+            MAX_GAS = newMaxGas;
+         } else if (Memory.compareStrings(key, "updateMaxFunctionSignatures")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
             if (items.length != 1) revert MismatchParamLength(key);
 
@@ -297,6 +307,7 @@ contract Configuration is System {
         // Validate reward percentages for all events
         for (uint i = 0; i < events.length; i++) {
             _validateRewardPercentages(events[i].rewards);
+            _validateGas(events[i].gas);
         }
 
         Config storage p = configs.push();
@@ -353,6 +364,7 @@ contract Configuration is System {
         // Validate reward percentages for all events
         for (uint i = 0; i < events.length; i++) {
             _validateRewardPercentages(events[i].rewards);
+            _validateGas(events[i].gas);
         }
         
         // Clear existing events and add new ones
@@ -440,6 +452,16 @@ contract Configuration is System {
         }
         if (totalPercentage > DENOMINATOR) {
             revert InvalidRewardPercentage(totalPercentage);
+        }
+    }
+
+    /**
+    * @dev Validate gas values are within limits
+    * @param gas The gas value to validate
+    */
+    function _validateGas(uint32 gas) internal view {
+        if (gas > MAX_GAS) {
+            revert InvalidGasValue(gas);
         }
     }
 }
