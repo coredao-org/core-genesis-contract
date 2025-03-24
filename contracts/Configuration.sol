@@ -464,4 +464,45 @@ contract Configuration is System {
             revert InvalidGasValue(gas);
         }
     }
+
+    /**
+    * @dev Public function to remove a configuration.
+    * @param contractAddr The address of the contract to remove the config from.
+    */
+    function removeConfig(address contractAddr) external onlyDAO onlyInit {
+        _removeConfig(contractAddr);
+    }
+
+    /**
+    * @dev Public function to update a configuration.
+    * @param contractAddr The address of the contract to update the config for.
+    * @param events The new array of events.
+    * @param functionSignatures The new array of function signatures.
+    */
+    function updateConfig(
+        address contractAddr, 
+        Event[] memory events, 
+        FunctionSignatures[] memory functionSignatures
+    ) external onlyDAO onlyInit {
+        _updateConfig(contractAddr, events, functionSignatures);
+    }
+
+    /**
+    * @dev Public function to remove an issuer from a configuration.
+    * @param contractAddr The address of the contract.
+    * @param issuer The address of the issuer to remove.
+    */
+    function removeIssuer(address contractAddr, address issuer) external onlyDAO onlyInit {
+        _removeIssuer(contractAddr, issuer);
+    }
+
+    /**
+    * @dev Public function to set the active status of a configuration.
+    * @param contractAddr The address of the contract.
+    * @param isActive The active status to set.
+    */
+    function setConfigStatus(address contractAddr, bool isActive) external onlyDAO onlyInit {
+        _setConfigStatus(contractAddr, isActive);
+    }
+
 }
