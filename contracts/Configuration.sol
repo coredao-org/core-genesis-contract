@@ -409,19 +409,6 @@ contract Configuration is System {
             }
         }
         
-        // Check function signatures
-        for (uint i = 0; i < configs[idx].functionSignatures.length; i++) {
-            for (uint j = 0; j < configs[idx].functionSignatures[i].rewards.length; j++) {
-                if (configs[idx].functionSignatures[i].rewards[j].rewardAddr == issuer) {
-                    // Replace with the last element and remove the last
-                    configs[idx].functionSignatures[i].rewards[j] = configs[idx].functionSignatures[i].rewards[configs[idx].functionSignatures[i].rewards.length - 1];
-                    configs[idx].functionSignatures[i].rewards.pop();
-                    found = true;
-                    break;
-                }
-            }
-        }
-        
         if (!found) {
             revert IssuerNotFound(issuer);
         }
