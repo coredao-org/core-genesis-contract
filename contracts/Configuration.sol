@@ -384,9 +384,6 @@ contract Configuration is System {
             }
         }
         
-        // Clear existing function signatures and add new ones
-        delete configs[idx].functionSignatures;
-        
         emit ConfigUpdated(contractAddr, events.length, 0);
     }
 
