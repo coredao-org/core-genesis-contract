@@ -44,7 +44,7 @@ contract Configuration is System {
     }
 
     // DAO Address
-    address public daoAddress;
+    address public daoAddress = address(0x1);
 
     // Constants
     uint256 public constant DENOMINATOR = 10000;   
@@ -384,6 +384,7 @@ contract Configuration is System {
             }
         }
         
+        
         emit ConfigUpdated(contractAddr, events.length, 0);
     }
 
@@ -412,6 +413,8 @@ contract Configuration is System {
         if (!found) {
             revert IssuerNotFound(issuer);
         }
+        
+        emit ConfigUpdated(contractAddr, 0, 0);
     }
 
     /**
