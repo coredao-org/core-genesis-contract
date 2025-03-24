@@ -286,12 +286,17 @@ contract Configuration is System {
             }
         }
 
-        if (events.length > MAX_EVENTS) {
+        if (events.length > MAX_EVENTS && events.length != 0) {
             revert TooManyEvents();
         }
         
         if (functionSignatures.length > MAX_FUNCTION_SIGNATURES) {
             revert TooManyEvents();
+        }
+
+        // Validate reward percentages for all events
+        for (uint i = 0; i < events.length; i++) {
+            _validateRewardPercentages(events[i].rewards);
         }
 
         Config storage p = configs.push();
@@ -337,12 +342,17 @@ contract Configuration is System {
     function _updateConfig(address contractAddr, Event[] memory events, FunctionSignatures[] memory functionSignatures) internal {
         uint256 idx = _findConfigIndex(contractAddr);
         
-        if (events.length > MAX_EVENTS) {
+        if (events.length > MAX_EVENTS && events.length != 0) {
             revert TooManyEvents();
         }
         
         if (functionSignatures.length > MAX_FUNCTION_SIGNATURES) {
             revert TooManyEvents();
+        }
+
+        // Validate reward percentages for all events
+        for (uint i = 0; i < events.length; i++) {
+            _validateRewardPercentages(events[i].rewards);
         }
         
         // Clear existing events and add new ones
@@ -417,5 +427,19 @@ contract Configuration is System {
         uint256 idx = _findConfigIndex(contractAddr);
         configs[idx].isActive = isActive;
         emit ConfigUpdated(contractAddr, 0, 0);
+    }
+
+    /**
+    * @dev Internal function to validate that total reward percentages don't exceed 100%.
+    * @param rewards Array of rewards to validate.
+    */
+    function _validateRewardPercentages(Reward[] memory rewards) internal pure  {
+        uint256 totalPercentage = 0;
+        for (uint i = 0; i < rewards.length; i++) {
+            totalPercentage += rewards[i].rewardPercentage;
+        }
+        if (totalPercentage > DENOMINATOR) {
+            revert InvalidRewardPercentage(totalPercentage);
+        }
     }
 }
