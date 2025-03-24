@@ -44,7 +44,7 @@ contract Configuration is System {
     }
 
     // DAO Address
-    address public daoAddress;
+    address public daoAddress = address(0x1);
 
     // Constants
     uint256 public constant DENOMINATOR = 10000;   
@@ -221,9 +221,21 @@ contract Configuration is System {
  
              uint256 newMaxRewardAddress = items[0].toUint();
              MAX_REWARD_ADDRESS = newMaxRewardAddress;
-         } else {
-             revert UnsupportedGovParam(key);
-         }
+        } else if (Memory.compareStrings(key, "updateMaxEvents")) {
+            RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+            if (items.length != 1) revert MismatchParamLength(key);
+
+            uint256 newMaxEvents = items[0].toUint();
+            MAX_EVENTS = newMaxEvents;
+        } else if (Memory.compareStrings(key, "updateMaxFunctionSignatures")) {
+            RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+            if (items.length != 1) revert MismatchParamLength(key);
+
+            uint256 newMaxFunctionSignatures = items[0].toUint();
+            MAX_FUNCTION_SIGNATURES = newMaxFunctionSignatures;
+        } else {
+            revert UnsupportedGovParam(key);
+        }
      }
 
 
