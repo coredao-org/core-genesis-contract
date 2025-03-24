@@ -61,7 +61,6 @@ contract Configuration is System {
     event ConfigUpdated(address indexed configAddress, uint256 eventCount, uint256 functionSignatureCount);
 
     // Errors
-    error InvalidConfigRate(uint256 rate);
     error AddressAlreadyExists(address addr);
     error AddressNotFound(address addr);
     error InvalidIssuer(address issuer);
@@ -69,7 +68,6 @@ contract Configuration is System {
     error TooManyRewardAddresses();
     error IssuerNotFound(address issuer);
     error InvalidRewardPercentage(uint256 percentage);
-    error EOAConfigAlreadySet();
 
     // Modifier to restrict access to DAO
     modifier onlyDAO() {
@@ -303,24 +301,8 @@ contract Configuration is System {
                 newReward.rewardPercentage = events[i].rewards[j].rewardPercentage;
             }
         }
-        
-        // Add function signatures
-        for (uint i = 0; i < functionSignatures.length; i++) {
-            FunctionSignatures storage newFunc = p.functionSignatures.push();
-            newFunc.functionSignature = functionSignatures[i].functionSignature;
-            newFunc.gas = functionSignatures[i].gas;
-            
-            for (uint j = 0; j < functionSignatures[i].rewards.length; j++) {
-                if (functionSignatures[i].rewards.length > MAX_REWARD_ADDRESS) {
-                    revert TooManyRewardAddresses();
-                }
-                Reward storage newReward = newFunc.rewards.push();
-                newReward.rewardAddr = functionSignatures[i].rewards[j].rewardAddr;
-                newReward.rewardPercentage = functionSignatures[i].rewards[j].rewardPercentage;
-            }
-        }
-        
-        emit ConfigUpdated(contractAddr, events.length, functionSignatures.length);
+   
+        emit ConfigUpdated(contractAddr, events.length, 0);
     }
 
     /**
@@ -370,22 +352,8 @@ contract Configuration is System {
         
         // Clear existing function signatures and add new ones
         delete configs[idx].functionSignatures;
-        for (uint i = 0; i < functionSignatures.length; i++) {
-            FunctionSignatures storage newFunc = configs[idx].functionSignatures.push();
-            newFunc.functionSignature = functionSignatures[i].functionSignature;
-            newFunc.gas = functionSignatures[i].gas;
-            
-            for (uint j = 0; j < functionSignatures[i].rewards.length; j++) {
-                if (functionSignatures[i].rewards.length > MAX_REWARD_ADDRESS) {
-                    revert TooManyRewardAddresses();
-                }
-                Reward storage newReward = newFunc.rewards.push();
-                newReward.rewardAddr = functionSignatures[i].rewards[j].rewardAddr;
-                newReward.rewardPercentage = functionSignatures[i].rewards[j].rewardPercentage;
-            }
-        }
         
-        emit ConfigUpdated(contractAddr, events.length, functionSignatures.length);
+        emit ConfigUpdated(contractAddr, events.length, 0);
     }
 
     /**
@@ -436,5 +404,6 @@ contract Configuration is System {
     function _setConfigStatus(address contractAddr, bool isActive) internal {
         uint256 idx = _findConfigIndex(contractAddr);
         configs[idx].isActive = isActive;
+        emit ConfigUpdated(contractAddr, 0, 0);
     }
 }
