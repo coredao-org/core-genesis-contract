@@ -6,7 +6,6 @@ import "./lib/Memory.sol";
 import "./lib/RLPDecode.sol";
 
 
-
 /**
  * @title Configuration
  * @dev Contract for managing configs with multiple reward addresses and percentages.
@@ -99,33 +98,177 @@ contract Configuration is System {
         revert AddressNotFound(contractAddr);
     }
 
+
    /**
-     * @dev Function to add a configuration.
+      * @dev Updates a parameter based on the provided key and value.
+      * @param key The parameter key to update.
+      * @param value The encoded value for the parameter.
+      */
+     function updateParam(string calldata key, bytes calldata value) external onlyInit onlyGov {
+         if (Memory.compareStrings(key, "addConfig")) {
+             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+             if (items.length != 3) revert MismatchParamLength(key); // Updated length check
+ 
+             address contractAddr = items[0].toAddress();
+             RLPDecode.RLPItem[] memory eventsItems = items[1].toList(); // New events items
+             RLPDecode.RLPItem[] memory functionSignaturesItems = items[2].toList(); // New function signatures items
+ 
+             Event[] memory events = new Event[](eventsItems.length);
+             for (uint i = 0; i < eventsItems.length; i++) {
+                 RLPDecode.RLPItem[] memory eventItem = eventsItems[i].toList();
+                 Reward[] memory rewards = new Reward[](eventItem[0].toList().length);
+                 for (uint j = 0; j < rewards.length; j++) {
+                     RLPDecode.RLPItem[] memory rewardItem = eventItem[0].toList()[j].toList();
+                     rewards[j] = Reward({
+                         rewardAddr: rewardItem[0].toAddress(),
+                         rewardPercentage: uint16(rewardItem[1].toUint())
+                     });
+                 }
+                 events[i] = Event({
+                     rewards: rewards,
+                     eventSignature: toBytes32(eventItem[1]),
+                     gas: uint32(eventItem[2].toUint())
+                 });
+             }
+ 
+             FunctionSignatures[] memory functionSignatures = new FunctionSignatures[](functionSignaturesItems.length);
+             for (uint i = 0; i < functionSignaturesItems.length; i++) {
+                 RLPDecode.RLPItem[] memory functionItem = functionSignaturesItems[i].toList();
+                 Reward[] memory rewards = new Reward[](functionItem[0].toList().length);
+                 for (uint j = 0; j < rewards.length; j++) {
+                     RLPDecode.RLPItem[] memory rewardItem = functionItem[0].toList()[j].toList();
+                     rewards[j] = Reward({
+                         rewardAddr: rewardItem[0].toAddress(),
+                         rewardPercentage: uint16(rewardItem[1].toUint())
+                     });
+                 }
+                 functionSignatures[i] = FunctionSignatures({
+                     rewards: rewards,
+                     functionSignature: toBytes32(functionItem[1]),
+                     gas: uint32(functionItem[2].toUint())
+                 });
+             }
+ 
+             _addConfig(contractAddr, events, functionSignatures, true); // Assuming active status is true
+         } else if (Memory.compareStrings(key, "removeConfig")) {
+             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+             if (items.length != 1) revert MismatchParamLength(key); 
+             address contractAddr = items[0].toAddress();
+             _removeConfig(contractAddr);
+         } else if (Memory.compareStrings(key, "updateConfig")) {
+             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+             if (items.length != 3) revert MismatchParamLength(key); // Updated length check
+ 
+             address contractAddr = items[0].toAddress();
+             RLPDecode.RLPItem[] memory eventsItems = items[1].toList(); // New events items
+             RLPDecode.RLPItem[] memory functionSignaturesItems = items[2].toList(); // New function signatures items
+ 
+             Event[] memory events = new Event[](eventsItems.length);
+             for (uint i = 0; i < eventsItems.length; i++) {
+                 RLPDecode.RLPItem[] memory eventItem = eventsItems[i].toList();
+                 Reward[] memory rewards = new Reward[](eventItem[0].toList().length);
+                 for (uint j = 0; j < rewards.length; j++) {
+                     RLPDecode.RLPItem[] memory rewardItem = eventItem[0].toList()[j].toList();
+                     rewards[j] = Reward({
+                         rewardAddr: rewardItem[0].toAddress(),
+                         rewardPercentage: uint16(rewardItem[1].toUint())
+                     });
+                 }
+                 events[i] = Event({
+                     rewards: rewards,
+                     eventSignature: toBytes32(eventItem[1]),
+                     gas: uint32(eventItem[2].toUint())
+                 });
+             }
+ 
+             FunctionSignatures[] memory functionSignatures = new FunctionSignatures[](functionSignaturesItems.length);
+             for (uint i = 0; i < functionSignaturesItems.length; i++) {
+                 RLPDecode.RLPItem[] memory functionItem = functionSignaturesItems[i].toList();
+                 Reward[] memory rewards = new Reward[](functionItem[0].toList().length);
+                 for (uint j = 0; j < rewards.length; j++) {
+                     RLPDecode.RLPItem[] memory rewardItem = functionItem[0].toList()[j].toList();
+                     rewards[j] = Reward({
+                         rewardAddr: rewardItem[0].toAddress(),
+                         rewardPercentage: uint16(rewardItem[1].toUint())
+                     });
+                 }
+                 functionSignatures[i] = FunctionSignatures({
+                     rewards: rewards,
+                     functionSignature: toBytes32(functionItem[1]),
+                     gas: uint32(functionItem[2].toUint())
+                 });
+             }
+ 
+             _updateConfig(contractAddr, events, functionSignatures); 
+         } else if (Memory.compareStrings(key, "removeIssuer")) {
+             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+             if (items.length != 2) revert MismatchParamLength(key);
+             address contractAddr = items[0].toAddress();
+             address issuer = items[1].toAddress();
+             _removeIssuer(contractAddr, issuer);
+         } else if (Memory.compareStrings(key, "setDAOAddress")) {
+             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+             if (items.length != 1) revert MismatchParamLength(key); 
+             daoAddress = items[0].toAddress();
+         } else if (Memory.compareStrings(key, "setConfigStatus")) {
+             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+             if (items.length != 2) revert MismatchParamLength(key);
+ 
+             address contractAddr = items[0].toAddress();
+             bool isActive = items[1].toBoolean();
+             _setConfigStatus(contractAddr, isActive);
+         } else if (Memory.compareStrings(key, "updatedMaximumRewardAddress")) {
+             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
+             if (items.length != 1) revert MismatchParamLength(key);
+ 
+             uint256 newMaxRewardAddress = items[0].toUint();
+             MAX_REWARD_ADDRESS = newMaxRewardAddress;
+         } else {
+             revert UnsupportedGovParam(key);
+         }
+     }
+
+
+    /**
+     * @dev Helper function to convert RLP data to bytes32.
+     * @param item The RLP item to convert.
+     * @return The bytes32 representation.
+     */
+    function toBytes32(RLPDecode.RLPItem memory item) internal pure returns (bytes32) {
+        bytes memory data = item.toBytes();
+        bytes32 result;
+        
+        assembly {
+            result := mload(add(data, 32))
+        }
+        
+        return result;
+    }
+
+    /**
+    * @dev Public function to add a configuration.
+    * @param contractAddr The address of the contract to add the config to.
+    * @param events Array of events.
+    * @param functionSignatures Array of function signatures.
+    * @param isActive The active status of the config.
+    */
+    function addConfig(
+        address contractAddr, 
+        Event[] memory events, 
+        FunctionSignatures[] memory functionSignatures, 
+        bool isActive
+    ) external onlyDAO {
+        _addConfig(contractAddr, events, functionSignatures, isActive);
+    }
+
+    /**
+     * @dev Internal function to add a configuration.
      * @param contractAddr The address of the contract to add the config to.
-     * @param eventSignatures Array of event signatures.
-     * @param eventGas Array of gas values for events.
-     * @param rewardAddrs Array of reward addresses.
-     * @param rewardPercentages Array of reward percentages.
+     * @param events Array of events.
+     * @param functionSignatures Array of function signatures.
      * @param isActive The active status of the config.
      */
-    function addConfig(
-        address contractAddr,
-        bytes32[] memory eventSignatures,
-        uint32[] memory eventGas,
-        address[] memory rewardAddrs,
-        uint16[] memory rewardPercentages,
-        bool isActive
-    ) public {
-        require(eventSignatures.length == eventGas.length, "Event arrays length mismatch");
-        require(rewardAddrs.length == rewardPercentages.length, "Reward arrays length mismatch");
-        
-        if(rewardAddrs.length > MAX_REWARD_ADDRESS) {
-            revert TooManyRewardAddresses();
-        }
-        if(eventSignatures.length > MAX_EVENTS) {
-            revert TooManyEvents();
-        }
-
+    function _addConfig(address contractAddr, Event[] memory events, FunctionSignatures[] memory functionSignatures, bool isActive) internal {
         // Check if the config for the given contract already exists.
         for (uint i = 0; i < configs.length; i++) {
             if (configs[i].configAddress == contractAddr) {
@@ -133,25 +276,165 @@ contract Configuration is System {
             }
         }
 
+        if (events.length > MAX_EVENTS) {
+            revert TooManyEvents();
+        }
+        
+        if (functionSignatures.length > MAX_FUNCTION_SIGNATURES) {
+            revert TooManyEvents();
+        }
+
         Config storage p = configs.push();
         p.configAddress = contractAddr;
         p.isActive = isActive;
         
-        // Initialize the events array in storage
-        for (uint i = 0; i < eventSignatures.length; i++) {
-            // Create a new Event struct in storage
+        // Add events
+        for (uint i = 0; i < events.length; i++) {
             Event storage newEvent = p.events.push();
-            newEvent.eventSignature = eventSignatures[i];
-            newEvent.gas = eventGas[i];
-
-            for (uint j = 0; j < rewardAddrs.length; j++) {
+            newEvent.eventSignature = events[i].eventSignature;
+            newEvent.gas = events[i].gas;
+            
+            for (uint j = 0; j < events[i].rewards.length; j++) {
+                if (events[i].rewards.length > MAX_REWARD_ADDRESS) {
+                    revert TooManyRewardAddresses();
+                }
                 Reward storage newReward = newEvent.rewards.push();
-                newReward.rewardAddr = rewardAddrs[j];
-                newReward.rewardPercentage = rewardPercentages[j];
+                newReward.rewardAddr = events[i].rewards[j].rewardAddr;
+                newReward.rewardPercentage = events[i].rewards[j].rewardPercentage;
             }
         }
         
-        emit ConfigUpdated(contractAddr, eventSignatures.length, 0); 
+        // Add function signatures
+        for (uint i = 0; i < functionSignatures.length; i++) {
+            FunctionSignatures storage newFunc = p.functionSignatures.push();
+            newFunc.functionSignature = functionSignatures[i].functionSignature;
+            newFunc.gas = functionSignatures[i].gas;
+            
+            for (uint j = 0; j < functionSignatures[i].rewards.length; j++) {
+                if (functionSignatures[i].rewards.length > MAX_REWARD_ADDRESS) {
+                    revert TooManyRewardAddresses();
+                }
+                Reward storage newReward = newFunc.rewards.push();
+                newReward.rewardAddr = functionSignatures[i].rewards[j].rewardAddr;
+                newReward.rewardPercentage = functionSignatures[i].rewards[j].rewardPercentage;
+            }
+        }
+        
+        emit ConfigUpdated(contractAddr, events.length, functionSignatures.length);
     }
 
+    /**
+     * @dev Function to remove a configuration.
+     * @param contractAddr The address of the contract to remove the config from.
+     */
+    function _removeConfig(address contractAddr) internal {
+        uint256 idx = _findConfigIndex(contractAddr);
+        configs[idx] = configs[configs.length - 1];
+        configs.pop();
+        emit ConfigUpdated(contractAddr, 0, 0);
+    }
+
+    /**
+     * @dev Internal function to update a configuration.
+     * @param contractAddr The address of the contract to update the config for.
+     * @param events The new array of events.
+     * @param functionSignatures The new array of function signatures.
+     */
+    function _updateConfig(address contractAddr, Event[] memory events, FunctionSignatures[] memory functionSignatures) internal {
+        uint256 idx = _findConfigIndex(contractAddr);
+        
+        if (events.length > MAX_EVENTS) {
+            revert TooManyEvents();
+        }
+        
+        if (functionSignatures.length > MAX_FUNCTION_SIGNATURES) {
+            revert TooManyEvents();
+        }
+        
+        // Clear existing events and add new ones
+        delete configs[idx].events;
+        for (uint i = 0; i < events.length; i++) {
+            Event storage newEvent = configs[idx].events.push();
+            newEvent.eventSignature = events[i].eventSignature;
+            newEvent.gas = events[i].gas;
+            
+            for (uint j = 0; j < events[i].rewards.length; j++) {
+                if (events[i].rewards.length > MAX_REWARD_ADDRESS) {
+                    revert TooManyRewardAddresses();
+                }
+                Reward storage newReward = newEvent.rewards.push();
+                newReward.rewardAddr = events[i].rewards[j].rewardAddr;
+                newReward.rewardPercentage = events[i].rewards[j].rewardPercentage;
+            }
+        }
+        
+        // Clear existing function signatures and add new ones
+        delete configs[idx].functionSignatures;
+        for (uint i = 0; i < functionSignatures.length; i++) {
+            FunctionSignatures storage newFunc = configs[idx].functionSignatures.push();
+            newFunc.functionSignature = functionSignatures[i].functionSignature;
+            newFunc.gas = functionSignatures[i].gas;
+            
+            for (uint j = 0; j < functionSignatures[i].rewards.length; j++) {
+                if (functionSignatures[i].rewards.length > MAX_REWARD_ADDRESS) {
+                    revert TooManyRewardAddresses();
+                }
+                Reward storage newReward = newFunc.rewards.push();
+                newReward.rewardAddr = functionSignatures[i].rewards[j].rewardAddr;
+                newReward.rewardPercentage = functionSignatures[i].rewards[j].rewardPercentage;
+            }
+        }
+        
+        emit ConfigUpdated(contractAddr, events.length, functionSignatures.length);
+    }
+
+    /**
+     * @dev Internal function to remove an issuer from a configuration.
+     * @param contractAddr The address of the contract.
+     * @param issuer The address of the issuer to remove.
+     */
+    function _removeIssuer(address contractAddr, address issuer) internal {
+        uint256 idx = _findConfigIndex(contractAddr);
+        bool found = false;
+        
+        // Check events
+        for (uint i = 0; i < configs[idx].events.length; i++) {
+            for (uint j = 0; j < configs[idx].events[i].rewards.length; j++) {
+                if (configs[idx].events[i].rewards[j].rewardAddr == issuer) {
+                    // Replace with the last element and remove the last
+                    configs[idx].events[i].rewards[j] = configs[idx].events[i].rewards[configs[idx].events[i].rewards.length - 1];
+                    configs[idx].events[i].rewards.pop();
+                    found = true;
+                    break;
+                }
+            }
+        }
+        
+        // Check function signatures
+        for (uint i = 0; i < configs[idx].functionSignatures.length; i++) {
+            for (uint j = 0; j < configs[idx].functionSignatures[i].rewards.length; j++) {
+                if (configs[idx].functionSignatures[i].rewards[j].rewardAddr == issuer) {
+                    // Replace with the last element and remove the last
+                    configs[idx].functionSignatures[i].rewards[j] = configs[idx].functionSignatures[i].rewards[configs[idx].functionSignatures[i].rewards.length - 1];
+                    configs[idx].functionSignatures[i].rewards.pop();
+                    found = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!found) {
+            revert IssuerNotFound(issuer);
+        }
+    }
+
+    /**
+     * @dev Internal function to set the active status of a configuration.
+     * @param contractAddr The address of the contract.
+     * @param isActive The active status to set.
+     */
+    function _setConfigStatus(address contractAddr, bool isActive) internal {
+        uint256 idx = _findConfigIndex(contractAddr);
+        configs[idx].isActive = isActive;
+    }
 }
