@@ -267,7 +267,7 @@ contract Configuration is System {
         Event[] memory events, 
         FunctionSignatures[] memory functionSignatures, 
         bool isActive
-    ) external onlyDAO {
+    ) external onlyDAO onlyInit {
         _addConfig(contractAddr, events, functionSignatures, isActive);
     }
 
