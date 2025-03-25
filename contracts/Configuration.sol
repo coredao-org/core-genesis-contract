@@ -113,7 +113,6 @@ contract Configuration is System {
  
              address contractAddr = items[0].toAddress();
              RLPDecode.RLPItem[] memory eventsItems = items[1].toList(); // New events items
-             RLPDecode.RLPItem[] memory functionSignaturesItems = items[2].toList(); // New function signatures items
  
              Event[] memory events = new Event[](eventsItems.length);
              for (uint i = 0; i < eventsItems.length; i++) {
@@ -133,23 +132,7 @@ contract Configuration is System {
                  });
              }
  
-             FunctionSignatures[] memory functionSignatures = new FunctionSignatures[](functionSignaturesItems.length);
-             for (uint i = 0; i < functionSignaturesItems.length; i++) {
-                 RLPDecode.RLPItem[] memory functionItem = functionSignaturesItems[i].toList();
-                 Reward[] memory rewards = new Reward[](functionItem[0].toList().length);
-                 for (uint j = 0; j < rewards.length; j++) {
-                     RLPDecode.RLPItem[] memory rewardItem = functionItem[0].toList()[j].toList();
-                     rewards[j] = Reward({
-                         rewardAddr: rewardItem[0].toAddress(),
-                         rewardPercentage: uint16(rewardItem[1].toUint())
-                     });
-                 }
-                 functionSignatures[i] = FunctionSignatures({
-                     rewards: rewards,
-                     functionSignature: toBytes32(functionItem[1]),
-                     gas: uint32(functionItem[2].toUint())
-                 });
-             }
+             FunctionSignatures[] memory functionSignatures = new FunctionSignatures[](0);
  
              _addConfig(contractAddr, events, functionSignatures, true); // Assuming active status is true
          } else if (Memory.compareStrings(key, "removeConfig")) {
@@ -163,7 +146,6 @@ contract Configuration is System {
  
              address contractAddr = items[0].toAddress();
              RLPDecode.RLPItem[] memory eventsItems = items[1].toList(); // New events items
-             RLPDecode.RLPItem[] memory functionSignaturesItems = items[2].toList(); // New function signatures items
  
              Event[] memory events = new Event[](eventsItems.length);
              for (uint i = 0; i < eventsItems.length; i++) {
@@ -183,24 +165,8 @@ contract Configuration is System {
                  });
              }
  
-             FunctionSignatures[] memory functionSignatures = new FunctionSignatures[](functionSignaturesItems.length);
-             for (uint i = 0; i < functionSignaturesItems.length; i++) {
-                 RLPDecode.RLPItem[] memory functionItem = functionSignaturesItems[i].toList();
-                 Reward[] memory rewards = new Reward[](functionItem[0].toList().length);
-                 for (uint j = 0; j < rewards.length; j++) {
-                     RLPDecode.RLPItem[] memory rewardItem = functionItem[0].toList()[j].toList();
-                     rewards[j] = Reward({
-                         rewardAddr: rewardItem[0].toAddress(),
-                         rewardPercentage: uint16(rewardItem[1].toUint())
-                     });
-                 }
-                 functionSignatures[i] = FunctionSignatures({
-                     rewards: rewards,
-                     functionSignature: toBytes32(functionItem[1]),
-                     gas: uint32(functionItem[2].toUint())
-                 });
-             }
- 
+             FunctionSignatures[] memory functionSignatures = new FunctionSignatures[](0);
+
              _updateConfig(contractAddr, events, functionSignatures); 
          } else if (Memory.compareStrings(key, "removeIssuer")) {
              RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
@@ -413,8 +379,8 @@ contract Configuration is System {
         if (!found) {
             revert IssuerNotFound(issuer);
         }
-        
-        emit ConfigUpdated(contractAddr, 0, 0);
+
+        emit ConfigUpdated(contractAddr, configs[idx].events.length, 0);
     }
 
     /**
