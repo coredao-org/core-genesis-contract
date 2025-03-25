@@ -115,10 +115,10 @@ contract Configuration is System {
              RLPDecode.RLPItem[] memory eventsItems = items[1].toList(); // New events items
  
              Event[] memory events = new Event[](eventsItems.length);
-             for (uint i = 0; i < eventsItems.length; i++) {
+             for (uint i; i < eventsItems.length; i++) {
                  RLPDecode.RLPItem[] memory eventItem = eventsItems[i].toList();
                  Reward[] memory rewards = new Reward[](eventItem[0].toList().length);
-                 for (uint j = 0; j < rewards.length; j++) {
+                 for (uint j; j < rewards.length; j++) {
                      RLPDecode.RLPItem[] memory rewardItem = eventItem[0].toList()[j].toList();
                      rewards[j] = Reward({
                          rewardAddr: rewardItem[0].toAddress(),
@@ -148,10 +148,10 @@ contract Configuration is System {
              RLPDecode.RLPItem[] memory eventsItems = items[1].toList(); // New events items
  
              Event[] memory events = new Event[](eventsItems.length);
-             for (uint i = 0; i < eventsItems.length; i++) {
+             for (uint i; i < eventsItems.length; i++) {
                  RLPDecode.RLPItem[] memory eventItem = eventsItems[i].toList();
                  Reward[] memory rewards = new Reward[](eventItem[0].toList().length);
-                 for (uint j = 0; j < rewards.length; j++) {
+                 for (uint j; j < rewards.length; j++) {
                      RLPDecode.RLPItem[] memory rewardItem = eventItem[0].toList()[j].toList();
                      rewards[j] = Reward({
                          rewardAddr: rewardItem[0].toAddress(),
@@ -256,7 +256,7 @@ contract Configuration is System {
      */
     function _addConfig(address contractAddr, Event[] memory events, FunctionSignatures[] memory functionSignatures, bool isActive) internal {
         // Check if the config for the given contract already exists.
-        for (uint i = 0; i < configs.length; i++) {
+        for (uint i; i < configs.length; i++) {
             if (configs[i].configAddress == contractAddr) {
                 revert AddressAlreadyExists(contractAddr);
             }
@@ -271,7 +271,7 @@ contract Configuration is System {
         }
 
         // Validate reward percentages for all events
-        for (uint i = 0; i < events.length; i++) {
+        for (uint i; i < events.length; i++) {
             _validateRewardPercentages(events[i].rewards);
             _validateGas(events[i].gas);
         }
@@ -281,12 +281,12 @@ contract Configuration is System {
         p.isActive = isActive;
         
         // Add events
-        for (uint i = 0; i < events.length; i++) {
+        for (uint i; i < events.length; i++) {
             Event storage newEvent = p.events.push();
             newEvent.eventSignature = events[i].eventSignature;
             newEvent.gas = events[i].gas;
             
-            for (uint j = 0; j < events[i].rewards.length; j++) {
+            for (uint j; j < events[i].rewards.length; j++) {
                 if (events[i].rewards.length > MAX_REWARD_ADDRESS) {
                     revert TooManyRewardAddresses();
                 }
@@ -335,12 +335,12 @@ contract Configuration is System {
         
         // Clear existing events and add new ones
         delete configs[idx].events;
-        for (uint i = 0; i < events.length; i++) {
+        for (uint i; i < events.length; i++) {
             Event storage newEvent = configs[idx].events.push();
             newEvent.eventSignature = events[i].eventSignature;
             newEvent.gas = events[i].gas;
             
-            for (uint j = 0; j < events[i].rewards.length; j++) {
+            for (uint j; j < events[i].rewards.length; j++) {
                 if (events[i].rewards.length > MAX_REWARD_ADDRESS) {
                     revert TooManyRewardAddresses();
                 }
@@ -364,8 +364,8 @@ contract Configuration is System {
         bool found = false;
         
         // Check events
-        for (uint i = 0; i < configs[idx].events.length; i++) {
-            for (uint j = 0; j < configs[idx].events[i].rewards.length; j++) {
+        for (uint i; i < configs[idx].events.length; i++) {
+            for (uint j; j < configs[idx].events[i].rewards.length; j++) {
                 if (configs[idx].events[i].rewards[j].rewardAddr == issuer) {
                     // Replace with the last element and remove the last
                     configs[idx].events[i].rewards[j] = configs[idx].events[i].rewards[configs[idx].events[i].rewards.length - 1];
@@ -400,7 +400,7 @@ contract Configuration is System {
     */
     function _validateRewardPercentages(Reward[] memory rewards) internal pure  {
         uint256 totalPercentage = 0;
-        for (uint i = 0; i < rewards.length; i++) {
+        for (uint i; i < rewards.length; i++) {
             totalPercentage += rewards[i].rewardPercentage;
         }
         if (totalPercentage > DENOMINATOR) {
