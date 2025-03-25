@@ -265,10 +265,6 @@ contract Configuration is System {
         if (events.length > MAX_EVENTS && events.length != 0) {
             revert TooManyEvents();
         }
-        
-        if (functionSignatures.length > MAX_FUNCTION_SIGNATURES) {
-            revert TooManyEvents();
-        }
 
         // Validate reward percentages for all events
         for (uint i; i < events.length; i++) {
@@ -320,10 +316,6 @@ contract Configuration is System {
         uint256 idx = _findConfigIndex(contractAddr);
         
         if (events.length > MAX_EVENTS && events.length != 0) {
-            revert TooManyEvents();
-        }
-        
-        if (functionSignatures.length > MAX_FUNCTION_SIGNATURES) {
             revert TooManyEvents();
         }
 
