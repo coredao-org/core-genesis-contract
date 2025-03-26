@@ -44,7 +44,7 @@ contract Configuration is System {
     }
 
     // DAO Address
-    address public daoAddress;
+    address public daoAddress = address(0x1);
 
     // Constants
     uint256 public constant DENOMINATOR = 10000;   
@@ -61,6 +61,7 @@ contract Configuration is System {
 
     // Event to signal config updates
     event ConfigUpdated(address indexed configAddress, uint256 eventCount, uint256 functionSignatureCount);
+    event ConstantUpdated();
 
     // Errors
     error AddressAlreadyExists(address addr);
@@ -178,6 +179,7 @@ contract Configuration is System {
              RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
              if (items.length != 1) revert MismatchParamLength(key); 
              daoAddress = items[0].toAddress();
+             emit ConstantUpdated();
          } else if (Memory.compareStrings(key, "setConfigStatus")) {
              RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
              if (items.length != 2) revert MismatchParamLength(key);
@@ -185,30 +187,35 @@ contract Configuration is System {
              address contractAddr = items[0].toAddress();
              bool isActive = items[1].toBoolean();
              _setConfigStatus(contractAddr, isActive);
+             emit ConstantUpdated();
          } else if (Memory.compareStrings(key, "updatedMaximumRewardAddress")) {
              RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
              if (items.length != 1) revert MismatchParamLength(key);
  
              uint256 newMaxRewardAddress = items[0].toUint();
              MAX_REWARD_ADDRESS = newMaxRewardAddress;
+             emit ConstantUpdated();
         } else if (Memory.compareStrings(key, "updateMaxEvents")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
             if (items.length != 1) revert MismatchParamLength(key);
 
             uint256 newMaxEvents = items[0].toUint();
             MAX_EVENTS = newMaxEvents;
+            emit ConstantUpdated();
         } else if (Memory.compareStrings(key, "updateMaxGas")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
             if (items.length != 1) revert MismatchParamLength(key);
 
             uint256 newMaxGas = items[0].toUint();
             MAX_GAS = newMaxGas;
+            emit ConstantUpdated();
          } else if (Memory.compareStrings(key, "updateMaxFunctionSignatures")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
             if (items.length != 1) revert MismatchParamLength(key);
 
             uint256 newMaxFunctionSignatures = items[0].toUint();
             MAX_FUNCTION_SIGNATURES = newMaxFunctionSignatures;
+            emit ConstantUpdated();
         } else {
             revert UnsupportedGovParam(key);
         }
@@ -265,6 +272,10 @@ contract Configuration is System {
         if (events.length > MAX_EVENTS && events.length != 0) {
             revert TooManyEvents();
         }
+        
+        if (functionSignatures.length > MAX_FUNCTION_SIGNATURES) {
+            revert TooManyEvents();
+        }
 
         // Validate reward percentages for all events
         for (uint i; i < events.length; i++) {
@@ -316,6 +327,10 @@ contract Configuration is System {
         uint256 idx = _findConfigIndex(contractAddr);
         
         if (events.length > MAX_EVENTS && events.length != 0) {
+            revert TooManyEvents();
+        }
+        
+        if (functionSignatures.length > MAX_FUNCTION_SIGNATURES) {
             revert TooManyEvents();
         }
 
