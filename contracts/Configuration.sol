@@ -44,10 +44,10 @@ contract Configuration is System {
     }
 
     // DAO Address
-    address public daoAddress = address(0x1);
+    address public daoAddress;
 
     // Constants
-    uint256 public DENOMINATOR = 10000;   
+    uint256 public DENOMINATOR;   
 
     uint256 public MAX_REWARD_ADDRESS;
 
@@ -88,6 +88,7 @@ contract Configuration is System {
         MAX_EVENTS = 5;
         MAX_FUNCTION_SIGNATURES = 5;
         MAX_GAS = 1000000;
+        DENOMINATOR = 10000;
     }
 
 
