@@ -395,7 +395,7 @@ contract Configuration is System {
         for (uint i; i < rewards.length; i++) {
             totalPercentage += rewards[i].rewardPercentage;
         }
-        if (totalPercentage > DENOMINATOR) {
+        if (totalPercentage != DENOMINATOR) {
             revert InvalidRewardPercentage(totalPercentage);
         }
     }
