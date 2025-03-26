@@ -179,7 +179,6 @@ contract Configuration is System {
              RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
              if (items.length != 1) revert MismatchParamLength(key); 
              daoAddress = items[0].toAddress();
-             emit ConstantUpdated();
          } else if (Memory.compareStrings(key, "setConfigStatus")) {
              RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
              if (items.length != 2) revert MismatchParamLength(key);
