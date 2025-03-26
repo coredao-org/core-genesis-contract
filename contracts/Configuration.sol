@@ -23,24 +23,24 @@ contract Configuration is System {
 
     /// @dev Struct to store event details.
     struct Event {
-        Reward[] rewards;
         bytes32 eventSignature;
         uint32 gas;
+        Reward[] rewards;
     }
 
     /// @dev Struct to store function signature and gas details.
     struct FunctionSignatures {
-        Reward[] rewards;
         bytes32 functionSignature;
         uint32 gas;
+        Reward[] rewards;
     }
 
     /// @dev Struct to store config details.
     struct Config {
-        Event[] events;
-        FunctionSignatures[] functionSignatures;
         address configAddress;
         bool isActive;
+        Event[] events;
+        FunctionSignatures[] functionSignatures;
     }
 
     // DAO Address
@@ -179,6 +179,7 @@ contract Configuration is System {
              RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
              if (items.length != 1) revert MismatchParamLength(key); 
              daoAddress = items[0].toAddress();
+             emit ConstantUpdated();
          } else if (Memory.compareStrings(key, "setConfigStatus")) {
              RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
              if (items.length != 2) revert MismatchParamLength(key);
