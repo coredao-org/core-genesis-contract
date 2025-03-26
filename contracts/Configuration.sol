@@ -47,7 +47,7 @@ contract Configuration is System {
     address public daoAddress;
 
     // Constants
-    uint256 public constant DENOMINATOR = 10000;   
+    uint256 public DENOMINATOR = 10000;   
 
     uint256 public MAX_REWARD_ADDRESS;
 
