@@ -44,7 +44,7 @@ contract Configuration is System {
     }
 
     // DAO Address
-    address public daoAddress;
+    address public daoAddress = address(0x1);
 
     // Constants
     uint256 public DENOMINATOR = 10000;   
@@ -405,7 +405,7 @@ contract Configuration is System {
     * @dev Internal function to validate that total reward percentages don't exceed 100%.
     * @param rewards Array of rewards to validate.
     */
-    function _validateRewardPercentages(Reward[] memory rewards) internal pure  {
+    function _validateRewardPercentages(Reward[] memory rewards) internal view  {
         uint256 totalPercentage = 0;
         for (uint i; i < rewards.length; i++) {
             totalPercentage += rewards[i].rewardPercentage;
@@ -465,4 +465,4 @@ contract Configuration is System {
         _setConfigStatus(contractAddr, isActive);
     }
 
-}
+}   
