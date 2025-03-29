@@ -101,6 +101,24 @@ def test_update_param_is_burn(system_reward, value, success):
                     system_reward.updateParam("isBurn", value)
 
 
+def test_update_param_add_operator(system_reward):
+    operator = random_address()
+    system_reward.updateParam("addOperator", operator)
+    assert system_reward.operators(operator)
+
+
+def test_add_operator_invalid_address_length(system_reward):
+    operator = random_address()
+    with brownie.reverts(f"MismatchParamLength: addOperator"):
+        system_reward.updateParam("addOperator", operator + 'A')
+        
+
+def test_add_operator_zero_address(system_reward):
+    operator = ZERO_ADDRESS
+    system_reward.updateParam("addOperator", operator)
+    assert system_reward.operators(operator)
+
+
 def test_receive_rewards_with_value_0(system_reward):
     tx = system_reward.receiveRewards({'value': 0})
     assert len(tx.events.keys()) == 0

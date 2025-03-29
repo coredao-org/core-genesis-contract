@@ -965,6 +965,128 @@ def test_stake_reward_claim_after_upgrade(stake_hub, system_reward, set_candidat
     turn_round(consensuses)
 
 
+@pytest.mark.parametrize("round", [0, 1, 2])
+@pytest.mark.parametrize("is_new_validator", [True, False])
+@pytest.mark.parametrize("is_slash", [True, False])
+@pytest.mark.parametrize("is_unregister", [True, False])
+@pytest.mark.parametrize("is_btc_lst", [True, False])
+def test_enable_lst_midway(slash_indicator, set_candidate, candidate_hub, round, is_new_validator, is_slash,
+                           is_unregister, is_btc_lst, btc_lst_stake):
+    delegate_value = MIN_INIT_DELEGATE_VALUE * 10
+    btc_lst_value = 1000
+    btc_value = 10000
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_coin_success(operators[0], accounts[0], delegate_value)
+    delegate_coin_success(operators[0], accounts[1], delegate_value)
+    delegate_coin_success(operators[1], accounts[0], delegate_value)
+    delegate_coin_success(operators[1], accounts[1], delegate_value)
+    delegate_btc_success(operators[0], accounts[3], btc_value, LOCK_SCRIPT, relay=accounts[3])
+    delegate_btc_success(operators[1], accounts[4], btc_value, LOCK_SCRIPT, relay=accounts[4])
+    turn_round(consensuses, round_count=2)
+    if is_new_validator:
+        for operator in accounts[10:12]:
+            operators.append(operator)
+            consensuses.append(register_candidate(operator=operator))
+    stake_manager.add_wallet(BTCLST_LOCK_SCRIPT)
+    delegate_btc_lst_success(accounts[0], btc_lst_value, BTCLST_LOCK_SCRIPT, relay=accounts[0])
+    delegate_btc_lst_success(accounts[1], btc_lst_value, BTCLST_LOCK_SCRIPT, relay=accounts[1])
+    delegate_btc_success(operators[1], accounts[2], btc_value, LOCK_SCRIPT, relay=accounts[2])
+    delegate_btc_success(operators[0], accounts[1], btc_value, LOCK_SCRIPT, relay=accounts[1])
+    turn_round(consensuses, round_count=round)
+    if is_btc_lst:
+        update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+        btc_lst_stake.updateParam('paused', 1)
+        with brownie.reverts("Pausable: paused"):
+            delegate_btc_lst_success(accounts[5], btc_lst_value, BTCLST_LOCK_SCRIPT, relay=accounts[1])
+    if is_slash:
+        slash_threshold = slash_indicator.felonyThreshold()
+        for count in range(slash_threshold):
+            slash_indicator.slash(consensuses[1])
+    turn_round(consensuses, round_count=round)
+    if is_unregister:
+        candidate_hub.refuseDelegate({'from': operators[2]})
+        turn_round(consensuses)
+        candidate_hub.unregister({'from': operators[2]})
+    delegate_btc_success(operators[0], accounts[2], btc_value, LOCK_SCRIPT, relay=accounts[2])
+    turn_round(consensuses, round_count=round)
+    stake_hub_claim_reward(accounts[0:6])
+
+
+@pytest.mark.parametrize("round", [0, 1, 2])
+@pytest.mark.parametrize("is_new_validator", [True, False])
+@pytest.mark.parametrize("is_slash", [True, False])
+def test_disable_lst_after_enabling(slash_indicator, set_candidate, candidate_hub, round, is_new_validator, is_slash):
+    delegate_value = MIN_INIT_DELEGATE_VALUE * 10
+    btc_value = 10000
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_coin_success(operators[0], accounts[0], delegate_value)
+    delegate_coin_success(operators[0], accounts[1], delegate_value)
+    delegate_coin_success(operators[1], accounts[0], delegate_value)
+    delegate_coin_success(operators[1], accounts[1], delegate_value)
+    delegate_btc_success(operators[0], accounts[3], btc_value, LOCK_SCRIPT, relay=accounts[3])
+    delegate_btc_success(operators[1], accounts[4], btc_value, LOCK_SCRIPT, relay=accounts[4])
+    turn_round(consensuses, round_count=2)
+    if is_new_validator:
+        for operator in accounts[10:12]:
+            operators.append(operator)
+            consensuses.append(register_candidate(operator=operator))
+    delegate_btc_success(operators[1], accounts[2], btc_value, LOCK_SCRIPT, relay=accounts[2])
+    delegate_btc_success(operators[0], accounts[1], btc_value, LOCK_SCRIPT, relay=accounts[1])
+    turn_round(consensuses, round_count=round)
+    if is_slash:
+        slash_threshold = slash_indicator.felonyThreshold()
+        for count in range(slash_threshold):
+            slash_indicator.slash(consensuses[1])
+    turn_round(consensuses, round_count=round)
+    delegate_btc_success(operators[0], accounts[2], btc_value, LOCK_SCRIPT, relay=accounts[2])
+    turn_round(consensuses, round_count=round)
+    stake_hub_claim_reward(accounts[0:6])
+
+
+@pytest.mark.parametrize("round", [0, 1, 2])
+@pytest.mark.parametrize("is_new_validator", [True, False])
+@pytest.mark.parametrize("is_unregister", [True, False])
+def test_btclst_transfer_success(slash_indicator, set_candidate, candidate_hub, round, is_new_validator, btc_lst_stake,
+                                 is_unregister):
+    delegate_value = MIN_INIT_DELEGATE_VALUE * 10
+    btc_lst_value = 1000
+    btc_value = 10000
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_coin_success(operators[0], accounts[0], delegate_value)
+    delegate_coin_success(operators[0], accounts[1], delegate_value)
+    delegate_coin_success(operators[1], accounts[0], delegate_value)
+    delegate_coin_success(operators[1], accounts[1], delegate_value)
+    delegate_coin_success(operators[2], accounts[1], delegate_value)
+    delegate_btc_success(operators[0], accounts[3], btc_value, LOCK_SCRIPT, relay=accounts[3])
+    delegate_btc_success(operators[1], accounts[4], btc_value, LOCK_SCRIPT, relay=accounts[4])
+    delegate_btc_success(operators[2], accounts[4], btc_value, LOCK_SCRIPT, relay=accounts[4])
+    turn_round(consensuses, round_count=2)
+    stake_manager.add_wallet(BTCLST_LOCK_SCRIPT)
+    delegate_btc_lst_success(accounts[0], btc_lst_value, BTCLST_LOCK_SCRIPT, relay=accounts[0])
+    delegate_btc_lst_success(accounts[1], btc_lst_value, BTCLST_LOCK_SCRIPT, relay=accounts[1])
+    delegate_btc_success(operators[1], accounts[2], btc_value, LOCK_SCRIPT, relay=accounts[2])
+    delegate_btc_success(operators[0], accounts[1], btc_value, LOCK_SCRIPT, relay=accounts[1])
+    turn_round(consensuses, round_count=round)
+    if is_new_validator:
+        for operator in accounts[10:12]:
+            operators.append(operator)
+            consensuses.append(register_candidate(operator=operator))
+    transfer_btc_lst_success(accounts[0], btc_lst_value // 2, accounts[3])
+    delegate_btc_success(operators[0], accounts[2], btc_value, LOCK_SCRIPT, relay=accounts[2])
+    if is_unregister:
+        candidate_hub.refuseDelegate({'from': operators[2]})
+        turn_round(consensuses)
+        candidate_hub.unregister({'from': operators[2]})
+    turn_round(consensuses, round_count=round)
+
+    redeem_btc_lst_success(accounts[3], btc_lst_value // 4, BTCLST_REDEEM_SCRIPT)
+    stake_hub_claim_reward(accounts[0:6])
+    turn_round(consensuses, round_count=round)
+
+
 def init_hybrid_score_mock():
     STAKE_HUB.initHybridScoreMock()
     set_round_tag(get_current_round())

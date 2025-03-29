@@ -135,6 +135,20 @@ def test_only_stake_hub_can_call_distribute_reward(btc_agent):
         btc_agent.distributeReward(candidates, rewards, 0)
 
 
+def test_reward_zero_with_staked_tokens(btc_agent, btc_stake, btc_lst_stake):
+    turn_round()
+    round_tag = get_current_round()
+    candidates = accounts[:3]
+    rewards = [10000, 20000, 30000]
+    set_round_tag(round_tag - 1)
+    round_tag += 2
+    btc_lst_stake.setRoundTag(round_tag)
+    btc_stake.setRoundTag(round_tag)
+    update_system_contract_address(btc_agent, stake_hub=accounts[0])
+    btc_agent.distributeReward(candidates, rewards, 0)
+    assert btc_stake.accruedRewardPerBTCMap(candidates[0], get_current_round()) == 0
+
+
 def test_distribute_reward_reverts(btc_agent, btc_stake, btc_lst_stake):
     candidates = accounts[:3]
     rewards = [10000, 20000, 30000]
@@ -163,6 +177,21 @@ def test_get_stake_amounts_success(btc_agent, btc_stake, btc_lst_stake, set_cand
     amount = lst_validator_amount + btc_amount
     assert amounts == [amount, amount, amount]
     assert total_amount == amount * 3
+
+
+def test_query_address_empty(btc_agent, btc_stake, btc_lst_stake, set_candidate):
+    operators = []
+    update_system_contract_address(btc_agent, stake_hub=accounts[0])
+    amounts, total_amount = btc_agent.getStakeAmounts(operators, 0).return_value
+    assert sum(amounts) == total_amount == 0
+
+
+def test_query_address_zero(btc_agent, btc_stake, btc_lst_stake, set_candidate):
+    operators = ZERO_ADDRESS
+    turn_round()
+    update_system_contract_address(btc_agent, stake_hub=accounts[0])
+    amounts, total_amount = btc_agent.getStakeAmounts([operators], 0).return_value
+    assert sum(amounts) == total_amount == 0
 
 
 def test_only_stake_hub_can_call(btc_agent, btc_stake, btc_lst_stake, set_candidate):

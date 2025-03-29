@@ -267,6 +267,22 @@ def test_lock_script_wallet_inactive_reverts(btc_lst_stake, set_candidate, round
         btc_lst_stake.delegate('0x00', 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
 
 
+@pytest.mark.parametrize("lock_script", [
+    ['0xa914cdf3d02dd323c14bea0bed94962496c80c09334487', '0xa914047b9ba09367c1b213b5ba2184fba3fababcdc0287'],
+    ['0xa914047b9ba09367c1b213b5ba2184fba3fababcdc0287', '0xa914cdf3d02dd323c14bea0bed94962496c80c09334487'],
+    ['0x00148bca50f394ed7e7f750213f287accc32c2431cf5', '0xa914cdf3d02dd323c14bea0bed94962496c80c09334487'],
+    ['0xa914cdf3d02dd323c14bea0bed94962496c80c09334487', '0x00148bca50f394ed7e7f750213f287accc32c2431cf5'],
+    ['0xa914047b9ba09367c1b213b5ba2184fba3fababcdc0287', '0x00148bca50f394ed7e7f750213f287accc32c2431cf5']
+])
+def test_btclst_delegate_script_error(set_candidate, lst_token, btc_lst_stake, lock_script):
+    stake_manager.add_wallet(lock_script[1])
+    turn_round()
+    btc_tx0 = build_btc_lst_tx(accounts[0], int(BTC_VALUE), lock_script[0])
+    with brownie.reverts("staked value is zero"):
+        btc_lst_stake.delegate(btc_tx0, 1, [], 0, lock_script[1], {"from": accounts[0]})
+    turn_round()
+
+
 def test_delete_wallet_after_stake(btc_lst_stake, set_candidate):
     operators, consensuses = set_candidate
     turn_round()

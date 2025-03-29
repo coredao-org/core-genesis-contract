@@ -40,6 +40,11 @@ contract CandidateHubMock is CandidateHub {
         roundTag = value;
     }
 
+    function setDues(uint value) external {
+        dues = value;
+    }
+
+
     function setValidatorCount(uint256 value) external {
         validatorCount = value;
     }
