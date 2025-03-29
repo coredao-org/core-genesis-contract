@@ -88,3 +88,25 @@ def test_register_failed(relay_hub):
 
     with brownie.reverts("deposit value does not match requirement"):
         relay_hub.register({'from': accounts[1], 'value': 1e10})
+
+
+def test_reregister_after_unregister(relay_hub):
+    required_deposit = relay_hub.requiredDeposit()
+    relay_hub.register({'value': required_deposit})
+    relay_hub.unregister({'from': accounts[0]})
+    tx = relay_hub.register({'value': required_deposit})
+    assert 'relayerRegister' in tx.events
+
+
+def test_is_relayer_true(relay_hub):
+    required_deposit = relay_hub.requiredDeposit()
+    relay_hub.register({'value': required_deposit})
+    assert relay_hub.isRelayer(accounts[0])
+
+
+def test_is_relayer_false(relay_hub):
+    required_deposit = relay_hub.requiredDeposit()
+    relay_hub.register({'value': required_deposit})
+    relay_hub.unregister({'from': accounts[0]})
+    assert relay_hub.isRelayer(accounts[0]) is False
+    assert relay_hub.isRelayer(accounts[1]) is False

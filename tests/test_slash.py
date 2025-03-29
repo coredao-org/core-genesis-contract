@@ -1,10 +1,13 @@
+import brownie
 import pytest
 import random
-from brownie import accounts
+from brownie import accounts, chain
 from brownie.test import given, strategy
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
-from .utils import expect_event
+from web3 import Web3
+
+from .utils import expect_event, padding_left, update_system_contract_address
 from .common import register_candidate, turn_round
 
 misdemeanorThreshold = 0
@@ -17,6 +20,16 @@ def set_threshold(slash_indicator):
     global felonyThreshold
     misdemeanorThreshold = slash_indicator.misdemeanorThreshold()
     felonyThreshold = slash_indicator.felonyThreshold()
+
+
+@pytest.fixture()
+def set_candidate():
+    operators = []
+    consensuses = []
+    for operator in accounts[5:8]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    return operators, consensuses
 
 
 def test_slash_validator(slash_indicator):
@@ -124,3 +137,120 @@ def test_clean(slash_indicator, validator_set):
         turn_round()
         for account, count in zip(slash_accounts, counts):
             assert slash_indicator.getSlashIndicator(account.address)[1] == max([count - decrease_value, 0])
+
+
+def test_only_gov_can_call(slash_indicator):
+    value = padding_left(Web3.to_hex(1000), 64)
+    with brownie.reverts(f"the msg sender must be governance contract"):
+        slash_indicator.updateParam('misdemeanorThreshold', value)
+
+
+@pytest.mark.parametrize("new_misdemeanorThreshold", [1, 2, 3])
+def test_update_misdemeanor_threshold_success(slash_indicator, new_misdemeanorThreshold):
+    value = padding_left(Web3.to_hex(new_misdemeanorThreshold), 64)
+    update_system_contract_address(slash_indicator, gov_hub=accounts[0])
+    slash_indicator.updateParam('misdemeanorThreshold', value)
+    assert slash_indicator.misdemeanorThreshold() == value
+
+
+@pytest.mark.parametrize("new_misdemeanorThreshold", [0, 4, 5, 100])
+def test_update_misdemeanor_threshold_failure(slash_indicator, new_misdemeanorThreshold):
+    value = padding_left(Web3.to_hex(new_misdemeanorThreshold), 64)
+    update_system_contract_address(slash_indicator, gov_hub=accounts[0])
+    with brownie.reverts(f"OutOfBounds: misdemeanorThreshold, {new_misdemeanorThreshold}, 1, 3"):
+        slash_indicator.updateParam('misdemeanorThreshold', value)
+
+
+@pytest.mark.parametrize("new_felonyThreshold", [3, 4, 5, 6, 100])
+def test_update_felony_threshold_success(slash_indicator, new_felonyThreshold):
+    value = padding_left(Web3.to_hex(new_felonyThreshold), 64)
+    update_system_contract_address(slash_indicator, gov_hub=accounts[0])
+    slash_indicator.updateParam('felonyThreshold', value)
+    assert slash_indicator.felonyThreshold() == value
+
+
+@pytest.mark.parametrize("new_felonyThreshold", [0, 1, 2])
+def test_update_felony_threshold_failure(slash_indicator, new_felonyThreshold):
+    value = padding_left(Web3.to_hex(new_felonyThreshold), 64)
+    update_system_contract_address(slash_indicator, gov_hub=accounts[0])
+    uint256_max = 2 ** 256 - 1
+    with brownie.reverts(f"OutOfBounds: felonyThreshold, {new_felonyThreshold}, 3, {uint256_max}"):
+        slash_indicator.updateParam('felonyThreshold', value)
+
+
+@pytest.mark.parametrize("new_rewardForReportDoubleSign", [1, 2, 3, 1e19, 1e20, 1e21])
+def test_update_reward_for_report_double_sign_success(slash_indicator, new_rewardForReportDoubleSign):
+    value = padding_left(Web3.to_hex(int(new_rewardForReportDoubleSign)), 64)
+    update_system_contract_address(slash_indicator, gov_hub=accounts[0])
+    slash_indicator.updateParam('rewardForReportDoubleSign', value)
+    assert slash_indicator.rewardForReportDoubleSign() == value
+
+
+@pytest.mark.parametrize("new_rewardForReportDoubleSign", [0, 1e22, 1e23])
+def test_update_reward_for_report_double_sign_failure(slash_indicator, new_rewardForReportDoubleSign):
+    value = padding_left(Web3.to_hex(int(new_rewardForReportDoubleSign)), 64)
+    update_system_contract_address(slash_indicator, gov_hub=accounts[0])
+    max_value = 1000000000000000000000
+    with brownie.reverts(
+            f"OutOfBounds: rewardForReportDoubleSign, {int(new_rewardForReportDoubleSign)}, 1, {max_value}"):
+        slash_indicator.updateParam('rewardForReportDoubleSign', value)
+
+
+@pytest.mark.parametrize("new_felonyDeposit", [1e18, 1e19, 1e20])
+def test_update_felony_deposit_success(slash_indicator, new_felonyDeposit):
+    value = padding_left(Web3.to_hex(int(new_felonyDeposit)), 64)
+    update_system_contract_address(slash_indicator, gov_hub=accounts[0])
+    slash_indicator.updateParam('felonyDeposit', value)
+    assert slash_indicator.felonyDeposit() == value
+
+
+@pytest.mark.parametrize("new_felonyDeposit", [0, 1e16, 1e17])
+def test_update_felony_deposit_failure(slash_indicator, new_felonyDeposit):
+    value = padding_left(Web3.to_hex(int(new_felonyDeposit)), 64)
+    update_system_contract_address(slash_indicator, gov_hub=accounts[0])
+    min_value = 1000000000000000000
+    uint256_max = 2 ** 256 - 1
+    with brownie.reverts(
+            f"OutOfBounds: felonyDeposit, {int(new_felonyDeposit)}, {min_value}, {uint256_max}"):
+        slash_indicator.updateParam('felonyDeposit', value)
+
+
+@pytest.mark.parametrize("new_felonyRound", [1, 2, 3, 1000, 5000])
+def test_update_felony_round_success(slash_indicator, new_felonyRound):
+    value = padding_left(Web3.to_hex(new_felonyRound), 64)
+    update_system_contract_address(slash_indicator, gov_hub=accounts[0])
+    slash_indicator.updateParam('felonyRound', value)
+    assert slash_indicator.felonyRound() == value
+
+
+@pytest.mark.parametrize("new_felonyRound", [0])
+def test_update_felony_round_failure(slash_indicator, new_felonyRound):
+    value = padding_left(Web3.to_hex(new_felonyRound), 64)
+    update_system_contract_address(slash_indicator, gov_hub=accounts[0])
+    uint256_max = 2 ** 256 - 1
+    with brownie.reverts(
+            f"OutOfBounds: felonyRound, 0, {1}, {uint256_max}"):
+        slash_indicator.updateParam('felonyRound', value)
+
+
+def test_invalid_key(slash_indicator):
+    value = padding_left(Web3.to_hex(1000), 64)
+    update_system_contract_address(slash_indicator, gov_hub=accounts[0])
+    with brownie.reverts("UnsupportedGovParam: key_error"):
+        slash_indicator.updateParam('key_error', value)
+
+
+def test_invalid_value_length(slash_indicator):
+    value = padding_left(Web3.to_hex(1000), 66)
+    update_system_contract_address(slash_indicator, gov_hub=accounts[0])
+    with brownie.reverts("MismatchParamLength: felonyRound"):
+        slash_indicator.updateParam('felonyRound', value)
+
+
+def test_get_slash_indicator_success(slash_indicator, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    slash_indicator.slash(consensuses[0])
+    value = slash_indicator.getSlashIndicator(consensuses[0])
+    assert value == (chain.height, 1)
+    turn_round(consensuses)

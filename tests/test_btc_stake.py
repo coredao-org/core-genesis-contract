@@ -523,6 +523,14 @@ def test_successful_delegate_btc_call_by_relayer(btc_stake, delegate_btc_valid_t
     assert 'delegated' in tx.events
 
 
+def test_delegator_is_relay(btc_stake, delegate_btc_valid_tx, relay_hub,
+                            set_candidate):
+    lock_script, btc_tx = delegate_btc_valid_tx
+    relay_hub.setRelayerRegister(accounts[0], True)
+    tx = btc_stake.delegate(btc_tx, 0, [], 0, lock_script, {'from': accounts[0]})
+    assert 'delegated' in tx.events
+
+
 @pytest.mark.parametrize("btc_value", [1, 2, 100, 800000, 120000, 50000000])
 def test_btc_delegate_no_amount_limit(btc_stake, set_candidate, delegate_btc_valid_tx, btc_value):
     operators, consensuses = set_candidate
@@ -607,6 +615,47 @@ def test_stake_to_regular_address_then_transfer(btc_stake, set_candidate, candid
     tracker = get_tracker(accounts[0])
     stake_hub_claim_reward(accounts[0])
     assert tracker.delta() == TOTAL_REWARD * 2
+
+
+def test_stake_to_self(btc_stake, set_candidate, candidate_hub):
+    operators, consensuses = set_candidate
+    tx = delegate_btc_success(accounts[0], accounts[0], BTC_VALUE, LOCK_SCRIPT, events=True)
+    assert 'delegated' in tx.events
+    turn_round(consensuses, round_count=2)
+
+
+def test_validator_address_zero(btc_stake, set_candidate, candidate_hub):
+    operators, consensuses = set_candidate
+    tx = delegate_btc_success(ZERO_ADDRESS, accounts[0], BTC_VALUE, LOCK_SCRIPT, events=True)
+    assert 'delegated' in tx.events
+    turn_round(consensuses, round_count=2)
+
+
+def test_validator_address_zerotest_stake_address_with_btc_staker(btc_stake, set_candidate, candidate_hub):
+    operators, consensuses = set_candidate
+    delegate_btc_success(ZERO_ADDRESS, accounts[1], BTC_VALUE, LOCK_SCRIPT)
+    tx = delegate_btc_success(accounts[1], accounts[0], BTC_VALUE, LOCK_SCRIPT, events=True)
+    assert 'delegated' in tx.events
+    turn_round(consensuses, round_count=2)
+
+
+@pytest.mark.parametrize("validator_state", ['minor', 'major'])
+def test_stake_to_slash_address(btc_stake, set_candidate, slash_indicator, candidate_hub, validator_state):
+    operators, consensuses = set_candidate
+    turn_round()
+    turn_round(consensuses)
+    tx0 = None
+    if validator_state == 'minor':
+        slash_threshold = slash_indicator.misdemeanorThreshold()
+        event_name = 'validatorMisdemeanor'
+    else:
+        slash_threshold = slash_indicator.felonyThreshold()
+        event_name = 'validatorFelony'
+    for count in range(slash_threshold):
+        tx0 = slash_indicator.slash(consensuses[0])
+    assert event_name in tx0.events
+    tx = delegate_btc_success(operators[0], accounts[1], BTC_VALUE, LOCK_SCRIPT, events=True)
+    assert 'delegated' in tx.events
 
 
 def test_undelegate_success(btc_stake, set_candidate):
@@ -851,6 +900,20 @@ def test_non_zero_reward_with_zero_total_btc_stake(btc_stake, candidate_hub):
         __check_accrued_reward_per_btc(v, round_tag, reward)
 
 
+def test_distribute_reward_with_zero_reward(btc_stake, candidate_hub):
+    validators = []
+    rewards = [1000, 2000, 3000]
+    update_system_contract_address(btc_stake, btc_agent=accounts[0])
+    btc_stake.distributeReward(validators, rewards)
+
+
+def test_only_btc_agent(btc_stake, candidate_hub):
+    validators = accounts[:3]
+    rewards = [1000, 2000, 3000]
+    with brownie.reverts("the msg sender must be bitcoin agent contract"):
+        btc_stake.distributeReward(validators, rewards)
+
+
 def test_get_btc_stake_amounts_success(btc_stake, set_candidate):
     operators, consensuses = set_candidate
     stake_amounts = []
@@ -859,6 +922,21 @@ def test_get_btc_stake_amounts_success(btc_stake, set_candidate):
         stake_amounts.append(BTC_VALUE + index)
     amounts = btc_stake.getStakeAmounts(operators)
     assert amounts == stake_amounts
+
+
+def test_query_validator_empty(btc_stake, set_candidate):
+    amounts = btc_stake.getStakeAmounts([])
+    assert len(amounts) == 0
+
+
+def test_query_validator_zero_address(btc_stake, set_candidate):
+    operators, consensuses = set_candidate
+    stake_amounts = []
+    for index, o in enumerate(operators):
+        delegate_btc_success(o, accounts[0], BTC_VALUE + index, LOCK_SCRIPT)
+        stake_amounts.append(BTC_VALUE + index)
+    amounts = btc_stake.getStakeAmounts([ZERO_ADDRESS])
+    assert amounts == [0]
 
 
 def test_btc_claim_reward_success(btc_stake, set_candidate):
@@ -1212,6 +1290,7 @@ def test_collectReward_success(btc_stake, set_candidate, btc_agent, settleRound)
     assert expired == actual_expired
     assert acc_amount == actual_acc_amount
 
+
 @pytest.mark.parametrize("tests", [
     [20099, 20101, 25000, 20101],
     [20101, 20103, 10000, 0],
@@ -1324,6 +1403,15 @@ def test_viewCollectReward_only_BtcAgent(btc_stake, set_candidate, btc_agent):
         reward, expired, _, acc_amount = btc_stake.viewCollectReward(tx_id, last_round, last_round)
 
 
+def test_view_collect_reward_invalid_txid(btc_stake, set_candidate, btc_agent):
+    turn_round()
+    tx_id = random_btc_tx_id()
+    turn_round()
+    last_round = get_current_round() - 1
+    update_system_contract_address(btc_stake, btc_agent=accounts[0])
+    reward, expired, _, acc_amount = btc_stake.viewCollectReward(tx_id, last_round, last_round)
+
+
 def test_only_btc_agent_can_call_set_new_round(btc_stake, btc_agent):
     round_tag = get_current_round()
     with brownie.reverts("the msg sender must be bitcoin agent contract"):
@@ -1341,6 +1429,16 @@ def test_set_new_round_success(btc_stake):
     btc_stake.setNewRound(accounts[:4], round_tag + 1)
     for index, op in enumerate(accounts[:4]):
         assert btc_stake.candidateMap(op) == [BTC_VALUE + index, BTC_VALUE + index]
+    assert btc_stake.roundTag() == round_tag + 1
+
+
+def test_set_validators_empty(btc_stake):
+    round_tag = 7
+    assert btc_stake.roundTag() == round_tag
+    turn_round()
+    round_tag += 1
+    update_system_contract_address(btc_stake, btc_agent=accounts[0])
+    btc_stake.setNewRound([], round_tag + 1)
     assert btc_stake.roundTag() == round_tag + 1
 
 
@@ -1563,6 +1661,72 @@ def test_transfer_expired_collateral_quantity_decreases(btc_stake, set_candidate
     candidate_list, amounts = __get_round2_expire_info_map(end_round)
     assert candidate_list == [operators[0], operators[2]]
     assert amounts == [1, BTC_VALUE + 1]
+
+
+@pytest.mark.parametrize("validator_state", ['minor', 'major'])
+def test_transfer_to_slash(btc_stake, set_candidate, slash_indicator, validator_state):
+    operators, consensuses = set_candidate
+    turn_round()
+    tx0 = None
+    if validator_state == 'minor':
+        slash_threshold = slash_indicator.misdemeanorThreshold()
+        event_name = 'validatorMisdemeanor'
+    else:
+        slash_threshold = slash_indicator.felonyThreshold()
+        event_name = 'validatorFelony'
+    for count in range(slash_threshold):
+        tx0 = slash_indicator.slash(consensuses[0])
+    assert event_name in tx0.events
+    turn_round(consensuses)
+    tx_id = delegate_btc_success(operators[1], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    if validator_state == 'major':
+        error_msg = encode_args_with_signature("InactiveCandidate(address)", [operators[0].address])
+        with brownie.reverts(error_msg):
+            transfer_btc_success(tx_id, operators[0], accounts[0])
+    else:
+        transfer_btc_success(tx_id, operators[0], accounts[0])
+    turn_round()
+
+
+def test_transfer_to_self_non_validator(btc_stake, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round(consensuses)
+    tx_id = delegate_btc_success(operators[1], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    error_msg = encode_args_with_signature("InactiveCandidate(address)", [accounts[0].address])
+    with brownie.reverts(error_msg):
+        transfer_btc_success(tx_id, accounts[0], accounts[0])
+    turn_round()
+
+
+def test_multiple_transfers_in_one_round(btc_stake, set_candidate):
+    operators, consensuses = set_candidate
+    tx_id = delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round(consensuses)
+    for candidate in operators[1:]:
+        transfer_btc_success(tx_id, candidate, accounts[0])
+    for candidate in operators:
+        transfer_btc_success(tx_id, candidate, accounts[0])
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker0.delta() == 0
+
+
+def test_transfer_with_nonexistent_txid(btc_stake, set_candidate):
+    operators, consensuses = set_candidate
+    delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round(consensuses)
+    with brownie.reverts("btc tx not found"):
+        transfer_btc_success(random_btc_tx_id(), operators[1], accounts[0])
+
+
+def test_transfer_to_zero_address(btc_stake, set_candidate):
+    operators, consensuses = set_candidate
+    tx_id = delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round(consensuses)
+    error_msg = encode_args_with_signature("InactiveCandidate(address)", [ZERO_ADDRESS])
+    with brownie.reverts(error_msg):
+        transfer_btc_success(tx_id, ZERO_ADDRESS, accounts[0])
 
 
 def test_calculate_btc_reward_success(btc_stake, set_candidate):
