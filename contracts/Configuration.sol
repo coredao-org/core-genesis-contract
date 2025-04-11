@@ -59,9 +59,13 @@ contract Configuration is System {
 
     Config[] public configs;
 
+    // Add the mapping declaration
+    mapping(address => uint256) public configsMap;
+
     // Event to signal config updates
     event ConfigUpdated(address indexed configAddress, uint256 eventCount, uint256 functionSignatureCount);
     event ConstantUpdated();
+    event ConfigRemoved(address indexed configAddress);
 
     // Errors
     error AddressAlreadyExists(address addr);
@@ -83,6 +87,7 @@ contract Configuration is System {
      * @dev Initializes the contract. Can only be called once.
      */
     function init() external onlyNotInit {
+        daoAddress = 0x7e5C92fA765Aac46042AfBba05b0F3846C619423;
         alreadyInit = true;
         MAX_REWARD_ADDRESS = 5;
         MAX_EVENTS = 5;
@@ -284,9 +289,11 @@ contract Configuration is System {
             _validateGas(events[i].gas);
         }
 
+        // Add the new config to the array and update the mapping
         Config storage p = configs.push();
         p.configAddress = contractAddr;
         p.isActive = isActive;
+        configsMap[contractAddr] = configs.length - 1; // Update the mapping with the index
         
         // Add events
         for (uint i; i < events.length; i++) {
@@ -312,10 +319,20 @@ contract Configuration is System {
      * @param contractAddr The address of the contract to remove the config from.
      */
     function _removeConfig(address contractAddr) internal {
-        uint256 idx = _findConfigIndex(contractAddr);
-        configs[idx] = configs[configs.length - 1];
+        uint256 index = configsMap[contractAddr];
+        uint256 lastIndex = configs.length - 1;
+
+        // Swap the last config with the one to be removed
+        if (index != lastIndex) {
+            Config storage lastConfig = configs[lastIndex];
+            configs[index] = lastConfig;
+            configsMap[lastConfig.configAddress] = index; // Update the mapping for the swapped config
+        }
+
+        // Remove the last element
         configs.pop();
-        emit ConfigUpdated(contractAddr, 0, 0);
+        delete configsMap[contractAddr]; // Remove the mapping entry
+        emit ConfigRemoved(contractAddr);
     }
 
     /**
