@@ -97,7 +97,7 @@ contract Configuration is System {
     }
 
 
-    // Helper function to find a config by address
+   // Helper function to find a config by address
     function _findConfigIndex(address contractAddr) internal view returns (uint256) {
         for (uint256 i = 0; i < configs.length; i++) {
             if (configs[i].configAddress == contractAddr) {
@@ -293,7 +293,7 @@ contract Configuration is System {
         Config storage p = configs.push();
         p.configAddress = contractAddr;
         p.isActive = isActive;
-        configsMap[contractAddr] = configs.length - 1; // Update the mapping with the index
+        configsMap[contractAddr] = configs.length; // Store index + 1
         
         // Add events
         for (uint i; i < events.length; i++) {
@@ -319,14 +319,14 @@ contract Configuration is System {
      * @param contractAddr The address of the contract to remove the config from.
      */
     function _removeConfig(address contractAddr) internal {
-        uint256 index = configsMap[contractAddr];
+        uint256 index = configsMap[contractAddr] - 1; // Retrieve the actual index
         uint256 lastIndex = configs.length - 1;
 
         // Swap the last config with the one to be removed
         if (index != lastIndex) {
             Config storage lastConfig = configs[lastIndex];
             configs[index] = lastConfig;
-            configsMap[lastConfig.configAddress] = index; // Update the mapping for the swapped config
+            configsMap[lastConfig.configAddress] = index + 1; // Update the mapping for the swapped config
         }
 
         // Remove the last element
