@@ -51,7 +51,6 @@ contract Configuration is System {
     uint8 public MAX_FUNCTIONS;
     uint32 public MAX_GAS;
 
-    // Replace the array with a mapping and an address array
     address[] public configAddresses;
     mapping(address => Config) public configsMap;
 
@@ -277,7 +276,8 @@ contract Configuration is System {
         newConfig.isActive = isActive;
 
         // Manually copy events and their rewards
-        for (uint i = 0; i < events.length; i++) {
+        uint eventsLength = events.length;
+        for (uint i = 0; i < eventsLength; i++) {
             Event storage newEvent = newConfig.events.push();
             newEvent.eventSignature = events[i].eventSignature;
             newEvent.gas = events[i].gas;
@@ -343,7 +343,8 @@ contract Configuration is System {
         delete existingConfig.functions;
 
         // Manually copy events and their rewards
-        for (uint i = 0; i < events.length; i++) {
+        uint eventsLength = events.length;
+        for (uint i = 0; i < eventsLength; i++) {
             Event storage newEvent = existingConfig.events.push();
             newEvent.eventSignature = events[i].eventSignature;
             newEvent.gas = events[i].gas;
