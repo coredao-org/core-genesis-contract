@@ -46,10 +46,10 @@ contract Configuration is System {
     // DAO Address
     address public daoAddress;
 
-    uint256 public MAX_REWARD_ADDRESS;
-    uint256 public MAX_EVENTS;
-    uint256 public MAX_FUNCTIONS;
-    uint256 public MAX_GAS;
+    uint8 public MAX_REWARD_ADDRESS;
+    uint8 public MAX_EVENTS;
+    uint8 public MAX_FUNCTIONS;
+    uint32 public MAX_GAS;
 
     // Replace the array with a mapping and an address array
     address[] public configAddresses;
@@ -174,28 +174,28 @@ contract Configuration is System {
             if (items.length != 1) revert MismatchParamLength(key);
 
             uint256 newMaxRewardAddress = items[0].toUint();
-            MAX_REWARD_ADDRESS = newMaxRewardAddress;
+            MAX_REWARD_ADDRESS = uint8(newMaxRewardAddress);
             emit ConstantUpdated();
         } else if (Memory.compareStrings(key, "updateMaxEvents")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
             if (items.length != 1) revert MismatchParamLength(key);
 
             uint256 newMaxEvents = items[0].toUint();
-            MAX_EVENTS = newMaxEvents;
+            MAX_EVENTS = uint8(newMaxEvents);
             emit ConstantUpdated();
         } else if (Memory.compareStrings(key, "updateMaxGas")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
             if (items.length != 1) revert MismatchParamLength(key);
 
             uint256 newMaxGas = items[0].toUint();
-            MAX_GAS = newMaxGas;
+            MAX_GAS = uint32(newMaxGas);
             emit ConstantUpdated();
         } else if (Memory.compareStrings(key, "updateMaxFunctions")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
             if (items.length != 1) revert MismatchParamLength(key);
 
             uint256 newMaxFunctions = items[0].toUint();
-            MAX_FUNCTIONS = newMaxFunctions;
+            MAX_FUNCTIONS = uint8(newMaxFunctions);
             emit ConstantUpdated();
         } else {
             revert UnsupportedGovParam(key);
