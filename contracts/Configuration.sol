@@ -46,13 +46,13 @@ contract Configuration is System {
     // DAO Address
     address public daoAddress;
 
-    uint8 public MAX_REWARD_ADDRESS;
+    uint8 public MAX_REWARDS;
     uint8 public MAX_EVENTS;
     uint8 public MAX_FUNCTIONS;
     uint32 public MAX_GAS;
 
-    address[] public configAddresses;
     mapping(address => Config) public configsMap;
+    address[] public configAddresses;
 
     // Event to signal config updates
     event ConfigUpdated(address indexed configAddress, uint256 eventCount, uint256 functionCount);
@@ -82,7 +82,7 @@ contract Configuration is System {
     function init() external onlyNotInit {
         daoAddress = 0x7e5C92fA765Aac46042AfBba05b0F3846C619423;
         alreadyInit = true;
-        MAX_REWARD_ADDRESS = 5;
+        MAX_REWARDS = 5;
         MAX_EVENTS = 5;
         MAX_FUNCTIONS = 5;
         MAX_GAS = 1000000;
@@ -174,7 +174,7 @@ contract Configuration is System {
             if (items.length != 1) revert MismatchParamLength(key);
 
             uint256 newMaxRewardAddress = items[0].toUint();
-            MAX_REWARD_ADDRESS = uint8(newMaxRewardAddress);
+            MAX_REWARDS = uint8(newMaxRewardAddress);
             emit ConstantUpdated();
         } else if (Memory.compareStrings(key, "updateMaxEvents")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
@@ -266,6 +266,9 @@ contract Configuration is System {
 
         // Validate reward percentages for all events
         for (uint i; i < events.length; i++) {
+            if (events[i].rewards.length > MAX_REWARDS) {
+                revert TooManyRewardAddresses();
+            }
             _validateRewardPercentages(events[i].rewards);
             _validateGas(events[i].gas);
         }
@@ -331,6 +334,9 @@ contract Configuration is System {
 
         // Validate reward percentages for all events
         for (uint i; i < events.length; i++) {
+            if (events[i].rewards.length > MAX_REWARDS) {
+                revert TooManyRewardAddresses();
+            }
             _validateRewardPercentages(events[i].rewards);
             _validateGas(events[i].gas);
         }
