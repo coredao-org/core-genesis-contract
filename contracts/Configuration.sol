@@ -64,6 +64,7 @@ contract Configuration is System {
     error AddressAlreadyExists(address addr);
     error AddressNotFound(address addr);
     error InvalidIssuer(address issuer);
+    error ZeroEvents();
     error TooManyEvents();
     error TooManyRewardAddresses();
     error InvalidGasValue(uint gas);
@@ -252,8 +253,12 @@ contract Configuration is System {
             revert AddressAlreadyExists(contractAddr);
         }
 
-        if (events.length > MAX_EVENTS && events.length != 0) {
+        if (events.length > MAX_EVENTS) {
             revert TooManyEvents();
+        }
+
+        if (events.length == 0) {
+            revert ZeroEvents();
         }
 
         if (functions.length > MAX_FUNCTIONS) {
