@@ -43,8 +43,7 @@ contract Configuration is System {
         Function[] functions;
     }
 
-    // DAO Address
-    address public daoAddress;
+
 
     uint8 public MAX_REWARDS;
     uint8 public MAX_EVENTS;
@@ -53,7 +52,9 @@ contract Configuration is System {
 
     mapping(address => Config) public configsMap;
     address[] public configAddresses;
-
+    // DAO Address
+    address public daoAddress;
+    
     // Event to signal config updates
     event ConfigUpdated(address indexed configAddress, uint256 eventCount, uint256 functionCount);
     event ConstantUpdated();
