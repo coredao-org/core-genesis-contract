@@ -2,77 +2,18 @@ import pytest
 import brownie
 from web3 import Web3, constants
 from eth_abi import encode
-from brownie import accounts, SelfDestroy
-from .utils import expect_event, get_tracker, padding_left, encode_args_with_signature
+from brownie import *
+from .utils import expect_event, get_tracker, padding_left, encode_args_with_signature, update_system_contract_address
 from .common import execute_proposal
-
-VALIDATOR_CONTRACT_ADDR = None
-SLASH_CONTRACT_ADDR = None
-SYSTEM_REWARD_ADDR = None
-LIGHT_CLIENT_ADDR = None
-RELAYER_HUB_ADDR = None
-CANDIDATE_HUB_ADDR = None
-GOV_HUB_ADDR = None
-PLEDGE_AGENT_ADDR = None
-BURN_ADDR = None
-FOUNDATION_ADDR = None
-STAKE_HUB_ADDR = None
-BTC_STAKE_ADDR = None
-BTC_AGENT_ADDR = None
-BTC_LST_STAKE_ADDR = None
-CORE_AGENT_ADDR = None
-HASH_POWER_AGENT_ADDR = None
 
 
 @pytest.fixture(scope="module", autouse=True)
-def set_up(validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub,
-           gov_hub, pledge_agent, burn, foundation, stake_hub, btc_stake, btc_agent, btc_lst_stake, core_agent,
-           hash_power_agent, lst_token):
-    global VALIDATOR_CONTRACT_ADDR
-    global SLASH_CONTRACT_ADDR
-    global SYSTEM_REWARD_ADDR
-    global LIGHT_CLIENT_ADDR
-    global RELAYER_HUB_ADDR
-    global CANDIDATE_HUB_ADDR
-    global GOV_HUB_ADDR
-    global PLEDGE_AGENT_ADDR
-    global BURN_ADDR
-    global FOUNDATION_ADDR
-    global STAKE_HUB_ADDR
-    global BTC_STAKE_ADDR
-    global BTC_AGENT_ADDR
-    global BTC_LST_STAKE_ADDR
-    global CORE_AGENT_ADDR
-    global HASH_POWER_AGENT_ADDR
-    global BTCLST_TOKEN_ADDR
-    VALIDATOR_CONTRACT_ADDR = validator_set.address
-    SLASH_CONTRACT_ADDR = slash_indicator.address
-    SYSTEM_REWARD_ADDR = system_reward.address
-    LIGHT_CLIENT_ADDR = btc_light_client.address
-    RELAYER_HUB_ADDR = relay_hub.address
-    CANDIDATE_HUB_ADDR = candidate_hub.address
-    GOV_HUB_ADDR = gov_hub.address
-    PLEDGE_AGENT_ADDR = pledge_agent.address
-    BURN_ADDR = burn.address
-    FOUNDATION_ADDR = foundation.address
-    STAKE_HUB_ADDR = stake_hub.address
-    BTC_STAKE_ADDR = btc_stake.address
-    BTC_AGENT_ADDR = btc_agent.address
-    BTC_LST_STAKE_ADDR = btc_lst_stake.address
-    CORE_AGENT_ADDR = core_agent.address
-    HASH_POWER_AGENT_ADDR = hash_power_agent.address
-    BTCLST_TOKEN_ADDR = lst_token.address
+def set_up():
+    pass
 
 
-def __update_gov_address(burn_instance):
-    contracts = [
-        VALIDATOR_CONTRACT_ADDR, SLASH_CONTRACT_ADDR, SYSTEM_REWARD_ADDR, LIGHT_CLIENT_ADDR, RELAYER_HUB_ADDR,
-        CANDIDATE_HUB_ADDR, accounts[0].address,
-        PLEDGE_AGENT_ADDR, BURN_ADDR, FOUNDATION_ADDR, STAKE_HUB_ADDR, BTC_STAKE_ADDR, BTC_AGENT_ADDR,
-        BTC_LST_STAKE_ADDR, CORE_AGENT_ADDR, HASH_POWER_AGENT_ADDR, BTCLST_TOKEN_ADDR
-    ]
-    args = encode(['address'] * len(contracts), [c for c in contracts])
-    getattr(burn_instance, "updateContractAddr")(args)
+def __update_gov_address(burn):
+    update_system_contract_address(burn, gov_hub=accounts[0])
 
 
 def __add_balance(address, value):

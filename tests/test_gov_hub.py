@@ -3,7 +3,8 @@ from web3 import Web3, constants
 import brownie
 from brownie import *
 from eth_abi import encode
-from .utils import expect_event, padding_left, expect_event_not_emitted, encode_args_with_signature
+from .utils import expect_event, padding_left, expect_event_not_emitted, encode_args_with_signature, \
+    update_system_contract_address
 from .common import execute_proposal
 
 origin_members = ["0x9fB29AAc15b9A4B7F17c3385939b007540f4d791", "0x96C42C56fdb78294F96B0cFa33c92bed7D75F96a"]
@@ -15,27 +16,7 @@ def set_up():
 
 
 def fake_gov():
-    contracts = [
-        ValidatorSetMock[0].address,
-        SlashIndicatorMock[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        accounts[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address,
-        StakeHubMock[0].address,
-        BitcoinStakeMock[0].address,
-        BitcoinAgentMock[0].address,
-        BitcoinLSTStakeMock[0].address,
-        CoreAgentMock[0].address,
-        HashPowerAgentMock[0].address,
-        BitcoinLSTToken[0].address,
-    ]
-    args = encode(['address'] * len(contracts), [c for c in contracts])
-    getattr(GovHubMock[0], "updateContractAddr")(args)
+    update_system_contract_address(GovHubMock[0], gov_hub=accounts[0])
 
 
 def test_receive_money(gov_hub):
@@ -410,6 +391,7 @@ def test_vote_early_completion_success(gov_hub, pledge_agent, vote_count, is_com
         [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
         ['pledgeAgent clearDeprecatedMembers']
     )
+    start_height = chain.height + 1
     chain.mine(1)
     assert gov_hub.getMembers() == accounts[:vote_count[2]]
     for member in gov_hub.getMembers()[:vote_count[0]]:
@@ -421,7 +403,8 @@ def test_vote_early_completion_success(gov_hub, pledge_agent, vote_count, is_com
         chain.mine(gov_hub.votingPeriod() + 10)
     else:
         chain.mine(3)
-    assert gov_hub.proposals(1) == [1, accounts[0], 69, 89, vote_count[0], vote_count[1], vote_count[2], False, False]
+    assert gov_hub.proposals(1) == [1, accounts[0], start_height, start_height + gov_hub.votingPeriod(), vote_count[0],
+                                    vote_count[1], vote_count[2], False, False]
     gov_hub.execute(1)
     assert pledge_agent.btcFactor() == 0
 

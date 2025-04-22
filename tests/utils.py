@@ -64,7 +64,6 @@ def expect_event_not_emitted(tx_receipt: TransactionReceipt, event_name):
     assert event_name not in tx_receipt.events
 
 
-
 class AccountTracker:
     def __init__(self, account: LocalAccount):
         self.account = account
@@ -174,7 +173,8 @@ def update_system_contract_address(update_contract,
                                    btc_lst_stake=None,
                                    core_agent=None,
                                    hash_power_agent=None,
-                                   lst_token=None
+                                   lst_token=None,
+                                   configuration=None
                                    ):
     if candidate_hub is None:
         candidate_hub = CandidateHubMock[0]
@@ -210,11 +210,13 @@ def update_system_contract_address(update_contract,
         hash_power_agent = HashPowerAgentMock[0]
     if lst_token is None:
         lst_token = BitcoinLSTToken[0]
+    if configuration is None:
+        configuration = ConfigurationMock[0]
 
     contracts = [
         validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub, gov_hub,
         pledge_agent, burn, foundation, stake_hub, btc_stake, btc_agent, btc_lst_stake, core_agent, hash_power_agent,
-        lst_token
+        lst_token, configuration
     ]
     args = encode(['address'] * len(contracts), [c.address for c in contracts])
     getattr(update_contract, "updateContractAddr")(args)
