@@ -10,7 +10,8 @@ from brownie import *
 
 from .common import execute_proposal, turn_round, register_candidate
 from .constant import Utils
-from .utils import expect_event, get_tracker, random_address, padding_left, encode_args_with_signature
+from .utils import expect_event, get_tracker, random_address, padding_left, encode_args_with_signature, \
+    update_system_contract_address
 
 account_tracker = None
 system_reward_tracker = None
@@ -19,31 +20,8 @@ foundation_tracker = None
 
 
 @pytest.fixture(scope="module", autouse=True)
-def set_up(validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub,
-           gov_hub, pledge_agent, burn, foundation, stake_hub, btc_stake, btc_agent, btc_lst_stake, core_agent,
-           hash_power_agent, lst_token):
-    contracts = [
-        validator_set.address,
-        slash_indicator.address,
-        system_reward.address,
-        btc_light_client.address,
-        relay_hub.address,
-        candidate_hub.address,
-        accounts[0].address,
-        pledge_agent.address,
-        burn.address,
-        foundation.address,
-        stake_hub.address,
-        btc_stake.address,
-        btc_agent.address,
-        btc_lst_stake.address,
-        core_agent.address,
-        hash_power_agent.address,
-        lst_token.address
-    ]
-    args = encode(['address'] * len(contracts), [c for c in contracts])
-    getattr(system_reward, "updateContractAddr")(args)
-
+def set_up(system_reward, burn, foundation):
+    update_system_contract_address(system_reward, gov_hub=accounts[0])
     global account_tracker
     global system_reward_tracker
     global burn_tracker
