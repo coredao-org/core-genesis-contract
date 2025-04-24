@@ -146,11 +146,6 @@ contract Configuration is System {
             Function[] memory functions = new Function[](0);
 
             _updateConfig(contractAddr, events, functions);
-        } else if (Memory.compareStrings(key, "setDAOAddress")) {
-            RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
-            if (items.length != 1) revert MismatchParamLength(key);
-            daoAddress = items[0].toAddress();
-            emit ConstantUpdated();
         } else if (Memory.compareStrings(key, "setConfigStatus")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
             if (items.length != 2) revert MismatchParamLength(key);
