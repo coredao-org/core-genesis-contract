@@ -43,8 +43,6 @@ contract Configuration is System {
         Function[] functions;
     }
 
-
-
     uint8 public MAX_REWARDS;
     uint8 public MAX_EVENTS;
     uint8 public MAX_FUNCTIONS;
