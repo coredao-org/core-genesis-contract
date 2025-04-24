@@ -52,8 +52,6 @@ contract Configuration is System {
 
     mapping(address => Config) public configsMap;
     address[] public configAddresses;
-    // DAO Address
-    address public daoAddress;
     
     // Event to signal config updates
     event ConfigUpdated(address indexed configAddress, uint256 eventCount, uint256 functionCount);
@@ -71,17 +69,10 @@ contract Configuration is System {
     error IssuerNotFound(address issuer);
     error InvalidRewardPercentage(uint256 percentage);
 
-    // Modifier to restrict access to DAO
-    modifier onlyDAO() {
-        require(msg.sender == daoAddress, "Caller is not the DAO");
-        _;
-    }
-
     /**
      * @dev Initializes the contract. Can only be called once.
      */
     function init() external onlyNotInit {
-        daoAddress = 0x7e5C92fA765Aac46042AfBba05b0F3846C619423;
         alreadyInit = true;
         MAX_REWARDS = 5;
         MAX_EVENTS = 5;
@@ -217,22 +208,6 @@ contract Configuration is System {
         }
 
         return result;
-    }
-
-    /**
-     * @dev Public function to add a configuration.
-     * @param contractAddr The address of the contract to add the config to.
-     * @param events Array of events.
-     * @param functions Array of function signatures.
-     * @param isActive The active status of the config.
-     */
-    function addConfig(
-        address contractAddr,
-        Event[] memory events,
-        Function[] memory functions,
-        bool isActive
-    ) external onlyDAO onlyInit {
-        _addConfig(contractAddr, events, functions, isActive);
     }
 
     /**
@@ -412,37 +387,6 @@ contract Configuration is System {
         if (gas > MAX_GAS) {
             revert InvalidGasValue(gas);
         }
-    }
-
-    /**
-     * @dev Public function to remove a configuration.
-     * @param contractAddr The address of the contract to remove the config from.
-     */
-    function removeConfig(address contractAddr) external onlyDAO onlyInit {
-        _removeConfig(contractAddr);
-    }
-
-    /**
-     * @dev Public function to update a configuration.
-     * @param contractAddr The address of the contract to update the config for.
-     * @param events The new array of events.
-     * @param functions The new array of function signatures.
-     */
-    function updateConfig(
-        address contractAddr,
-        Event[] memory events,
-        Function[] memory functions
-    ) external onlyDAO onlyInit {
-        _updateConfig(contractAddr, events, functions);
-    }
-
-    /**
-     * @dev Public function to set the active status of a configuration.
-     * @param contractAddr The address of the contract.
-     * @param isActive The active status to set.
-     */
-    function setConfigStatus(address contractAddr, bool isActive) external onlyDAO onlyInit {
-        _setConfigStatus(contractAddr, isActive);
     }
 
     /**
