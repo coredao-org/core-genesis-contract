@@ -1,23 +1,23 @@
 const web3 = require("web3")
 const init_holders = [
   {
-     address: "0xD60c4550b0EC244C58191b917E263506c8C0D046",
+     address: "0xf81399FC678D9AC35685e0900Aa09F5EBB477fc4",
      balance: web3.utils.toBN("500000000000000000000").toString("hex") // 500e18
   },
   {
-     address: "0xD5FB7d560a3eCbf9364A6339204f037fd5eD8D66",
+     address: "0xE801aAB42A5ED64FD8EFd798EA8e919b3F8A727d",
      balance: web3.utils.toBN("500000000000000000000").toString("hex") // 500e18
   },
   {
-     address: "0xB129986cAB3b865A6267415eE4Ca2d86a5704fdE",
+     address: "0xB26aAA7769DE824B5aACcE5da62C7Ae71bFF2e53",
      balance: web3.utils.toBN("500000000000000000000").toString("hex") // 500e18
   },
   {
-     address: "0x1ef01E76f1aad50144A32680f16Aa97a10f8aF95",
+     address: "0x40861Aa6542C59D505446747290fB1F001C042F4",
      balance: web3.utils.toBN("500000000000000000000").toString("hex") // 500e18
   },
   {
-     address: "0x140A939b5a10952f958A08244D93185F6a0bC91e",
+     address: "0x43026BE461B8D7774AcAc7C3Fe4Ca490ccdc20E7",
      balance: web3.utils.toBN("500000000000000000000").toString("hex") // 500e18
   }
 ];

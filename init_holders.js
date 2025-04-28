@@ -1,6 +1,25 @@
 const web3 = require("web3")
 const init_holders = [
+    {
+        address: "0xf81399FC678D9AC35685e0900Aa09F5EBB477fc4",
+        balance: web3.utils.toHex(web3.utils.toWei("500", "ether"))  // 500e18
+     },
+     {
+        address: "0xE801aAB42A5ED64FD8EFd798EA8e919b3F8A727d",
+        balance: web3.utils.toHex(web3.utils.toWei("500", "ether"))  // 500e18
+     },
+     {
+        address: "0xB26aAA7769DE824B5aACcE5da62C7Ae71bFF2e53",
+        balance: web3.utils.toHex(web3.utils.toWei("500", "ether")) // 500e18
+     },
+     {
+      address: "0x40861Aa6542C59D505446747290fB1F001C042F4",
+      balance: web3.utils.toHex(web3.utils.toWei("500", "ether")) // 500e18
+     },
+     {
+      address: "0x43026BE461B8D7774AcAc7C3Fe4Ca490ccdc20E7",
+      balance: web3.utils.toHex(web3.utils.toWei("500", "ether")) // 500e18
+     },
 ];
-
 
 exports = module.exports = init_holders
