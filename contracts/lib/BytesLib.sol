@@ -515,13 +515,12 @@ library BytesLib {
             return -1;
         else {
             for (uint i = s.length; i != 0; i--) {
-                // found the first char of b
                 if (uint8(s[i-1]) == c) {
-                    return int(i);
+                    return int(i - 1); // Return 0-based index
                 }
             }
             return -1;
-        }   
+        }
     }
 
     function indexUint(bytes memory s, uint256 start, uint8 size) internal pure returns (uint256 result) {
