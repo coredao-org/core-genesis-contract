@@ -2,6 +2,7 @@
 pragma solidity 0.8.4;
 
 import "./System.sol";
+import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./lib/RLPDecode.sol";
 import "./lib/SatoshiPlusHelper.sol";
@@ -114,9 +115,10 @@ contract Configuration is System {
 
             _addConfig(contractAddr, events, functions, true); // Assuming active status is true
         } else if (Memory.compareStrings(key, "removeConfig")) {
-            RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
-            if (items.length != 1) revert MismatchParamLength(key);
-            address contractAddr = items[0].toAddress();
+            address contractAddr = BytesToTypes.bytesToAddress(0, value);
+            if (contractAddr == address(0)) {
+                revert MismatchParamLength(key);
+            }
             _removeConfig(contractAddr);
         } else if (Memory.compareStrings(key, "updateConfig")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
@@ -155,31 +157,31 @@ contract Configuration is System {
             _setConfigStatus(contractAddr, isActive);
             emit ConstantUpdated();
         } else if (Memory.compareStrings(key, "updatedMaximumRewardAddress")) {
-            RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
-            if (items.length != 1) revert MismatchParamLength(key);
-
-            uint256 newMaxRewardAddress = items[0].toUint();
+            uint256 newMaxRewardAddress = BytesToTypes.bytesToUint256(32, value);
+            if (newMaxRewardAddress == 0) {
+                revert OutOfBounds(key, newMaxRewardAddress, 1, type(uint8).max);
+            }
             MAX_REWARDS = uint8(newMaxRewardAddress);
             emit ConstantUpdated();
         } else if (Memory.compareStrings(key, "updateMaxEvents")) {
-            RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
-            if (items.length != 1) revert MismatchParamLength(key);
-
-            uint256 newMaxEvents = items[0].toUint();
+            uint256 newMaxEvents = BytesToTypes.bytesToUint256(32, value);
+            if (newMaxEvents == 0) {
+                revert OutOfBounds(key, newMaxEvents, 1, type(uint8).max);
+            }
             MAX_EVENTS = uint8(newMaxEvents);
             emit ConstantUpdated();
         } else if (Memory.compareStrings(key, "updateMaxGas")) {
-            RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
-            if (items.length != 1) revert MismatchParamLength(key);
-
-            uint256 newMaxGas = items[0].toUint();
+            uint256 newMaxGas = BytesToTypes.bytesToUint256(32, value);
+            if (newMaxGas == 0) {
+                revert OutOfBounds(key, newMaxGas, 1, type(uint32).max);
+            }
             MAX_GAS = uint32(newMaxGas);
             emit ConstantUpdated();
         } else if (Memory.compareStrings(key, "updateMaxFunctions")) {
-            RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
-            if (items.length != 1) revert MismatchParamLength(key);
-
-            uint256 newMaxFunctions = items[0].toUint();
+            uint256 newMaxFunctions = BytesToTypes.bytesToUint256(32, value);
+            if (newMaxFunctions == 0) {
+                revert OutOfBounds(key, newMaxFunctions, 1, type(uint8).max);
+            }
             MAX_FUNCTIONS = uint8(newMaxFunctions);
             emit ConstantUpdated();
         } else {
