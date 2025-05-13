@@ -2,6 +2,7 @@
 pragma solidity 0.8.4;
 
 import "./System.sol";
+import "./lib/BytesLib.sol";
 import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./lib/RLPDecode.sol";
@@ -12,6 +13,7 @@ import "./lib/SatoshiPlusHelper.sol";
  * @dev Contract for managing configurations with multiple reward addresses and percentages.
  */
 contract Configuration is System {
+    using BytesLib for bytes;
     using RLPDecode for bytes;
     using RLPDecode for RLPDecode.Iterator;
     using RLPDecode for RLPDecode.RLPItem;
@@ -118,7 +120,7 @@ contract Configuration is System {
             if (value.length != 20) {
                 revert MismatchParamLength(key);
             }
-            address contractAddr = BytesToTypes.bytesToAddress(0, value);
+            address contractAddr = value.toAddress(0);
             _removeConfig(contractAddr);
         } else if (Memory.compareStrings(key, "updateConfig")) {
             RLPDecode.RLPItem[] memory items = value.toRLPItem().toList();
