@@ -65,6 +65,7 @@ contract Configuration is System {
     error InvalidIssuer(address issuer);
     error ZeroEvents();
     error TooManyEvents();
+    error TooManyFunctionSigs();
     error TooManyRewardAddresses();
     error InvalidGasValue(uint gas);
     error IssuerNotFound(address issuer);
@@ -314,7 +315,7 @@ contract Configuration is System {
         }
 
         if (functions.length > MAX_FUNCTIONS) {
-            revert TooManyEvents();
+            revert TooManyFunctionSigs();
         }
 
         // Validate reward percentages for all events
