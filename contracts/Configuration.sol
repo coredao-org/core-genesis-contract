@@ -158,7 +158,6 @@ contract Configuration is System {
             address contractAddr = items[0].toAddress();
             bool isActive = items[1].toBoolean();
             _setConfigStatus(contractAddr, isActive);
-            emit ConstantUpdated();
         } else if (Memory.compareStrings(key, "updatedMaximumRewardAddress")) {
             if (value.length != 32) {
                 revert MismatchParamLength(key);
