@@ -309,8 +309,12 @@ contract Configuration is System {
             revert AddressNotFound(contractAddr);
         }
 
-        if (events.length > MAX_EVENTS && events.length != 0) {
+        if (events.length > MAX_EVENTS) {
             revert TooManyEvents();
+        }
+
+        if (events.length == 0) {
+            revert ZeroEvents();
         }
 
         if (functions.length > MAX_FUNCTIONS) {
