@@ -246,7 +246,7 @@ contract Configuration is System {
         }
 
         if (functions.length > MAX_FUNCTIONS) {
-            revert TooManyEvents();
+            revert TooManyFunctionSigs();
         }
 
         // Validate reward percentages for all events
