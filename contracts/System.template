@@ -27,6 +27,7 @@ contract System {
   address public CORE_AGENT_ADDR;
   address public HASH_AGENT_ADDR;
   address public BTCLST_TOKEN_ADDR;
+  address public CONFIGURATION_ADDR;
 
   struct SystemContractAddr {
     address validator;
@@ -46,6 +47,7 @@ contract System {
     address coreAgent;
     address hashAgent;
     address btcLstToken;
+    address configurationContract;
   }
 
   function updateContractAddr(bytes memory _systemContractAddr) external {
@@ -67,6 +69,7 @@ contract System {
     CORE_AGENT_ADDR = systemContractAddr.coreAgent;
     HASH_AGENT_ADDR = systemContractAddr.hashAgent;
     BTCLST_TOKEN_ADDR = systemContractAddr.btcLstToken;
+    CONFIGURATION_ADDR = systemContractAddr.configurationContract;
   }
   
   function setAlreadyInit(bool value) external {
