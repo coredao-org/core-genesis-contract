@@ -44,6 +44,7 @@ jobs:
         run: |
           npm install
           npm install -g ganache
+          npm install --global solc
 
       - name: modify openssl.cnf
         run: |
