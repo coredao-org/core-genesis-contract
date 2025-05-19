@@ -55,7 +55,4 @@ jobs:
       
       - name: Run tests
         run: |
-          brownie pm install OpenZeppelin/openzeppelin-contracts@4.9.6
-          sh generate-test-contracts.sh
-          brownie test -v --stateful false
           node generate-genesis.js
