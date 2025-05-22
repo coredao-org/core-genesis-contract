@@ -110,6 +110,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     adjustmentHashes[adjustment] = blockHash;
     bytes memory nodeBytes = encode(initBytes, rewardAddr, scoreBlock, INIT_CHAIN_HEIGHT, adjustment, candidateAddr);
     blockChain[blockHash] = nodeBytes;
+    height2HashMap[INIT_CHAIN_HEIGHT] = blockHash;
     rewardForSyncHeader = INIT_REWARD_FOR_SYNC_HEADER;
     callerCompensationMolecule=CALLER_COMPENSATION_MOLECULE;
     roundSize = ROUND_SIZE;
@@ -447,7 +448,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       uint256 prevTarget;
 
       // (blockHeight - DIFFICULTY_ADJUSTMENT_INTERVAL) is same as [getHeight(hashPrevBlock) - (DIFFICULTY_ADJUSTMENT_INTERVAL - 1)]
-      bytes32 startBlock = getAdjustmentHash(hashPrevBlock);
+      bytes32 startBlock = height2HashMap[blockHeight - DIFFICULTY_ADJUSTMENT_INTERVAL];
       uint64 startTime = getTimestamp(startBlock);
 
       // compute new bits
@@ -460,8 +461,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       }
 
       if (ENFORCE_BIP94) {
-        bytes32 lastAdjustmentHash = adjustmentHashes[blockHeight - DIFFICULTY_ADJUSTMENT_INTERVAL];
-        prevTarget = targetFromBits(getBits(lastAdjustmentHash));
+        prevTarget = targetFromBits(getBits(startBlock));
       } else {
         prevTarget = targetFromBits(getBits(hashPrevBlock));
       }
@@ -470,6 +470,11 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
       assembly{
         newTarget := div(mul(actualTimespan, prevTarget), TARGET_TIMESPAN)
       }
+
+      if (newTarget > POW_LIMIT) {
+        newTarget = POW_LIMIT;
+      }
+
       uint32 newBits = toCompactBits(newTarget);
       if (bits != newBits && newBits != 0) { // newBits != 0 to allow first header
         return (blockHeight, scoreBlock, ERR_RETARGET);
