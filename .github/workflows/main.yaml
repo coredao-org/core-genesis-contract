@@ -44,7 +44,6 @@ jobs:
         run: |
           npm install
           npm install -g ganache
-          npm install --global solc
 
       - name: modify openssl.cnf
         run: |
@@ -56,4 +55,6 @@ jobs:
       
       - name: Run tests
         run: |
-          node generate-genesis.js
+          brownie pm install OpenZeppelin/openzeppelin-contracts@4.9.6
+          sh generate-test-contracts.sh
+          brownie test -v --stateful false
