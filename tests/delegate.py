@@ -1,6 +1,6 @@
 import time
 
-from tests.common import get_current_round
+from tests.common import get_current_round, stake_hub_claim_reward
 from tests.utils import *
 from brownie import *
 
@@ -215,11 +215,44 @@ def set_last_round_tag(stake_round, time0=None):
     current_round = end_round0 - stake_round - 1
     CandidateHubMock[0].setRoundTag(current_round)
     BitcoinStakeMock[0].setRoundTag(current_round)
+    CoreAgentMock[0].setRoundTag(current_round)
     BitcoinLSTStakeMock[0].setInitRound(current_round)
     return end_round0, current_round
 
 
 # delegate
+def run_stake_operation(operation, candidate, account, operation_amount, target_agent=None, tx_id=None,
+                        lock_script=None, btc_value=None):
+    tx = None
+    if operation == 'delegate':
+        tx = delegate_coin_success(candidate, account, operation_amount)
+    elif operation == 'undelegate':
+        tx = undelegate_coin_success(candidate, account, operation_amount)
+    elif operation == 'transfer':
+        tx = transfer_coin_success(candidate, target_agent, account, operation_amount)
+    elif operation == 'delegate_btc':
+        tx = delegate_btc_success(candidate, account, btc_value, lock_script, events=True)
+    elif operation == 'transfer_btc':
+        tx = transfer_btc_success(tx_id, target_agent, account)
+    elif operation == 'claim':
+        tx = stake_hub_claim_reward(account)
+    return tx
+
+
+# delegate
+def run_proxy_stake_operation(operation, candidate, account, operation_amount, target_agent=None, candidates=None):
+    tx = None
+    if operation == 'proxy_delegate':
+        tx = old_delegate_coin_success(candidate, account, operation_amount, False)
+    elif operation == 'proxy_undelegate':
+        tx = old_undelegate_coin_success(candidate, account, operation_amount, False)
+    elif operation == 'proxy_transfer':
+        tx = old_transfer_coin_success(candidate, target_agent, account, operation_amount, False)
+    elif operation == 'proxy_claim':
+        tx = old_claim_reward_success(candidates, account)
+    return tx
+
+
 def delegate_coin_success(candidate, delegator, amount):
     tx = CoreAgentMock[0].delegateCoin(candidate, {'value': amount, 'from': delegator})
     assert 'delegatedCoin' in tx.events
@@ -239,7 +272,7 @@ def undelegate_coin_success(candidate, delegator, amount):
 
 
 def delegate_btc_success(agent, delegator, btc_amount, lock_script, lock_data=None, relay=None, stake_duration=None,
-                         fee=1, script_type='p2sh', lock_time=None):
+                         fee=1, script_type='p2sh', lock_time=None, events=None):
     if stake_duration is None:
         stake_duration = Utils.MONTH
     if lock_time is None:
@@ -253,7 +286,10 @@ def delegate_btc_success(agent, delegator, btc_amount, lock_script, lock_data=No
     tx = BitcoinStakeMock[0].delegate(btc_tx0, 1, [], 0, lock_script, {"from": relay})
     assert 'delegated' in tx.events
     tx_id = get_transaction_txid(btc_tx0)
-    return tx_id
+    if events is None:
+        return tx_id
+    else:
+        return tx
 
 
 def transfer_btc_success(tx_id, target_candidate, delegator):
@@ -301,6 +337,43 @@ def redeem_btc_lst_success(delegator, amount, pkscript):
     return tx
 
 
+# mock delegate 
+# agent, delegator, btc_amount, lock_script
+def mock_delegate_btc_success(agent, delegator, btc_amount, lock_time=None, block_timestamp=0, output_index=0,
+                              tx_id=None):
+    if tx_id is None:
+        tx_id = random_btc_tx_id()
+    if lock_time is None:
+        lock_time = LOCK_TIME
+    tx = BitcoinStakeMock[0].mockDelegateBtc(tx_id, btc_amount, agent, delegator, lock_time, block_timestamp,
+                                             output_index)
+    assert 'mockDelegatedBtc' in tx.events
+    return tx_id
+
+
+def mock_transfer_btc_success(tx_id, target_candidate):
+    tx = BitcoinStakeMock[0].mockTransferBtc(tx_id, target_candidate)
+    assert 'mockTransferredBtc' in tx.events
+
+
+def mock_delegate_coin_success(candidate, delegator, amount):
+    tx = CoreAgentMock[0].mockDelegateCoin(candidate, {'value': amount, 'from': delegator})
+    assert 'mockDelegatedCoin' in tx.events
+
+
+def mock_transfer_coin_success(source_agent, target_agent, delegator, amount):
+    tx = CoreAgentMock[0].mockTransferCoin(source_agent, target_agent, amount, {'from': delegator})
+    assert 'mockTransferredCoin' in tx.events
+
+    return tx
+
+
+def mock_undelegate_coin_success(candidate, delegator, amount):
+    tx = CoreAgentMock[0].mockUndelegateCoin(candidate, amount, {'from': delegator})
+    assert 'mockUndelegatedCoin' in tx.events
+    return tx
+
+
 # old delegate
 def old_delegate_coin_success(candidate, account, amount, old=True):
     if old is True:
@@ -338,11 +411,11 @@ def old_claim_reward_success(candidates, account=None):
     if isinstance(account, list):
         for a in account:
             tx = PledgeAgentMock[0].claimReward(candidates, {'from': a})
-
     else:
         if account is None:
             account = accounts[0]
         tx = PledgeAgentMock[0].claimReward(candidates, {'from': account})
+    return tx
 
 
 def old_claim_btc_reward_success(tx_ids, account=None):
@@ -367,7 +440,8 @@ def old_turn_round(miners: list = None, tx_fee=100, round_count=1):
 def old_delegate_btc_success(btc_value, agent, delegator, lock_time=None, tx_id=None, script=None, fee=1):
     if script is None:
         script, _, timestamp = random_btc_lock_script()
-        lock_time = timestamp
+        if lock_time is None:
+            lock_time = timestamp
     if tx_id is None:
         tx_id = random_btc_tx_id()
     PledgeAgentMock[0].delegateBtcMock(tx_id, btc_value, agent, delegator, script, lock_time, fee)
@@ -581,6 +655,12 @@ class StakeManager:
     @staticmethod
     def set_is_btc_stake_active(value=0):
         BitcoinStakeMock[0].setIsActive(value)
+
+    @staticmethod
+    def set_stake_hub_delegator_map(account, change_round, rewards=None):
+        if rewards is None:
+            rewards = []
+        StakeHubMock[0].setDelegatorMap(account, change_round, rewards)
 
     @staticmethod
     def add_wallet(script):

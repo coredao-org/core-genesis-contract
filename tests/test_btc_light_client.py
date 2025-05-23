@@ -1,10 +1,9 @@
 import pytest
 import brownie
-from eth_abi import encode
 from web3 import Web3
 from brownie import *
 from brownie.network import gas_price
-from .utils import expect_event, get_tracker, padding_left, encode_args_with_signature
+from .utils import expect_event, get_tracker, padding_left, encode_args_with_signature, update_system_contract_address
 from .common import register_relayer
 from .btc_block_data import btc_block_data
 
@@ -31,29 +30,9 @@ def isolation():
     pass
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def init_gov_address():
-    contracts = [
-        ValidatorSetMock[0].address,
-        SlashIndicatorMock[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        accounts[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address,
-        StakeHubMock[0].address,
-        BitcoinStakeMock[0].address,
-        BitcoinAgentMock[0].address,
-        BitcoinLSTStakeMock[0].address,
-        CoreAgentMock[0].address,
-        HashPowerAgentMock[0].address,
-        BitcoinLSTToken[0].address
-    ]
-    args = encode(['address'] * len(contracts), [c for c in contracts])
-    getattr(BtcLightClientMock[0], "updateContractAddr")(args)
+    update_system_contract_address(BtcLightClientMock[0], gov_hub=accounts[0])
 
 
 def update_default_block_gasprice(btc_light_client):

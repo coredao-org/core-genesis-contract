@@ -143,7 +143,7 @@ library TypedMemView {
                 }
             }
         }
-        
+
     }
 
     /**
@@ -223,7 +223,7 @@ library TypedMemView {
         uint256 _end = end(memView);
         assembly {
         // solium-disable-previous-line security/no-inline-assembly
-            ret := not(gt(_end, mload(0x40)))
+            ret := iszero(gt(_end, mload(0x40)))
         }
     }
 
@@ -395,7 +395,7 @@ library TypedMemView {
      * @return          uint256 - The number of memory words
      */
     function words(bytes29 memView) internal pure returns (uint256) {
-        return (uint256(len(memView)) + 32) / 32;
+        return (uint256(len(memView)) + 31) / 32;
     }
 
     /**
@@ -528,7 +528,7 @@ library TypedMemView {
             assembly {
                 // solium-disable-previous-line security/no-inline-assembly
                 result := and(mload(add(_loc, _index)), _mask)
-            }   
+            }
         }
 
     }

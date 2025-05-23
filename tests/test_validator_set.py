@@ -2,7 +2,7 @@ import pytest
 import brownie
 from web3 import Web3, constants
 from brownie import *
-from .utils import expect_event, get_tracker, AccountTracker
+from .utils import expect_event, get_tracker, AccountTracker, update_system_contract_address
 from eth_abi import encode
 
 init_validators = [
@@ -69,75 +69,15 @@ def __contract_check(total_income, validator_incomes):
 
 
 def __fake_validator_set():
-    contracts = [
-        ValidatorSetMock[0].address,
-        SlashIndicatorMock[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        accounts[0].address,
-        GovHubMock[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address,
-        StakeHubMock[0].address,
-        BitcoinStakeMock[0].address,
-        BitcoinAgentMock[0].address,
-        BitcoinLSTStakeMock[0].address,
-        CoreAgentMock[0].address,
-        HashPowerAgentMock[0].address,
-        BitcoinLSTToken[0].address
-    ]
-    args = encode(['address'] * len(contracts), [c for c in contracts])
-    getattr(validator_set_instance, "updateContractAddr")(args)
+    update_system_contract_address(validator_set_instance, candidate_hub=accounts[0])
 
 
 def __update_gov_address():
-    contracts = [
-        ValidatorSetMock[0].address,
-        SlashIndicatorMock[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        accounts[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address,
-        StakeHubMock[0].address,
-        BitcoinStakeMock[0].address,
-        BitcoinAgentMock[0].address,
-        BitcoinLSTStakeMock[0].address,
-        CoreAgentMock[0].address,
-        HashPowerAgentMock[0].address,
-        BitcoinLSTToken[0].address
-    ]
-    args = encode(['address'] * len(contracts), [c for c in contracts])
-    getattr(validator_set_instance, "updateContractAddr")(args)
+    update_system_contract_address(validator_set_instance, gov_hub=accounts[0])
 
 
 def __update_slash_address():
-    contracts = [
-        ValidatorSetMock[0].address,
-        accounts[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        GovHubMock[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address,
-        StakeHubMock[0].address,
-        BitcoinStakeMock[0].address,
-        BitcoinAgentMock[0].address,
-        BitcoinLSTStakeMock[0].address,
-        CoreAgentMock[0].address,
-        HashPowerAgentMock[0].address,
-        BitcoinLSTToken[0].address,
-    ]
-    args = encode(['address'] * len(contracts), [c for c in contracts])
-    getattr(validator_set_instance, "updateContractAddr")(args)
+    update_system_contract_address(validator_set_instance, slash_indicator=accounts[0])
 
 
 def test_check_validator_address_failed_with_zero_address(validator_set):

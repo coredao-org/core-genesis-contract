@@ -147,12 +147,14 @@ def test_claim_reward_after_transfer_to_duplicated_validator(core_agent, stake_h
             core_agent.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE, "from": client})
     turn_round()
     core_agent.transferCoin(operators[0], operators[1], MIN_INIT_DELEGATE_VALUE, {"from": clients[0]})
+    stake_hub_reward_map = stake_hub.getDelegatorMap(accounts[0])
+    assert stake_hub_reward_map == [get_current_round(), [0, 0, 0]]
     turn_round(consensuses, round_count=2)
     tracker0 = get_tracker(clients[0])
     tracker1 = get_tracker(clients[1])
     stake_hub_claim_reward(clients)
-    account_reward0 = TOTAL_REWARD * 3 // 2 + TOTAL_REWARD // 2 + (TOTAL_REWARD * 200 / 300)
-    account_reward1 = TOTAL_REWARD * 3 // 2 + TOTAL_REWARD + TOTAL_REWARD // 2 + (TOTAL_REWARD * 100 / 300)
+    account_reward0 = TOTAL_REWARD // 2 * 3 + TOTAL_REWARD // 2 + (TOTAL_REWARD * 2 // 3)
+    account_reward1 = TOTAL_REWARD * 3 // 2 + (TOTAL_REWARD + TOTAL_REWARD // 2 + (TOTAL_REWARD // 3))
     assert tracker0.delta() == account_reward0
     assert tracker1.delta() == account_reward1
 
@@ -1140,7 +1142,7 @@ def test_transfer_and_check_transfer_info(core_agent, validator_set, candidate_h
     assert tracker0.delta() == COIN_REWARD + COIN_REWARD // 2 * 2
 
 
-def test_multiple_transfers_and_check_transfer_info(core_agent, validator_set, candidate_hub, set_candidate):
+def test_multiple_transfers_and_check_transfer_info(core_agent,pledge_agent, validator_set, candidate_hub, set_candidate):
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     transfer_amount0 = delegate_amount // 2
     transfer_amount1 = delegate_amount // 4
@@ -1154,29 +1156,29 @@ def test_multiple_transfers_and_check_transfer_info(core_agent, validator_set, c
     turn_round()
     transfer_coin_success(operators[0], operators[2], accounts[0], transfer_amount0)
     transfer_coin_success(operators[1], operators[2], accounts[0], transfer_amount1)
-    delegator_info0 = core_agent.getDelegator(operators[0], accounts[0])
-    delegator_info1 = core_agent.getDelegator(operators[1], accounts[0])
-    delegator_info2 = core_agent.getDelegator(operators[2], accounts[0])
+    delegator_info0 = pledge_agent.getDelegator(operators[0], accounts[0])
+    delegator_info1 = pledge_agent.getDelegator(operators[1], accounts[0])
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
     new_deposit1 = delegate_amount - transfer_amount1
     new_deposit2 = delegate_amount + transfer_amount0 + transfer_amount1
     expect_query(delegator_info0,
-                 {'stakedAmount': transfer_amount0, 'realtimeAmount': delegate_amount - transfer_amount0,
-                  'transferredAmount': transfer_amount0})
+                 {'deposit': transfer_amount0, 'newDeposit': delegate_amount - transfer_amount0,
+                  'transferOutDeposit': transfer_amount0})
     expect_query(delegator_info1,
-                 {'realtimeAmount': new_deposit1, 'transferredAmount': transfer_amount1})
-    expect_query(delegator_info2, {'realtimeAmount': new_deposit2, 'transferredAmount': 0})
+                 {'newDeposit': new_deposit1, 'transferOutDeposit': transfer_amount1})
+    expect_query(delegator_info2, {'newDeposit': new_deposit2, 'transferOutDeposit': 0})
     undelegate_coin_success(operators[2], accounts[0], undelegate_amount)
-    delegator_info2 = core_agent.getDelegator(operators[2], accounts[0])
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
     new_deposit2 -= undelegate_amount
     new_deposit1 -= transfer_amount2
-    expect_query(delegator_info2, {'realtimeAmount': new_deposit2, 'transferredAmount': 0})
+    expect_query(delegator_info2, {'newDeposit': new_deposit2, 'transferOutDeposit': 0})
     transfer_coin_success(operators[1], operators[2], accounts[0], transfer_amount2)
     new_deposit2 += transfer_amount2
-    delegator_info1 = core_agent.getDelegator(operators[1], accounts[0])
-    delegator_info2 = core_agent.getDelegator(operators[2], accounts[0])
+    delegator_info1 = pledge_agent.getDelegator(operators[1], accounts[0])
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
     expect_query(delegator_info1,
-                 {'realtimeAmount': new_deposit1, 'transferredAmount': transfer_amount1 + transfer_amount2})
-    expect_query(delegator_info2, {'realtimeAmount': new_deposit2, 'transferredAmount': 0})
+                 {'newDeposit': new_deposit1, 'transferOutDeposit': transfer_amount1 + transfer_amount2})
+    expect_query(delegator_info2, {'newDeposit': new_deposit2, 'transferOutDeposit': 0})
     expect_reward = calculate_coin_rewards(delegate_amount - undelegate_amount, delegate_amount * 2, COIN_REWARD)
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
@@ -1184,7 +1186,7 @@ def test_multiple_transfers_and_check_transfer_info(core_agent, validator_set, c
     assert tracker0.delta() == expect_reward + COIN_REWARD + COIN_REWARD // 2
 
 
-def test_transfer_info_accumulation(core_agent, validator_set, candidate_hub, set_candidate):
+def test_transfer_info_accumulation(core_agent, pledge_agent, validator_set, candidate_hub, set_candidate):
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     transfer_amount0 = delegate_amount // 2
     transfer_amount1 = delegate_amount // 4
@@ -1197,26 +1199,26 @@ def test_transfer_info_accumulation(core_agent, validator_set, candidate_hub, se
     transfer_coin_success(operators[0], operators[2], accounts[0], transfer_amount0)
     new_deposit0 -= transfer_amount0
     new_deposit2 += transfer_amount0
-    delegator_info0 = core_agent.getDelegator(operators[0], accounts[0])
-    delegator_info2 = core_agent.getDelegator(operators[2], accounts[0])
-    expect_query(delegator_info0, {'realtimeAmount': new_deposit0, 'transferredAmount': transfer_amount0})
-    expect_query(delegator_info2, {'realtimeAmount': new_deposit2, 'transferredAmount': 0})
+    delegator_info0 = pledge_agent.getDelegator(operators[0], accounts[0])
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
+    expect_query(delegator_info0, {'newDeposit': new_deposit0, 'transferOutDeposit': transfer_amount0})
+    expect_query(delegator_info2, {'newDeposit': new_deposit2, 'transferOutDeposit': 0})
     transfer_coin_success(operators[0], operators[2], accounts[0], transfer_amount1)
     new_deposit0 -= transfer_amount1
     new_deposit2 += transfer_amount1
-    delegator_info0 = core_agent.getDelegator(operators[0], accounts[0])
-    delegator_info2 = core_agent.getDelegator(operators[2], accounts[0])
+    delegator_info0 = pledge_agent.getDelegator(operators[0], accounts[0])
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
     expect_query(delegator_info0,
-                 {'realtimeAmount': new_deposit0, 'transferredAmount': transfer_amount0 + transfer_amount1})
-    expect_query(delegator_info2, {'realtimeAmount': new_deposit2, 'transferredAmount': 0})
+                 {'newDeposit': new_deposit0, 'transferOutDeposit': transfer_amount0 + transfer_amount1})
+    expect_query(delegator_info2, {'newDeposit': new_deposit2, 'transferOutDeposit': 0})
     transfer_coin_success(operators[1], operators[2], accounts[0], transfer_amount1)
     transfer_coin_success(operators[1], operators[2], accounts[0], transfer_amount1)
     new_deposit2 += transfer_amount1 * 2
-    delegator_info1 = core_agent.getDelegator(operators[1], accounts[0])
-    delegator_info2 = core_agent.getDelegator(operators[2], accounts[0])
+    delegator_info1 = pledge_agent.getDelegator(operators[1], accounts[0])
+    delegator_info2 = pledge_agent.getDelegator(operators[2], accounts[0])
     expect_query(delegator_info1,
-                 {'realtimeAmount': delegate_amount - transfer_amount1 * 2, 'transferredAmount': transfer_amount1 * 2})
-    expect_query(delegator_info2, {'realtimeAmount': new_deposit2, 'transferredAmount': 0})
+                 {'newDeposit': delegate_amount - transfer_amount1 * 2, 'transferOutDeposit': transfer_amount1 * 2})
+    expect_query(delegator_info2, {'newDeposit': new_deposit2, 'transferOutDeposit': 0})
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     stake_hub_claim_reward(accounts[0])
@@ -1431,8 +1433,8 @@ def test_claim_rewards_for_three_rounds(core_agent, validator_set, slash_indicat
     v2r = delegate_amount1 * v2 // Utils.CORE_STAKE_DECIMAL
     assert tracker0.delta() == v1r + v2r
     turn_round(consensuses, round_count=3)
-    v1r = delegate_amount0 * (v1 * 3) // Utils.CORE_STAKE_DECIMAL
-    v2r = delegate_amount1 * (v2 * 3) // Utils.CORE_STAKE_DECIMAL
+    v1r = delegate_amount0 * (v1 * 2) // Utils.CORE_STAKE_DECIMAL + v1r
+    v2r = delegate_amount1 * (v2 * 2) // Utils.CORE_STAKE_DECIMAL + v2r
     stake_hub_claim_reward(accounts[0])
     assert tracker0.delta() == v1r + v2r
 
@@ -2043,15 +2045,13 @@ def test_claim_after_cancel_stake_transfer_skip_round(core_agent, validator_set,
         turn_round(consensuses)
         stake_hub_claim_reward(accounts[0])
         turn_round(consensuses)
-        adjustment_amount = 0
     else:
         turn_round(consensuses, round_count=2)
-        adjustment_amount = 1
     stake_hub_claim_reward(accounts[0])
-    assert tracker0.delta() == expect_reward + adjustment_amount
+    assert tracker0.delta() == expect_reward
 
 
-def test_cancel_after_skip_round(core_agent, validator_set, set_candidate):
+def test_cancel_after_skip_round(core_agent, validator_set, set_candidate, stake_hub):
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     operators, consensuses = set_candidate
     for op in operators:
@@ -2061,17 +2061,14 @@ def test_cancel_after_skip_round(core_agent, validator_set, set_candidate):
     turn_round(consensuses)
     transfer_coin_success(operators[0], operators[2], accounts[0], delegate_amount // 2)
     undelegate_coin_success(operators[2], accounts[0], delegate_amount + delegate_amount // 2)
+    stake_delegator_map = stake_hub.getDelegatorMap(accounts[0])
+    # Settlement of historical rewards during unstaking.
+    actual_reward = TOTAL_REWARD // 2 * 3
+    assert stake_delegator_map[1][0] == actual_reward
     turn_round(consensuses)
+    actual_reward += TOTAL_REWARD // 2 + TOTAL_REWARD // 4
     tracker0 = get_tracker(accounts[0])
     stake_hub_claim_reward(accounts[0])
-    one_round_reward = 6772500
-    tow_round_reward = 13545000
-    # the reward that is settled when the stake is transferred
-    actual_reward = delegate_amount * one_round_reward // Utils.CORE_STAKE_DECIMAL * 2
-    # validators who have not performed any operations will receive 2 rounds of rewards
-    actual_reward += delegate_amount * tow_round_reward // Utils.CORE_STAKE_DECIMAL
-    # transfer rewards
-    actual_reward += delegate_amount // 2 * one_round_reward // Utils.CORE_STAKE_DECIMAL
     assert tracker0.delta() == actual_reward
 
 

@@ -110,7 +110,11 @@ library RLPDecode {
             result := byte(0, mload(memPtr))
         }
 
-        return result == 0 ? false : true;
+        if (result == 0x00 || result == 0x80) {
+            return false;
+        } else {
+            return true;
+        }
     }
 
     function toAddress(RLPItem memory item) internal pure returns (address) {
@@ -266,7 +270,7 @@ library RLPDecode {
         }
 
         // left over bytes. Mask is used to remove unwanted bytes from the word
-        unchecked { 
+        unchecked {
             uint mask = 256 ** (WORD_SIZE - len) - 1;
             assembly {
                 let srcpart := and(mload(src), not(mask)) // zero out src

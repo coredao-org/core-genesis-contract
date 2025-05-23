@@ -168,7 +168,6 @@ contract CandidateHubMock is CandidateHub {
             super.nextRound();
         }
     }
-
     /// The `turn round` workflowf
     /// @dev this method is called by Golang consensus engine at the end of a round
     function turnRoundOld() external onlyCoinbase onlyInit onlyZeroGasPrice {

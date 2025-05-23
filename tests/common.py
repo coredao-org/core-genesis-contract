@@ -12,7 +12,7 @@ def register_candidate(consensus=None, fee_address=None, operator=None, commissi
     if margin is None:
         margin = CandidateHubMock[0].requiredMargin()
 
-    CandidateHubMock[0].register(
+    tx = CandidateHubMock[0].register(
         consensus, fee_address, commission,
         {'from': operator, 'value': margin}
     )
@@ -76,6 +76,7 @@ def stake_hub_claim_reward(account):
     if isinstance(account, list):
         for i in account:
             tx = StakeHubMock[0].claimReward({'from': i})
+
     else:
         tx = StakeHubMock[0].claimReward({'from': account})
     return tx
@@ -89,4 +90,3 @@ def claim_stake_and_relay_reward(account):
     else:
         tx0 = stake_hub_claim_reward(account)
     return tx0
-

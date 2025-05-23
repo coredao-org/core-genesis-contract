@@ -3,7 +3,8 @@ from web3 import Web3, constants
 import brownie
 from brownie import *
 from eth_abi import encode
-from .utils import expect_event, padding_left, expect_event_not_emitted, encode_args_with_signature
+from .utils import expect_event, padding_left, expect_event_not_emitted, encode_args_with_signature, \
+    update_system_contract_address
 from .common import execute_proposal
 
 origin_members = ["0x9fB29AAc15b9A4B7F17c3385939b007540f4d791", "0x96C42C56fdb78294F96B0cFa33c92bed7D75F96a"]
@@ -15,27 +16,7 @@ def set_up():
 
 
 def fake_gov():
-    contracts = [
-        ValidatorSetMock[0].address,
-        SlashIndicatorMock[0].address,
-        SystemRewardMock[0].address,
-        BtcLightClientMock[0].address,
-        RelayerHubMock[0].address,
-        CandidateHubMock[0].address,
-        accounts[0].address,
-        PledgeAgentMock[0].address,
-        Burn[0].address,
-        Foundation[0].address,
-        StakeHubMock[0].address,
-        BitcoinStakeMock[0].address,
-        BitcoinAgentMock[0].address,
-        BitcoinLSTStakeMock[0].address,
-        CoreAgentMock[0].address,
-        HashPowerAgentMock[0].address,
-        BitcoinLSTToken[0].address,
-    ]
-    args = encode(['address'] * len(contracts), [c for c in contracts])
-    getattr(GovHubMock[0], "updateContractAddr")(args)
+    update_system_contract_address(GovHubMock[0], gov_hub=accounts[0])
 
 
 def test_receive_money(gov_hub):
@@ -387,11 +368,354 @@ def test_execute_proposal_failed_with_is_not_in_success_state(gov_hub):
     with brownie.reverts("proposal can only be executed if it is succeeded"):
         gov_hub.execute(1)
     chain.mine(1)
-    with brownie.reverts("proposal can only be executed if it is succeeded"):
+    with brownie.reverts("can only be executed when yes from majority of members"):
         gov_hub.execute(1)
     chain.mine(gov_hub.votingPeriod())
     with brownie.reverts("proposal can only be executed if it is succeeded"):
         gov_hub.execute(1)
+
+
+@pytest.mark.parametrize("is_completed_early", [True, False])
+@pytest.mark.parametrize("vote_count", [
+    [2, 1, 3], [3, 0, 3], [3, 0, 4],
+    [4, 3, 7], [4, 0, 7], [4, 2, 7]
+])
+def test_vote_early_completion_success(gov_hub, pledge_agent, vote_count, is_completed_early):
+    assert pledge_agent.btcFactor() == 2
+    gov_hub.resetMembers(accounts[:vote_count[2]])
+    padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(10), 64))
+    gov_hub.propose(
+        [pledge_agent.address],
+        [0],
+        ["updateParam(string,bytes)"],
+        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+        ['pledgeAgent clearDeprecatedMembers']
+    )
+    start_height = chain.height + 1
+    chain.mine(1)
+    assert gov_hub.getMembers() == accounts[:vote_count[2]]
+    for member in gov_hub.getMembers()[:vote_count[0]]:
+        gov_hub.castVote(1, True, {'from': member})
+    reversed_arr = list(reversed(gov_hub.getMembers()))
+    for member in reversed_arr[0:vote_count[1]]:
+        gov_hub.castVote(1, False, {'from': member})
+    if is_completed_early is False:
+        chain.mine(gov_hub.votingPeriod() + 10)
+    else:
+        chain.mine(3)
+    assert gov_hub.proposals(1) == [1, accounts[0], start_height, start_height + gov_hub.votingPeriod(), vote_count[0],
+                                    vote_count[1], vote_count[2], False, False]
+    gov_hub.execute(1)
+    assert pledge_agent.btcFactor() == 0
+
+
+@pytest.mark.parametrize("is_completed_early", [True, False])
+@pytest.mark.parametrize("vote_count", [0, 1, 2])
+def test_vote_early_completion_with_two_voters(gov_hub, pledge_agent, vote_count, is_completed_early):
+    assert pledge_agent.btcFactor() == 2
+    padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(10), 64))
+    gov_hub.propose(
+        [pledge_agent.address],
+        [0],
+        ["updateParam(string,bytes)"],
+        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+        ['pledgeAgent clearDeprecatedMembers']
+    )
+    chain.mine()
+    for member in gov_hub.getMembers()[:vote_count]:
+        gov_hub.castVote(1, True, {'from': member})
+    error_msg = 'can only be executed when yes from majority of members'
+    if is_completed_early is False:
+        chain.mine(gov_hub.votingPeriod() + 2)
+        error_msg = 'proposal can only be executed if it is succeeded'
+    if vote_count > 1:
+        gov_hub.execute(1)
+        assert pledge_agent.btcFactor() == 0
+    else:
+        with brownie.reverts(error_msg):
+            gov_hub.execute(1)
+
+
+@pytest.mark.parametrize("execute_early", [True, False])
+def test_vote_not_completed(gov_hub, pledge_agent, execute_early):
+    assert pledge_agent.btcFactor() == 2
+    padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(10), 64))
+    gov_hub.propose(
+        [pledge_agent.address],
+        [0],
+        ["updateParam(string,bytes)"],
+        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+        ['pledgeAgent clearDeprecatedMembers']
+    )
+    chain.mine()
+    for member in gov_hub.getMembers()[:1]:
+        gov_hub.castVote(1, True, {'from': member})
+    error_msg = 'can only be executed when yes from majority of members'
+    if execute_early is False:
+        chain.mine(gov_hub.votingPeriod() * 2)
+        error_msg = 'proposal can only be executed if it is succeeded'
+    with brownie.reverts(error_msg):
+        gov_hub.execute(1)
+    assert pledge_agent.btcFactor() == 2
+
+
+def test_governance_mid_change_participants(gov_hub, pledge_agent):
+    assert pledge_agent.btcFactor() == 2
+    padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(10), 64))
+    gov_hub.propose(
+        [pledge_agent.address],
+        [0],
+        ["updateParam(string,bytes)"],
+        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+        ['pledgeAgent clearDeprecatedMembers']
+    )
+    chain.mine()
+    gov_hub.resetMembers(accounts[:4])
+    for member in gov_hub.getMembers()[:2]:
+        gov_hub.castVote(1, True, {'from': member})
+    gov_hub.execute(1)
+    assert pledge_agent.btcFactor() == 0
+
+
+@pytest.mark.parametrize("execute", [True, False])
+def test_execute_multiple_times(gov_hub, pledge_agent, execute):
+    assert pledge_agent.btcFactor() == 2
+    gov_hub.resetMembers(accounts[:3])
+    padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(10), 64))
+    gov_hub.propose(
+        [pledge_agent.address],
+        [0],
+        ["updateParam(string,bytes)"],
+        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+        ['pledgeAgent clearDeprecatedMembers']
+    )
+    chain.mine(1)
+    for member in gov_hub.getMembers()[:2]:
+        gov_hub.castVote(1, True, {'from': member})
+    reversed_arr = list(reversed(gov_hub.getMembers()))
+    for member in reversed_arr[:1]:
+        gov_hub.castVote(1, False, {'from': member})
+    if execute is False:
+        chain.mine(gov_hub.votingPeriod() * 2)
+    gov_hub.execute(1)
+    with brownie.reverts('proposal can only be executed if it is succeeded'):
+        gov_hub.execute(1)
+    assert pledge_agent.btcFactor() == 0
+    chain.mine(gov_hub.votingPeriod() * 2)
+    with brownie.reverts('proposal can only be executed if it is succeeded'):
+        gov_hub.execute(1)
+
+
+def test_cancel_proposal_multiple_times(gov_hub, pledge_agent):
+    assert pledge_agent.btcFactor() == 2
+    gov_hub.resetMembers(accounts[:3])
+    padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(10), 64))
+    gov_hub.propose(
+        [pledge_agent.address],
+        [0],
+        ["updateParam(string,bytes)"],
+        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+        ['pledgeAgent clearDeprecatedMembers']
+    )
+    chain.mine(1)
+    for member in gov_hub.getMembers()[:2]:
+        gov_hub.castVote(1, True, {'from': member})
+    reversed_arr = list(reversed(gov_hub.getMembers()))
+    for member in reversed_arr[:1]:
+        gov_hub.castVote(1, False, {'from': member})
+    gov_hub.cancel(1)
+    with brownie.reverts('cannot cancel finished proposal'):
+        gov_hub.cancel(1)
+
+
+@pytest.mark.parametrize("is_pre_exec", [True, False])
+def test_cancel_proposal_after_execution(gov_hub, pledge_agent, is_pre_exec):
+    assert pledge_agent.btcFactor() == 2
+    gov_hub.resetMembers(accounts[:3])
+    padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(10), 64))
+    gov_hub.propose(
+        [pledge_agent.address],
+        [0],
+        ["updateParam(string,bytes)"],
+        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+        ['pledgeAgent clearDeprecatedMembers']
+    )
+    chain.mine(1)
+    for member in gov_hub.getMembers()[:2]:
+        gov_hub.castVote(1, True, {'from': member})
+    reversed_arr = list(reversed(gov_hub.getMembers()))
+    for member in reversed_arr[:1]:
+        gov_hub.castVote(1, False, {'from': member})
+    if is_pre_exec is False:
+        chain.mine(gov_hub.votingPeriod() * 2)
+    gov_hub.execute(1)
+    with brownie.reverts('cannot cancel finished proposal'):
+        gov_hub.cancel(1)
+
+
+@pytest.mark.parametrize("is_pre_exec", [True, False])
+def test_execute_early_then_continue_voting(gov_hub, pledge_agent, is_pre_exec):
+    assert pledge_agent.btcFactor() == 2
+    gov_hub.resetMembers(accounts[:5])
+    padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(10), 64))
+    gov_hub.propose(
+        [pledge_agent.address],
+        [0],
+        ["updateParam(string,bytes)"],
+        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+        ['pledgeAgent clearDeprecatedMembers']
+    )
+    chain.mine(1)
+    for member in gov_hub.getMembers()[:3]:
+        gov_hub.castVote(1, True, {'from': member})
+    if is_pre_exec is False:
+        chain.mine(gov_hub.votingPeriod() * 2)
+    gov_hub.execute(1)
+    with brownie.reverts('voting is closed'):
+        gov_hub.castVote(1, True, {'from': accounts[4]})
+
+
+@pytest.mark.parametrize("is_pre_exec", [True, False])
+def test_execute_early_then_propose(gov_hub, pledge_agent, is_pre_exec):
+    assert pledge_agent.btcFactor() == 2
+    gov_hub.resetMembers(accounts[:5])
+    padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(10), 64))
+    gov_hub.propose(
+        [pledge_agent.address],
+        [0],
+        ["updateParam(string,bytes)"],
+        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+        ['pledgeAgent clearDeprecatedMembers']
+    )
+    chain.mine(1)
+    for member in gov_hub.getMembers()[:3]:
+        gov_hub.castVote(1, True, {'from': member})
+    if is_pre_exec is False:
+        chain.mine(gov_hub.votingPeriod() * 2)
+    gov_hub.execute(1)
+    assert pledge_agent.btcFactor() == 0
+    pledge_agent.setBtcFactor(20)
+    gov_hub.propose(
+        [pledge_agent.address],
+        [0],
+        ["updateParam(string,bytes)"],
+        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+        ['pledgeAgent clearDeprecatedMembers']
+    )
+    chain.mine(1)
+    for member in gov_hub.getMembers()[:3]:
+        gov_hub.castVote(2, True, {'from': member})
+    if is_pre_exec is False:
+        chain.mine(gov_hub.votingPeriod() * 2)
+    gov_hub.execute(2)
+    assert pledge_agent.btcFactor() == 0
+
+
+@pytest.mark.parametrize("is_pre_exec", [True, False])
+def test_execute_proposal_after_cancellation(gov_hub, pledge_agent, is_pre_exec):
+    assert pledge_agent.btcFactor() == 2
+    gov_hub.resetMembers(accounts[:3])
+    padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(10), 64))
+    gov_hub.propose(
+        [pledge_agent.address],
+        [0],
+        ["updateParam(string,bytes)"],
+        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+        ['pledgeAgent clearDeprecatedMembers']
+    )
+    chain.mine(1)
+    for member in gov_hub.getMembers()[:2]:
+        gov_hub.castVote(1, True, {'from': member})
+    reversed_arr = list(reversed(gov_hub.getMembers()))
+    for member in reversed_arr[:1]:
+        gov_hub.castVote(1, False, {'from': member})
+    gov_hub.cancel(1)
+    if is_pre_exec is False:
+        chain.mine(gov_hub.votingPeriod() * 2)
+    with brownie.reverts("proposal can only be executed if it is succeeded"):
+        gov_hub.execute(1)
+
+
+def test_duplicate_voting(gov_hub, pledge_agent):
+    gov_hub.resetMembers(accounts[:5])
+    padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(10), 64))
+    gov_hub.propose(
+        [pledge_agent.address],
+        [0],
+        ["updateParam(string,bytes)"],
+        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+        ['pledgeAgent clearDeprecatedMembers']
+    )
+    chain.mine(1)
+    for member in gov_hub.getMembers()[:2]:
+        gov_hub.castVote(1, True, {'from': member})
+        with brownie.reverts("voter already voted"):
+            gov_hub.castVote(1, True, {'from': member})
+    reversed_arr = list(reversed(gov_hub.getMembers()))
+    for member in reversed_arr[:2]:
+        gov_hub.castVote(1, False, {'from': member})
+        with brownie.reverts("voter already voted"):
+            gov_hub.castVote(1, False, {'from': member})
+
+
+def test_cannot_propose_new_without_executing_existing_proposal(gov_hub, pledge_agent):
+    gov_hub.resetMembers(accounts[:3])
+    padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(10), 64))
+    gov_hub.propose(
+        [pledge_agent.address],
+        [0],
+        ["updateParam(string,bytes)"],
+        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+        ['pledgeAgent clearDeprecatedMembers']
+    )
+    chain.mine(1)
+    for member in gov_hub.getMembers()[:2]:
+        gov_hub.castVote(1, True, {'from': member})
+    with brownie.reverts("one live proposal per proposer, found an already active proposal"):
+        gov_hub.propose(
+            [pledge_agent.address],
+            [0],
+            ["updateParam(string,bytes)"],
+            [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+            ['pledgeAgent clearDeprecatedMembers']
+        )
+
+
+def test_voting_allowed_after_majority_reached(gov_hub, pledge_agent):
+    gov_hub.resetMembers(accounts[:5])
+    padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(10), 64))
+    gov_hub.propose(
+        [pledge_agent.address],
+        [0],
+        ["updateParam(string,bytes)"],
+        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+        ['pledgeAgent clearDeprecatedMembers']
+    )
+    chain.mine(1)
+    for member in gov_hub.getMembers()[:3]:
+        gov_hub.castVote(1, True, {'from': member})
+    gov_hub.castVote(1, False, {'from': gov_hub.getMembers()[-1]})
+    gov_hub.castVote(1, False, {'from': gov_hub.getMembers()[-2]})
+    gov_hub.execute(1)
+
+
+def test_only_members_can_execute(gov_hub, pledge_agent):
+    gov_hub.resetMembers(accounts[:3])
+    padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(10), 64))
+    gov_hub.propose(
+        [pledge_agent.address],
+        [0],
+        ["updateParam(string,bytes)"],
+        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
+        ['pledgeAgent clearDeprecatedMembers']
+    )
+    chain.mine(1)
+    for member in gov_hub.getMembers()[:2]:
+        gov_hub.castVote(1, True, {'from': member})
+    with brownie.reverts("only member is allowed to call the method"):
+        gov_hub.castVote(1, True, {'from': accounts[5]})
+    with brownie.reverts("proposal can only be executed by members"):
+        gov_hub.execute(1, {'from': accounts[5]})
 
 
 def test_execute_proposal_failed_with_is_defeated_state_with_members_voted(gov_hub):
