@@ -80,4 +80,4 @@ npm run flatten
 ## License
 
 The library is licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0),
-also included in our repository in the [LICENSE](LICENSE) file.
+also included in our repository in the [LICENSE](https://github.com/coredao-org/core-genesis-contract/blob/master/LICENCE) file.
