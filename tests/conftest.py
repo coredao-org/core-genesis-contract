@@ -162,6 +162,13 @@ def hash_power_agent(accounts):
     return c
 
 
+@pytest.fixture(scope="module")
+def configuration(accounts):
+    c = accounts[0].deploy(ConfigurationMock)
+    c.init()
+    return c
+
+
 # test contract
 @pytest.fixture(scope="module")
 def test_lib_memory(accounts):
@@ -187,12 +194,13 @@ def set_system_contract_address(
         btc_lst_stake,
         core_agent,
         hash_power_agent,
-        lst_token
+        lst_token,
+        configuration
 ):
     contracts = [
         validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub, gov_hub,
         pledge_agent, burn, foundation, stake_hub, btc_stake, btc_agent, btc_lst_stake, core_agent, hash_power_agent,
-        lst_token
+        lst_token, configuration
     ]
     args = encode(['address'] * len(contracts), [c.address for c in contracts])
 
