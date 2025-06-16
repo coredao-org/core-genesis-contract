@@ -25,6 +25,8 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
 
   bytes public constant INIT_VALIDATORSET_BYTES = hex"{{initValidatorSetBytes}}";
 
+  uint256 public constant INIT_VOTE_REWARD_PERCENT = 10;
+
   /*********************** state of the contract **************************/
   uint256 public blockReward;
   uint256 public blockRewardIncentivePercent;
@@ -35,12 +37,16 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   // value is the index of the element in `currentValidatorSet`.
   mapping(address => uint256) public currentValidatorSetMap;
 
+  uint256 voteRewardPercent;
+
   struct Validator {
     address operateAddress;
     address consensusAddress;
     address payable feeAddress;
     uint256 commissionThousandths;
     uint256 income;
+    bytes voteAddr;
+    uint256 voteWeight;
   }
 
   /*********************** events **************************/
@@ -57,6 +63,16 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     address payable indexed validator,
     uint256 amount,
     uint256 totalReward
+  );
+  event voteRewardTransfer(
+    address indexed operateAddress,
+    address payable indexed validator,
+    uint256 amount
+  );
+  event voteRewardTransferFail(
+    address indexed operateAddress,
+    address payable indexed validator,
+    uint256 amount
   );
   event deprecatedDeposit(address indexed validator, uint256 amount);
   event validatorDeposit(address indexed validator, uint256 amount);
@@ -75,6 +91,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
     blockReward = BLOCK_REWARD;
     blockRewardIncentivePercent = BLOCK_REWARD_INCENTIVE_PERCENT;
+    voteRewardPercent = INIT_VOTE_REWARD_PERCENT;
     alreadyInit = true;
   }
 
@@ -114,45 +131,82 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
   }
 
+  function vote(address[] calldata valAddrs, uint256[] calldata weights) external payable onlyCoinbase onlyInit onlyZeroGasPrice {
+    require(valAddrs.length == weights.length, "length not equal");
+
+    for (uint256 i; i < valAddrs.length; ++i) {
+      uint256 index = currentValidatorSetMap[valAddrs[i]];
+      if (index > 0) {
+        currentValidatorSet[index - 1].voteWeight += weights[i];
+      }
+    }
+  }
+
   /// Distribute rewards to validators (and delegators through PledgeAgent)
   /// @dev this method is called by the CandidateHub contract at the beginning of turn round
   /// @dev this is where we deal with reward distribution logics
   function distributeReward(uint256 roundTag) external override onlyCandidate returns (address[] memory operateAddressList) {
     address payable feeAddress;
-    uint256 validatorReward;
 
     uint256 incentiveSum = 0;
+    uint256 voteWeightSum;
     uint256 validatorSize = currentValidatorSet.length;
     for (uint256 i = 0; i < validatorSize; i++) {
       Validator storage v = currentValidatorSet[i];
       uint256 incentiveValue = (v.income * blockRewardIncentivePercent) / 100;
       incentiveSum += incentiveValue;
       v.income -= incentiveValue;
+      voteWeightSum += v.voteWeight;
     }
     ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: incentiveSum }();
 
+    if (voteRewardPercent == 0) {
+      voteRewardPercent = INIT_VOTE_REWARD_PERCENT;
+    }
+
+    uint256 vrPercent = voteWeightSum == 0 ? 0 : voteRewardPercent;
+
     operateAddressList = new address[](validatorSize);
     uint256[] memory rewardList = new uint256[](validatorSize);
-    uint256 rewardSum = 0;
+    uint256 rewardSum;
     uint256 tempIncome;
+    uint256 voteRewardSum;
     for (uint256 i = 0; i < validatorSize; i++) {
       Validator storage v = currentValidatorSet[i];
       operateAddressList[i] = v.operateAddress;
       tempIncome = v.income;
       if (tempIncome != 0) {
         feeAddress = v.feeAddress;
-        validatorReward = (tempIncome * v.commissionThousandths) / 1000;
+        uint256 validatorReward = (tempIncome * v.commissionThousandths) / 1000;
         if (tempIncome > validatorReward) {
           rewardList[i] = tempIncome - validatorReward;
           rewardSum += rewardList[i];
         }
 
         v.income = 0;
+        uint256 voteReward = tempIncome * vrPercent / 100;
+        validatorReward -= voteReward;
+        voteRewardSum += voteReward;
         bool success = feeAddress.send(validatorReward);
         if (success) {
           emit directTransfer(v.operateAddress, feeAddress, validatorReward, tempIncome);
         } else {
           emit directTransferFail(v.operateAddress, feeAddress, validatorReward, tempIncome);
+        }
+      }
+    }
+
+    if (voteRewardSum != 0) {
+      for (uint256 i = 0; i < currentValidatorSet.length; i++) {
+        Validator memory v = currentValidatorSet[i];
+        if (v.voteWeight != 0) {
+          uint256 reward = voteRewardSum * v.voteWeight / voteWeightSum;
+          bool success = v.feeAddress.send(reward);
+          if(success) {
+            emit voteRewardTransfer(v.operateAddress, v.feeAddress, reward);
+          } else {
+            emit voteRewardTransferFail(v.operateAddress, v.feeAddress, reward);
+          }
         }
       }
     }
@@ -171,10 +225,11 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     address[] calldata operateAddrList,
     address[] calldata consensusAddrList,
     address payable[] calldata feeAddrList,
-    uint256[] calldata commissionThousandthsList
+    uint256[] calldata commissionThousandthsList,
+    bytes[] calldata voteAddrList
   ) external override onlyCandidate {
     // do verify.
-    checkValidatorSet(operateAddrList, consensusAddrList, feeAddrList, commissionThousandthsList);
+    checkValidatorSet(operateAddrList, consensusAddrList, feeAddrList, commissionThousandthsList, voteAddrList);
     if (consensusAddrList.length == 0) {
       return;
     }
@@ -191,9 +246,9 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
 
     for (i = 0; i < currentLength; ++i) {
       if (i >= lastLength) {
-        currentValidatorSet.push(Validator(operateAddrList[i], consensusAddrList[i], feeAddrList[i],commissionThousandthsList[i], 0));
+        currentValidatorSet.push(Validator(operateAddrList[i], consensusAddrList[i], feeAddrList[i],commissionThousandthsList[i], 0, voteAddrList[i], 0));
       } else {
-        currentValidatorSet[i] = Validator(operateAddrList[i], consensusAddrList[i], feeAddrList[i],commissionThousandthsList[i], 0);
+        currentValidatorSet[i] = Validator(operateAddrList[i], consensusAddrList[i], feeAddrList[i],commissionThousandthsList[i], 0, voteAddrList[i], 0);
       }
       currentValidatorSetMap[consensusAddrList[i]] = i + 1;
     }
@@ -221,6 +276,19 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       opAddrs[i] = currentValidatorSet[i].operateAddress;
     }
     return opAddrs;
+  }
+  
+  /// Get list of validators and list of voting addressess in the current round
+  /// @return (List of validator consensus addresses, List of voting addresses)
+  function getValidatorsAndVoteAddresses() external override view returns (address[] memory, bytes[] memory) {
+    uint256 validatorSize = currentValidatorSet.length;
+    address[] memory consensusAddrs = new address[](validatorSize);
+    bytes[] memory voteAddrs = new bytes[](validatorSize);
+    for (uint256 i = 0; i < validatorSize; i++) {
+      consensusAddrs[i] = currentValidatorSet[i].consensusAddress;
+      voteAddrs[i] = currentValidatorSet[i].voteAddr;
+    }
+    return (consensusAddrs, voteAddrs);
   }
 
   /// Get incoming, which is the reward to distribute at the end of the round, of a validator
@@ -316,6 +384,12 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
         revert OutOfBounds(key, newBlockRewardIncentivePercent, 0, 100);
       }
       blockRewardIncentivePercent = newBlockRewardIncentivePercent;
+    } else if (Memory.compareStrings(key, "voteRewardPercent")) {
+      uint256 newVoteRewardPercent = BytesToTypes.bytesToUint256(32, value);
+      if (newVoteRewardPercent > 100) {
+        revert OutOfBounds(key, newVoteRewardPercent, 0, 100);
+      }
+      voteRewardPercent = newVoteRewardPercent;
     } else {
       revert UnsupportedGovParam(key);
     }
@@ -324,10 +398,11 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
 
   /*********************** Internal Functions **************************/
   function checkValidatorSet(
-    address[] memory operateAddrList,
-    address[] memory consensusAddrList,
-    address payable[] memory feeAddrList,
-    uint256[] memory commissionThousandthsList
+    address[] calldata operateAddrList,
+    address[] calldata consensusAddrList,
+    address payable[] calldata feeAddrList,
+    uint256[] calldata commissionThousandthsList,
+    bytes[] calldata voteAddrList
   ) private pure {
     require(
       consensusAddrList.length == operateAddrList.length,
@@ -340,6 +415,10 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     require(
       consensusAddrList.length == commissionThousandthsList.length,
       "the numbers of consensusAddresses and commissionThousandthss should be equal"
+    );
+    require(
+      consensusAddrList.length == voteAddrList.length,
+      "the numbers of consensusAddresses and voteAddressed should be equal"
     );
     for (uint256 i = 0; i < consensusAddrList.length; i++) {
       for (uint256 j = 0; j < i; j++) {

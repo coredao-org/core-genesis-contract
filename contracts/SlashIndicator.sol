@@ -18,6 +18,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   using RLPDecode for RLPDecode.RLPItem;
   using RLPEncode for bytes;
   using RLPEncode for bytes[];
+  using RLPEncode for uint256;
 
   uint256 public constant MISDEMEANOR_THRESHOLD = 50;
   uint256 public constant FELONY_THRESHOLD = 150;
@@ -26,6 +27,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   uint256 public constant INIT_FELONY_DEPOSIT = 1e21;
   uint256 public constant INIT_FELONY_ROUND = 2;
   uint256 public constant INFINITY_ROUND = 0xFFFFFFFFFFFFFFFF;
+  uint256 public constant INIT_REWARD_FOR_REPORT_FINALITY_VIOLATION = 5e20;
 
   // State of the contract
   address[] public validators;
@@ -39,10 +41,27 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
   uint256 public felonyDeposit;
   uint256 public felonyRound;
 
+  uint256 public rewardForReportFinalityViolation;
+
   struct Indicator {
     uint256 height;
     uint256 count;
     bool exist;
+  }
+
+  // Proof that a validator misbehaved in fast finality
+  struct VoteData {
+    uint256 srcNum;
+    bytes32 srcHash;
+    uint256 tarNum;
+    bytes32 tarHash;
+    bytes sig;
+  }
+
+  struct FinalityEvidence {
+    VoteData voteA;
+    VoteData voteB;
+    bytes voteAddr;
   }
 
   modifier oncePerBlock() {
@@ -61,6 +80,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     rewardForReportDoubleSign = INIT_REWARD_FOR_REPORT_DOUBLE_SIGN;
     felonyDeposit = INIT_FELONY_DEPOSIT;
     felonyRound = INIT_FELONY_ROUND;
+    rewardForReportFinalityViolation = INIT_REWARD_FOR_REPORT_FINALITY_VIOLATION;
     alreadyInit = true;
   }
 
@@ -99,7 +119,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     RLPDecode.RLPItem[] memory items1 = header1.toRLPItem().toList();
     RLPDecode.RLPItem[] memory items2 = header2.toRLPItem().toList();
 
-    require(items1[0].toUintStrict() == items2[0].toUintStrict(),"parent of two blocks must be the same");
+    require(items1[0].toUintStrict() == items2[0].toUintStrict(), "parent of two blocks must be the same");
 
     (bytes32 sigHash1, address validator1) = parseHeader(items1);
     (bytes32 sigHash2, address validator2) = parseHeader(items2);
@@ -109,6 +129,38 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     require(IValidatorSet(VALIDATOR_CONTRACT_ADDR).isValidator(validator1), "not a validator");
     IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(validator1, INFINITY_ROUND, felonyDeposit);
     ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(msg.sender), rewardForReportDoubleSign);
+  }
+
+  function submitFinalityViolationEvidence(FinalityEvidence memory evidence) public onlyInit {
+    if (rewardForReportFinalityViolation == 0) {
+      rewardForReportFinalityViolation = INIT_REWARD_FOR_REPORT_FINALITY_VIOLATION;
+    }
+
+    // Basic check
+    require(evidence.voteA.srcNum+256 > block.number &&
+      evidence.voteB.srcNum+256 > block.number, "too old block involved");
+    require(!(evidence.voteA.srcHash == evidence.voteB.srcHash &&
+      evidence.voteA.tarHash == evidence.voteB.tarHash), "two identical votes");
+    require(evidence.voteA.srcNum < evidence.voteA.tarNum &&
+      evidence.voteB.srcNum < evidence.voteB.tarNum, "srcNum bigger than tarNum");
+
+    // Vote rules check
+    require((evidence.voteA.srcNum<evidence.voteB.srcNum && evidence.voteB.tarNum<evidence.voteA.tarNum) ||
+      (evidence.voteB.srcNum<evidence.voteA.srcNum && evidence.voteA.tarNum<evidence.voteB.tarNum) ||
+      evidence.voteA.tarNum == evidence.voteB.tarNum, "no violation of vote rules");
+
+    // BLS verification
+    require(verifyBLSSignature(evidence.voteA, evidence.voteAddr) &&
+      verifyBLSSignature(evidence.voteB, evidence.voteAddr), "verify signature failed");
+
+    (address[] memory vals, bytes[] memory voteAddrs) = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getValidatorsAndVoteAddresses();
+    for (uint256 i; i < voteAddrs.length; ++i) {
+      if (BytesLib.equal(voteAddrs[i],  evidence.voteAddr)) {
+        ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(msg.sender), rewardForReportFinalityViolation);
+        IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(vals[i], felonyRound, felonyDeposit);
+        break;
+      }
+    }
   }
 
   /// Clean slash record by felonyThreshold/DECREASE_RATE.
@@ -264,5 +316,51 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
       return address(0x0);
     }
     return ecrecover(hash, v, r, s);
+  }
+
+  function verifyBLSSignature(VoteData memory vote, bytes memory voteAddr) internal view returns(bool) {
+    bytes[] memory elements = new bytes[](4);
+    bytes memory _bytes = new bytes(32);
+    elements[0] = vote.srcNum.encodeUint();
+    bytes32ToBytes(32, vote.srcHash, _bytes);
+    elements[1] = _bytes.encodeBytes();
+    elements[2] = vote.tarNum.encodeUint();
+    bytes32ToBytes(32, vote.tarHash, _bytes);
+    elements[3] = _bytes.encodeBytes();
+
+    bytes32ToBytes(32, keccak256(elements.encodeList()), _bytes);
+
+    // assemble input data
+    bytes memory input = new bytes(176);
+    bytesConcat(input, _bytes, 0, 32);
+    bytesConcat(input, vote.sig, 32, 96);
+    bytesConcat(input, voteAddr, 128, 48);
+
+    // call the precompiled contract to verify the BLS signature
+    // the precompiled contract's address is 0x66
+    bytes memory output = new bytes(1);
+    assembly {
+      let len := mload(input)
+      if iszero(staticcall(not(0), 0x66, add(input, 0x20), len, add(output, 0x20), 0x01)) {
+        revert(0, 0)
+      }
+    }
+    if (BytesLib.toUint8(output, 0) != uint8(1)) {
+      return false;
+    }
+    return true;
+  }
+
+  function bytesConcat(bytes memory data, bytes memory _bytes, uint256 index, uint256 len) internal pure {
+    for (uint i; i<len; ++i) {
+      data[index++] = _bytes[i];
+    }
+  }
+
+  function bytes32ToBytes(uint _offst, bytes32 _input, bytes memory _output) internal pure {
+    assembly {
+        mstore(add(_output, _offst), _input)
+        mstore(add(add(_output, _offst),32), add(_input,32))
+    }
   }
 }
