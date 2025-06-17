@@ -1,9 +1,12 @@
 import codecs
 import hashlib
+import os
 import random
 import binascii
 import ecdsa
 from _sha256 import sha256
+
+from blspy import AugSchemeMPL
 from web3 import Web3
 from brownie.network.transaction import TransactionReceipt
 from brownie.network.account import LocalAccount
@@ -16,6 +19,14 @@ from tests.constant import *
 
 def random_address():
     return Account.create(str(random.random())).address
+
+
+def random_vote_address():
+    seed = os.urandom(32)
+    sk = AugSchemeMPL.key_gen(seed)
+    pk = sk.get_g1()
+    vote_address = bytes(pk)
+    return vote_address
 
 
 def random_btc_tx_id():

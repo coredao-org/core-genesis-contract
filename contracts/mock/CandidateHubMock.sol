@@ -138,7 +138,8 @@ contract CandidateHubMock is CandidateHub {
         address operateAddr,
         address consensusAddr,
         address payable feeAddr,
-        uint32 commissionThousandths
+        uint32 commissionThousandths,
+        bytes calldata voteAddr
     ) external payable onlyInit {
         uint256 status = SET_CANDIDATE;
         candidateSet.push(
@@ -150,14 +151,15 @@ contract CandidateHubMock is CandidateHub {
                 msg.value,
                 status,
                 roundTag,
-                commissionThousandths
+                commissionThousandths,
+                voteAddr
             )
         );
         uint256 index = candidateSet.length;
         operateMap[operateAddr] = index;
         consensusMap[consensusAddr] = index;
 
-        emit registered(operateAddr, consensusAddr, feeAddr, commissionThousandths, msg.value);
+        emit registered(operateAddr, consensusAddr, feeAddr, commissionThousandths, msg.value, voteAddr);
     }
     /********************* External methods  ****************************/
 
@@ -250,7 +252,7 @@ contract CandidateHubMock is CandidateHub {
             statusList[index - 1] |= SET_VALIDATOR;
         }
 
-        IValidatorSet(VALIDATOR_CONTRACT_ADDR).updateValidatorSet(validatorList, consensusAddrList, feeAddrList, commissionThousandthsList);
+        IValidatorSetMock(VALIDATOR_CONTRACT_ADDR).updateValidatorSetOld(validatorList, consensusAddrList, feeAddrList, commissionThousandthsList);
 
         // clean slash contract
         ISlashIndicator(SLASH_CONTRACT_ADDR).clean();

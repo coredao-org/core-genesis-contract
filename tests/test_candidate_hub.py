@@ -6,8 +6,9 @@ from eth_account import Account
 from brownie import accounts, UnRegisterReentry, chain
 from brownie.test import given, strategy
 from brownie.network.transaction import Status, TransactionReceipt
+from .constant import Utils
 from .utils import random_address, expect_event, padding_left, update_system_contract_address
-from .common import register_candidate, turn_round, get_candidate
+from .common import register_candidate, turn_round, get_candidate, get_current_round
 
 
 @pytest.fixture(scope="module")
@@ -39,7 +40,7 @@ def test_register(candidate_hub, required_margin):
     consensus_address = random_address()
     commission = 10
     tx: TransactionReceipt = candidate_hub.register(
-        consensus_address, accounts[0], commission,
+        consensus_address, accounts[0], commission, random_vote_address(),
         {'from': accounts[0], 'value': required_margin}
     )
     assert tx.status == Status.Confirmed
@@ -271,24 +272,25 @@ def test_turnRound_update_validator_info(candidate_hub, set_candidate, slash_ind
 def test_duplicate_operator(candidate_hub, required_margin, times):
     for _ in range(times):
         candidate_hub.register(
-            random_address(), accounts[0], 1,
+            random_address(), accounts[0], 1, random_vote_address(),
             {'from': accounts[0], 'value': required_margin}
         )
 
 
 def test_duplicate_consensus_address(candidate_hub, required_margin):
     consensus_address = random_address()
-    candidate_hub.register(consensus_address, accounts[0], 1, {'from': accounts[0], 'value': required_margin})
+    candidate_hub.register(consensus_address, accounts[0], 1, random_vote_address(),
+                           {'from': accounts[0], 'value': required_margin})
     with brownie.reverts("consensus already exists"):
         candidate_hub.register(
-            consensus_address, accounts[1], 1, {'from': accounts[1], 'value': required_margin}
+            consensus_address, accounts[1], 1, random_vote_address(), {'from': accounts[1], 'value': required_margin}
         )
 
 
 @given(commission=strategy('uint32', max_value=1000, exclude=(0, 1000)))
 def test_register_commission(candidate_hub, required_margin, commission):
     candidate_hub.register(
-        random_address(), accounts[0], commission,
+        random_address(), accounts[0], commission, random_vote_address(),
         {'from': accounts[0], 'value': required_margin}
     )
 
@@ -314,7 +316,7 @@ def test_register_invalid_commission(candidate_hub, required_margin, commission)
 ])
 def test_register_margin(candidate_hub, margin):
     candidate_hub.register(
-        random_address(), accounts[0], 1,
+        random_address(), accounts[0], 1, random_vote_address(),
         {'from': accounts[0], 'value': margin}
     )
 
@@ -661,7 +663,7 @@ def test_query_jail_round_by_non_validator(candidate_hub, slash_indicator, set_c
 def test_is_candidate_by_operate(candidate_hub, required_margin):
     operator = accounts[0]
     candidate_hub.register(
-        random_address(), accounts[0], 1,
+        random_address(), accounts[0], 1, random_vote_address(),
         {'from': operator, 'value': required_margin}
     )
     assert candidate_hub.isCandidateByOperate(operator) is True
@@ -670,7 +672,7 @@ def test_is_candidate_by_operate(candidate_hub, required_margin):
 def test_is_candidate_by_consensus(candidate_hub, required_margin):
     consensus_address = random_address()
     candidate_hub.register(
-        consensus_address, accounts[0], 1,
+        consensus_address, accounts[0], 1, random_vote_address(),
         {'from': accounts[0], 'value': required_margin}
     )
     assert candidate_hub.isCandidateByConsensus(consensus_address) is True
@@ -679,7 +681,7 @@ def test_is_candidate_by_consensus(candidate_hub, required_margin):
 def test_get_candidates(candidate_hub, required_margin):
     operator = accounts[0]
     candidate_hub.register(
-        random_address(), accounts[0], 1,
+        random_address(), accounts[0], 1, random_vote_address(),
         {'from': operator, 'value': required_margin}
     )
     assert operator in candidate_hub.getCandidates()
@@ -702,7 +704,8 @@ def test_accept_delegate(candidate_hub, required_margin):
     for operate_addr, register, set_status, status, check_event, ret, err in tests:
         old_status = 1
         if register:
-            candidate_hub.register(random_address(), fee_address, 10, {'from': operate_addr, 'value': required_margin})
+            candidate_hub.register(random_address(), fee_address, 10, random_vote_address(),
+                                   {'from': operate_addr, 'value': required_margin})
         if set_status is not None:
             candidate_hub.setCandidateStatus(operate_addr, set_status, {'from': operate_addr})
             old_status = set_status
@@ -731,7 +734,8 @@ def test_refuse_delegate(candidate_hub, required_margin):
     for operate_addr, ret, err, register, set_status, status, check_event in tests:
         old_status = 1
         if register:
-            candidate_hub.register(random_address(), fee_address, 10, {'from': operate_addr, 'value': required_margin})
+            candidate_hub.register(random_address(), fee_address, 10, random_vote_address(),
+                                   {'from': operate_addr, 'value': required_margin})
         if set_status is not None:
             candidate_hub.setCandidateStatus(operate_addr, set_status, {'from': operate_addr})
             old_status = set_status
@@ -785,7 +789,8 @@ def test_bond_update_registration_failure(candidate_hub, required_margin):
     hex_value = padding_left(Web3.to_hex(required_margin * 2), 64)
     candidate_hub.updateParam('requiredMargin', hex_value)
     with brownie.reverts('deposit is not enough'):
-        candidate_hub.register(consensus_address, fee_address, 1, {'from': accounts[1], 'value': required_margin})
+        candidate_hub.register(consensus_address, fee_address, 1, random_vote_address(),
+                               {'from': accounts[1], 'value': required_margin})
 
 
 def test_register_candidate(candidate_hub, required_margin):
@@ -810,9 +815,11 @@ def test_register_candidate(candidate_hub, required_margin):
     for operate_addr, consensus_addr, fee_addr, commission, value, ret, err in tests:
         if ret is False:
             with brownie.reverts(err):
-                candidate_hub.register(consensus_addr, fee_addr, commission, {'from': operate_addr, 'value': value})
+                candidate_hub.register(consensus_addr, fee_addr, commission, random_vote_address(),
+                                       {'from': operate_addr, 'value': value})
         else:
-            tx = candidate_hub.register(consensus_addr, fee_addr, commission, {'from': operate_addr, 'value': value})
+            tx = candidate_hub.register(consensus_addr, fee_addr, commission, random_vote_address(),
+                                        {'from': operate_addr, 'value': value})
             expect_event(tx, "registered", {
                 "operateAddr": operate_addr,
                 "consensusAddr": consensus_addr,
@@ -826,7 +833,8 @@ def test_unregister_candidate(candidate_hub, required_margin):
     consensus_address = random_address()
     fee_address = random_address()
 
-    candidate_hub.register(consensus_address, fee_address, 10, {'from': accounts[3], 'value': required_margin})
+    candidate_hub.register(consensus_address, fee_address, 10, random_vote_address(),
+                           {'from': accounts[3], 'value': required_margin})
 
     tests = [
         (accounts[1], None, False, "candidate does not exist", None, None, None),
@@ -848,7 +856,8 @@ def test_unregister_candidate(candidate_hub, required_margin):
         if register is True:
             if consensus_addr is None:
                 consensus_addr = random_address()
-            candidate_hub.register(consensus_addr, fee_address, 10, {'from': operate_addr, "value": required_margin})
+            candidate_hub.register(consensus_addr, fee_address, 10, random_vote_address(),
+                                   {'from': operate_addr, "value": required_margin})
         if consensus_addr is None:
             consensus_addr = consensus_address
         if set_status is not None:
@@ -887,27 +896,36 @@ def test_update_candidate(candidate_hub, required_margin):
         (accounts[3], None, random_address(), fee_address, 200 + max_commission_change, True, "", None),
         (accounts[3], None, random_address(), fee_address, 200 + max_commission_change * 2, True, "", True),
     ]
-
+    i = 0
     for operate_addr, register, consensus_addr, fee_addr, commission, ret, err, need_turn_round in tests:
         if need_turn_round:
             turn_round()
+        i += 1
+        vote_address0 = random_vote_address()
+        vote_address1 = random_vote_address()
+        vote_address2 = random_vote_address()
         if register:
             if consensus_addr is None:
                 consensus_addr = random_address()
-            candidate_hub.register(consensus_addr, fee_addr, 200, {'from': operate_addr, 'value': required_margin})
+            candidate_hub.register(consensus_addr, fee_addr, 200, vote_address0,
+                                   {'from': operate_addr, 'value': required_margin})
         if consensus_addr is None:
             consensus_addr = consensus_address
         if ret is False:
+            if err == 'the consensus already exists':
+                pass
             with brownie.reverts(err):
-                candidate_hub.update(consensus_addr, fee_addr, commission, {'from': operate_addr})
+                candidate_hub.update(consensus_addr, fee_addr, commission, vote_address1, {'from': operate_addr})
         else:
-            tx = candidate_hub.update(consensus_addr, fee_addr, commission, {'from': operate_addr})
+            tx = candidate_hub.update(consensus_addr, fee_addr, commission, vote_address2,
+                                      {'from': operate_addr})
             expect_event(tx, "updated", {
                 "operateAddr": operate_addr,
                 "consensusAddr": consensus_addr,
                 "feeAddress": fee_addr,
-                "commissionThousandths": commission
+                "commissionThousandths": commission,
             })
+            assert tx.events['updated']['voteAddr'] == Web3.to_hex(vote_address2)
 
 
 def test_add_margin(candidate_hub, required_margin):
@@ -926,7 +944,8 @@ def test_add_margin(candidate_hub, required_margin):
     for operate_addr, register, set_margin, value, set_status, status, check_event, ret, err in tests:
         old_status = 1
         if register:
-            candidate_hub.register(random_address(), fee_address, 10, {'from': operate_addr, 'value': required_margin})
+            candidate_hub.register(random_address(), fee_address, 10, random_vote_address(),
+                                   {'from': operate_addr, 'value': required_margin})
         if set_status is not None:
             candidate_hub.setCandidateStatus(operate_addr, set_status, {'from': operate_addr})
             old_status = set_status
@@ -1001,7 +1020,8 @@ def test_jail_validator(candidate_hub, validator_set, required_margin):
     for operate_addr, register, _round, set_margin, set_status, status, fine, check_event, ret, err in tests:
         old_status = 1
         if register:
-            candidate_hub.register(random_address(), fee_address, 10, {'from': operate_addr, 'value': required_margin})
+            candidate_hub.register(random_address(), fee_address, 10, random_vote_address(),
+                                   {'from': operate_addr, 'value': required_margin})
         if set_status is not None:
             candidate_hub.setCandidateStatus(operate_addr, set_status, {'from': operate_addr})
             old_status = set_status
@@ -1053,7 +1073,7 @@ def test_turn_round(candidate_hub, core_agent, validator_set, required_margin):
     ]
     for agents, deposit, set_status, status in tests:
         for agent, _set_status in zip(agents, set_status):
-            candidate_hub.register(agent, agent, 10, {'from': agent, 'value': required_margin})
+            candidate_hub.register(agent, agent, 10, random_vote_address(), {'from': agent, 'value': required_margin})
             candidate_hub.setCandidateStatus(agent, _set_status, {'from': agent})
         for agent, _deposit in zip(agents, deposit):
             if _deposit > 0:
