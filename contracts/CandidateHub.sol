@@ -313,7 +313,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     
     uint256 candidateSize = candidateSet.length;
     for (uint256 i = 0; i < candidateSize; i++) {
-      require(candidateSet[i].operateAddr != msg.sender && !BytesLib.equal(candidateSet[i].voteAddr,  voteAddr), "vote address already exists");
+      if (candidateSet[i].operateAddr != msg.sender) {
+        require(!BytesLib.equal(candidateSet[i].voteAddr, voteAddr), "vote address already exists");
+      }
     }
 
     uint256 index = operateMap[msg.sender];

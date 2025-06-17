@@ -131,7 +131,7 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(msg.sender), rewardForReportDoubleSign);
   }
 
-  function submitFinalityViolationEvidence(FinalityEvidence memory evidence) public onlyInit {
+  function submitFinalityViolationEvidence(FinalityEvidence memory evidence) external onlyInit {
     if (rewardForReportFinalityViolation == 0) {
       rewardForReportFinalityViolation = INIT_REWARD_FOR_REPORT_FINALITY_VIOLATION;
     }

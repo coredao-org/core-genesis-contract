@@ -131,7 +131,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
   }
 
-  function vote(address[] calldata valAddrs, uint256[] calldata weights) external payable onlyCoinbase onlyInit onlyZeroGasPrice {
+  function vote(address[] calldata valAddrs, uint256[] calldata weights) external onlyCoinbase onlyInit onlyZeroGasPrice {
     require(valAddrs.length == weights.length, "length not equal");
 
     for (uint256 i; i < valAddrs.length; ++i) {
