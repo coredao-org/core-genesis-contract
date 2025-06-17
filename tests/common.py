@@ -1,8 +1,9 @@
 from brownie import *
-from .utils import random_address
+from .utils import random_address, random_vote_address
 
 
-def register_candidate(consensus=None, fee_address=None, operator=None, commission=500, margin=None) -> str:
+def register_candidate(consensus=None, fee_address=None, operator=None, commission=500, margin=None,
+                       vote_address=None) -> str:
     if consensus is None:
         consensus = random_address()
     if not operator:
@@ -11,9 +12,10 @@ def register_candidate(consensus=None, fee_address=None, operator=None, commissi
         fee_address = operator
     if margin is None:
         margin = CandidateHubMock[0].requiredMargin()
-
+    if vote_address is None:
+        vote_address = random_vote_address()
     tx = CandidateHubMock[0].register(
-        consensus, fee_address, commission,
+        consensus, fee_address, commission, vote_address,
         {'from': operator, 'value': margin}
     )
     return consensus
@@ -26,15 +28,17 @@ def get_candidate(operator=None):
     return CandidateHubMock[0].candidateSet(idx - 1).dict()
 
 
-def turn_round(miners: list = None, tx_fee=100, round_count=1):
+def turn_round(miners: list = None, tx_fee=100, round_count=1,weights=None):
     if miners is None:
         miners = []
-
+    if weights is None:
+        weights = [10] * len(miners)
     tx = None
 
     for _ in range(round_count):
         for miner in miners:
             ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[99]})
+        ValidatorSetMock[0].vote(miners, weights, {"from": accounts[99]})
         tx = CandidateHubMock[0].turnRound()
         chain.sleep(1)
     return tx

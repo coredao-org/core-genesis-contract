@@ -2008,7 +2008,7 @@ def __register_candidates(agents=None):
 def __candidate_register(agent, percent=100):
     consensus_addr = random_address()
     fee_addr = random_address()
-    candidate_hub_instance.register(consensus_addr, fee_addr, percent,
+    candidate_hub_instance.register(consensus_addr, fee_addr, percent, random_vote_address(),
                                     {'from': agent, 'value': CANDIDATE_REGISTER_MARGIN})
     return consensus_addr
 

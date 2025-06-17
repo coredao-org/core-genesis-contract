@@ -49,4 +49,38 @@ contract SlashIndicatorMock is SlashIndicator {
         return ecrecovery(hash, sig);
     }
 
+
+    function mockSubmitFinalityViolationEvidence(FinalityEvidence memory evidence) external onlyInit {
+        if (rewardForReportFinalityViolation == 0) {
+            rewardForReportFinalityViolation = INIT_REWARD_FOR_REPORT_FINALITY_VIOLATION;
+        }
+
+        // Basic check
+        require(evidence.voteA.srcNum + 86400 > block.number &&
+        evidence.voteB.srcNum + 86400 > block.number, "too old block involved");
+        require(!(evidence.voteA.srcHash == evidence.voteB.srcHash &&
+            evidence.voteA.tarHash == evidence.voteB.tarHash), "two identical votes");
+        require(evidence.voteA.srcNum < evidence.voteA.tarNum &&
+        evidence.voteB.srcNum < evidence.voteB.tarNum, "srcNum bigger than tarNum");
+
+        // Vote rules check
+        require((evidence.voteA.srcNum < evidence.voteB.srcNum && evidence.voteB.tarNum < evidence.voteA.tarNum) ||
+        (evidence.voteB.srcNum < evidence.voteA.srcNum && evidence.voteA.tarNum < evidence.voteB.tarNum) ||
+        evidence.voteA.tarNum == evidence.voteB.tarNum, "no violation of vote rules");
+
+        // BLS verification 
+        // Default BLS verification passed.
+        // require(verifyBLSSignature(evidence.voteA, evidence.voteAddr) &&
+        // verifyBLSSignature(evidence.voteB, evidence.voteAddr), "verify signature failed");
+
+        (address[] memory vals, bytes[] memory voteAddrs) = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getValidatorsAndVoteAddresses();
+        for (uint256 i; i < voteAddrs.length; ++i) {
+            if (BytesLib.equal(voteAddrs[i], evidence.voteAddr)) {
+                ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(msg.sender), rewardForReportFinalityViolation);
+                IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(vals[i], felonyRound, felonyDeposit);
+                break;
+            }
+        }
+    }
+
 }

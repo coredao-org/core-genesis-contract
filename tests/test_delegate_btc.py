@@ -652,12 +652,19 @@ def test_operations_with_coin_power_and_btc_staking(btc_stake, set_candidate, bt
     tx_id = delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT, LOCK_TIME, accounts[2])
     CORE_AGENT.delegateCoin(operators[0], {"value": delegate_amount, "from": accounts[1]})
     turn_round()
+    vote_percent = 10
+    weights = [10, 20, 30]
     undelegate_amount = 7000
     transfer_amount = delegate_amount // 2
     CORE_AGENT.transferCoin(operators[0], operators[2], transfer_amount, {'from': accounts[1]})
     CORE_AGENT.undelegateCoin(operators[0], undelegate_amount, {'from': accounts[1]})
     btc_stake.transfer(tx_id, operators[1])
-    turn_round(consensuses)
+    tx = turn_round(consensuses, weights=weights)
+    total_vote_fee0 = BLOCK_REWARD * vote_percent // 100 * 2 + BLOCK_REWARD // 2 * vote_percent // 100
+    for i in range(len(operators)):
+        expect_event(tx, 'voteRewardTransfer', {
+            'amount': total_vote_fee0 * weights[i] // sum(weights)
+        }, idx=i)
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[1])
     tracker2 = get_tracker(accounts[2])
@@ -673,7 +680,12 @@ def test_operations_with_coin_power_and_btc_staking(btc_stake, set_candidate, bt
     assert tracker0.delta() == 0
     assert tracker1.delta() == account_rewards[accounts[1]]
     assert tracker2.delta() == account_rewards[accounts[2]]
-    turn_round(consensuses)
+    tx = turn_round(consensuses, weights=weights)
+    total_vote_fee = TOTAL_REWARD * vote_percent // 100 * 3
+    for i in range(len(operators)):
+        expect_event(tx, 'voteRewardTransfer', {
+            'amount': total_vote_fee * weights[i] // sum(weights)
+        }, idx=i)
     _, _, account_rewards, _ = parse_delegation([{
         "address": operators[0],
         "active": True,
@@ -698,6 +710,7 @@ def test_operations_with_coin_power_and_btc_staking(btc_stake, set_candidate, bt
     assert tracker0.delta() == account_rewards[accounts[0]] - FEE
     assert tracker1.delta() == account_rewards[accounts[1]]
     assert tracker2.delta() == account_rewards[accounts[2]]
+    turn_round(consensuses)
 
 
 def test_btc_transfer_does_not_claim_historical_rewards(btc_stake, set_candidate):

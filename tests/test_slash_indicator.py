@@ -3,7 +3,7 @@ import brownie
 from web3 import Web3
 from eth_abi import encode
 from brownie import *
-from .utils import expect_event, padding_left, random_address, random_btc_tx_id
+from .utils import expect_event, padding_left, random_address, random_btc_tx_id, random_vote_address
 from .common import execute_proposal
 
 
@@ -44,7 +44,8 @@ def test_double_sign_slash(slash_indicator, candidate_hub):
         "0x01Bca3615D24d3c638836691517b2B9b49b054B1",
         "0x01Bca3615D24d3c638836691517b2B9b49b054B1",
         "0x01Bca3615D24d3c638836691517b2B9b49b054B1",
-        100
+        100,
+        random_vote_address()
     )
     for operate_address, header1, header2, ret, err in tests:
         if ret:

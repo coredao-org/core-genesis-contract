@@ -1409,7 +1409,8 @@ def test_view_collect_reward_invalid_txid(btc_stake, set_candidate, btc_agent):
     turn_round()
     last_round = get_current_round() - 1
     update_system_contract_address(btc_stake, btc_agent=accounts[0])
-    reward, expired, _, acc_amount = btc_stake.viewCollectReward(tx_id, last_round, last_round)
+    with brownie.reverts():
+        reward, expired, _, acc_amount = btc_stake.viewCollectReward(tx_id, last_round, last_round)
 
 
 def test_only_btc_agent_can_call_set_new_round(btc_stake, btc_agent):
