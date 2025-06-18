@@ -184,7 +184,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
         }
 
         v.income = 0;
-        uint256 voteReward = tempIncome * vrPercent / 100;
+        uint256 voteReward = validatorReward * vrPercent / 100;
         validatorReward -= voteReward;
         voteRewardSum += voteReward;
         bool success = feeAddress.send(validatorReward);
