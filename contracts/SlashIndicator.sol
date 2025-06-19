@@ -257,6 +257,12 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
         revert OutOfBounds(key, newFelonyRound, 1, type(uint256).max);
       }
       felonyRound = newFelonyRound;
+    } else if (Memory.compareStrings(key,"rewardForReportFinalityViolation")) {
+      uint256 newRewardForReportFinalityViolation = BytesToTypes.bytesToUint256(32, value);
+      if (newRewardForReportFinalityViolation == 0 || newRewardForReportFinalityViolation > 1e21) {
+        revert OutOfBounds(key, newRewardForReportFinalityViolation, 1, 1e21);
+      }
+      rewardForReportFinalityViolation = newRewardForReportFinalityViolation;
     } else {
       revert UnsupportedGovParam(key);
     }
