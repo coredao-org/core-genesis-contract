@@ -59,8 +59,9 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   mapping(address => uint256) public jailMap;
 
   uint256 public roundTag;
-  
 
+  mapping(address => uint256) public agentMap;
+  
   struct Candidate {
     address operateAddr;
     address consensusAddr;
@@ -71,6 +72,15 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     uint256 commissionLastChangeRound;
     uint256 commissionLastRoundValue;
     bytes voteAddr;
+    address agent;
+    Description description;
+  }
+
+  struct Description {
+    string moniker;
+    string identity;
+    string website;
+    string details;
   }
 
   modifier exist() {
@@ -81,11 +91,17 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /*********************** events **************************/
   event registered(address indexed operateAddr, address indexed consensusAddr, address indexed feeAddress, uint256 commissionThousandths, uint256 margin, bytes voteAddr);
   event unregistered(address indexed operateAddr, address indexed consensusAddr);
-  event updated(address indexed operateAddr, address indexed consensusAddr, address indexed feeAddress, uint256 commissionThousandths, bytes voteAddr);
   event addedMargin(address indexed operateAddr, uint256 margin, uint256 totalMargin);
   event deductedMargin(address indexed operateAddr, uint256 margin, uint256 totalMargin);
   event statusChanged(address indexed operateAddr, uint256 oldStatus, uint256 newStatus);
   event turnedRound(uint256 round);
+
+  event AgentUpdated(address indexed operateAddr, address newAgent);
+  event ConsensusAddressEdited(address indexed operateAddr, address newConsensusAddr);
+  event CommissionRateEdited(address indexed operateAddr, uint256 newRate);
+  event VoteAddressEdited(address indexed operateAddr, bytes newVoteAddr);
+  event DescriptionEdited(address indexed operateAddr, string moniker, string identity, string website, string details);
+  event FeeAddressEdited(address indexed operateAddr, address newFeeAddr);
 
   /*********************** init **************************/
   function init() external onlyNotInit {
@@ -254,6 +270,7 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   /// @param consensusAddr Consensus address configured on the validator node
   /// @param feeAddr Fee address set to collect system rewards
   /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths
+  /// @param voteAddr Vote address set to vote for the validator
   function register(address consensusAddr, address payable feeAddr, uint32 commissionThousandths, bytes calldata voteAddr)
     external payable
     onlyInit
@@ -272,11 +289,23 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
 
     require(voteAddr.length == 48, "vote address length should be 48");
     for (uint256 i = 0; i < candidateSize; i++) {
-      require(!BytesLib.equal(candidateSet[i].voteAddr,  voteAddr), "vote address already exists");
+      require(!BytesLib.equal(candidateSet[i].voteAddr, voteAddr), "vote address already exists");
     }
 
     uint256 status = SET_CANDIDATE;
-    candidateSet.push(Candidate(msg.sender, consensusAddr, feeAddr, commissionThousandths, msg.value, status, roundTag, commissionThousandths, voteAddr));
+    candidateSet.push(Candidate(
+      msg.sender,
+      consensusAddr,
+      feeAddr,
+      commissionThousandths,
+      msg.value,
+      status,
+      roundTag,
+      commissionThousandths,
+      voteAddr,
+      address(0),
+      Description("", "", "", "")
+    ));
     operateMap[msg.sender] = candidateSize + 1;
     consensusMap[consensusAddr] = candidateSize + 1;
 
@@ -301,47 +330,78 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     }
   }
 
-  /// Update validator candidate information
-  /// @param consensusAddr Consensus address configured on the validator node
-  /// @param feeAddr Fee address set to collect system rewards
-  /// @param commissionThousandths The commission fee taken by the validator, measured in thousandths  
-  function update(address consensusAddr, address payable feeAddr, uint32 commissionThousandths, bytes calldata voteAddr) external onlyInit exist{
-    require(commissionThousandths != 0 && commissionThousandths < 1000, "commissionThousandths should in range (0, 1000)");
-    require(consensusAddr != address(0), "consensus address should not be zero");
-    require(feeAddr != address(0), "fee address should not be zero");
-    require(voteAddr.length == 48, "vote address length should be 48");
-    
-    uint256 candidateSize = candidateSet.length;
-    for (uint256 i = 0; i < candidateSize; i++) {
-      if (candidateSet[i].operateAddr != msg.sender) {
-        require(!BytesLib.equal(candidateSet[i].voteAddr, voteAddr), "vote address already exists");
-      }
-    }
-
+  function updateAgent(address newAgent) external exist {
     uint256 index = operateMap[msg.sender];
     Candidate storage c = candidateSet[index - 1];
+    require(newAgent != address(0), "agent address cannot be zero");
+
+    if (c.agent != address(0)) {
+        delete agentMap[c.agent];
+    }
+
+    agentMap[newAgent] = index;
+    c.agent = newAgent;
+    emit AgentUpdated(msg.sender, newAgent);
+  }
+
+  function editConsensusAddress(address newConsensusAddr) external {
+    (uint256 index, Candidate storage c) = getCandidate();
+    
+    require(consensusMap[newConsensusAddr] == 0, "consensus already exists");
+    delete consensusMap[c.consensusAddr];
+    c.consensusAddr = newConsensusAddr;
+    consensusMap[newConsensusAddr] = index;
+
+    emit ConsensusAddressEdited(msg.sender, newConsensusAddr);
+  }
+
+  function editCommissionRate(uint32 newRate) external {
+    (, Candidate storage c) = getCandidate();
+
+    require(newRate != 0 && newRate < 1000, "commissionThousandths should in range (0, 1000)");
+    
     uint256 commissionLastRoundValue = roundTag == c.commissionLastChangeRound
       ? c.commissionLastRoundValue
       : c.commissionThousandths;
     require(
-      commissionThousandths + maxCommissionChange >= commissionLastRoundValue &&
-        commissionLastRoundValue + maxCommissionChange >= commissionThousandths,
+      newRate + maxCommissionChange >= commissionLastRoundValue &&
+        commissionLastRoundValue + maxCommissionChange >= newRate,
       "commissionThousandths out of adjustment range"
     );
     if (roundTag != c.commissionLastChangeRound) {
       c.commissionLastChangeRound = roundTag;
       c.commissionLastRoundValue = c.commissionThousandths;
     }
-    if (c.consensusAddr != consensusAddr) {
-      require(consensusMap[consensusAddr] == 0, "the consensus already exists");
-      delete consensusMap[c.consensusAddr];
-      c.consensusAddr = consensusAddr;
-      consensusMap[consensusAddr] = index;
+    c.commissionThousandths = newRate;
+    emit CommissionRateEdited(msg.sender, newRate);
+  }
+
+  function editVoteAddress(bytes calldata voteAddr) external {
+    (, Candidate storage c) = getCandidate();
+
+    require(voteAddr.length == 48, "vote address length should be 48");
+    
+    uint256 candidateSize = candidateSet.length;
+    for (uint256 i = 0; i < candidateSize; i++) {
+      require(!BytesLib.equal(candidateSet[i].voteAddr, voteAddr), "vote address already exists");
     }
-    c.feeAddr = feeAddr;
-    c.commissionThousandths = commissionThousandths;
     c.voteAddr = voteAddr;
-    emit updated(msg.sender, consensusAddr, feeAddr, commissionThousandths, voteAddr);
+    emit VoteAddressEdited(msg.sender, voteAddr);
+  }
+
+  function editDescription(string calldata moniker, string calldata identity, string calldata website, string calldata details) external {
+    (, Candidate storage c) = getCandidate();
+    
+    c.description = Description(moniker, identity, website, details);
+    emit DescriptionEdited(msg.sender, moniker, identity, website, details);
+  }
+
+  function editFeeAddress(address payable newFeeAddr) external exist {
+    (, Candidate storage c) = getCandidate();
+
+    require(newFeeAddr != address(0), "fee address cannot be zero");
+    c.feeAddr = newFeeAddr;
+    emit FeeAddressEdited(c.operateAddr, newFeeAddr);
   }
 
   /// Refuse to accept delegate from others
@@ -378,6 +438,17 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
   }
 
   /*************************** internal methods ******************************/
+
+  function getCandidate() internal view returns (uint256, Candidate storage) {
+      uint256 index = operateMap[msg.sender];
+      if (index == 0) {
+          // Check if sender is agent
+          index = agentMap[msg.sender];
+          require(index != 0, "candidate does not exist");
+      }
+      return (index, candidateSet[index - 1]);
+  }
+
   function changeStatus(Candidate storage c, uint256 newStatus) internal {
     uint256 oldStatus = c.status;
     if (oldStatus != newStatus) {
@@ -390,6 +461,10 @@ contract CandidateHub is ICandidateHub, System, IParamSubscriber {
     Candidate storage c = candidateSet[index - 1];
 
     emit unregistered(c.operateAddr, c.consensusAddr);
+
+    if (c.agent != address(0)) {
+        delete agentMap[c.agent];
+    }
 
     delete operateMap[c.operateAddr];
     delete consensusMap[c.consensusAddr];
