@@ -8,7 +8,7 @@ from brownie.test import given, strategy
 from brownie.network.transaction import Status, TransactionReceipt
 from .constant import Utils
 from .utils import random_address, expect_event, padding_left, update_system_contract_address
-from .common import register_candidate, turn_round, get_candidate, get_current_round
+from .common import register_candidate, turn_round, get_candidate, get_current_round, random_vote_address
 
 
 @pytest.fixture(scope="module")
@@ -263,6 +263,24 @@ def test_turnRound_update_validator_info(candidate_hub, set_candidate, slash_ind
     assert 'validatorSetUpdated' in tx.events
 
 
+def test_turnround_update_voteaddrlist_success(candidate_hub, validator_set, slash_indicator):
+    operators = []
+    consensuses = []
+    init_vote_address = 0x99a1dbde53606922478636c65b06f9683e10bde7f6cbee8f0ebbb803d0beef91fa47f2727ef8533cb5166e54a52d08b8
+    vote_address_list = [Web3.to_hex(random_vote_address()) for _ in range(3)]
+    for index, operator in enumerate(accounts[5:8]):
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator, vote_address=vote_address_list[index]))
+    assert validator_set.getValidatorsAndVoteAddresses()[1] == [Web3.to_hex(init_vote_address)] * 5
+    tx = turn_round()
+    assert 'validatorSetUpdated' in tx.events
+    assert validator_set.getValidatorsAndVoteAddresses()[0] == consensuses
+    assert validator_set.getValidatorsAndVoteAddresses()[1] == vote_address_list
+    turn_round(consensuses)
+    assert validator_set.currentValidatorSet(0) == [operators[0], consensuses[0], operators[0], 1000, 0,
+                                                    vote_address_list[0], 0]
+
+
 @pytest.mark.parametrize("times", [
     1,
     pytest.param(2, marks=pytest.mark.xfail),
@@ -325,7 +343,7 @@ def test_register_zero_consensus_address(candidate_hub, required_margin):
     zero_address = "0x0000000000000000000000000000000000000000"
     with brownie.reverts("consensus address should not be zero"):
         candidate_hub.register(
-            zero_address, accounts[0], 1,
+            zero_address, accounts[0], 1, random_vote_address(),
             {'from': accounts[0], 'value': required_margin}
         )
 
@@ -334,7 +352,7 @@ def test_register_zero_fee_address(candidate_hub, required_margin):
     zero_address = "0x0000000000000000000000000000000000000000"
     with brownie.reverts("fee address should not be zero"):
         candidate_hub.register(
-            random_address(), zero_address, 1,
+            random_address(), zero_address, 1, random_vote_address(),
             {'from': accounts[0], 'value': required_margin}
         )
 
@@ -343,7 +361,7 @@ def test_register_exceeds_validator_limit(candidate_hub, required_margin):
     zero_address = "0x0000000000000000000000000000000000000000"
     with brownie.reverts("fee address should not be zero"):
         candidate_hub.register(
-            random_address(), zero_address, 1,
+            random_address(), zero_address, 1, random_vote_address(),
             {'from': accounts[0], 'value': required_margin}
         )
 
@@ -352,7 +370,7 @@ def test_register_requires_init_first(candidate_hub, required_margin):
     candidate_hub.setAlreadyInit(False)
     with brownie.reverts("the contract not init yet"):
         candidate_hub.register(
-            random_address(), accounts[0], 1,
+            random_address(), accounts[0], 1, random_vote_address(),
             {'from': accounts[0], 'value': required_margin}
         )
 
@@ -360,24 +378,114 @@ def test_register_requires_init_first(candidate_hub, required_margin):
 def test_register_zero_payment_amount(candidate_hub, required_margin):
     with brownie.reverts("deposit is not enough"):
         candidate_hub.register(
-            random_address(), accounts[0], 1,
+            random_address(), accounts[0], 1, random_vote_address(),
             {'from': accounts[0], 'value': 0}
         )
 
 
 def test_reregister_after_cancel(candidate_hub, required_margin):
     candidate_hub.register(
-        random_address(), accounts[0], 1,
+        random_address(), accounts[0], 1, random_vote_address(),
         {'from': accounts[0], 'value': required_margin}
     )
     candidate_hub.refuseDelegate({'from': accounts[0]})
     turn_round()
     candidate_hub.unregister({'from': accounts[0]})
     tx = candidate_hub.register(
-        random_address(), accounts[0], 1,
+        random_address(), accounts[0], 1, random_vote_address(),
         {'from': accounts[0], 'value': required_margin}
     )
     assert 'registered' in tx.events
+
+
+@pytest.mark.parametrize("candidate_size", [
+    999, 1000, 1001, 1002
+])
+def test_candidate_size_exceeds_total_limit(candidate_hub, required_margin, candidate_size):
+    operator = accounts[0]
+    candidate_hub.mockRegister(candidate_size)
+    if candidate_size <= 1000:
+        tx = candidate_hub.register(
+            random_address(), accounts[1], 1, random_vote_address(),
+            {'from': operator, 'value': required_margin}
+        )
+        assert 'registered' in tx.events
+    else:
+        with brownie.reverts("maximum candidate size reached"):
+            candidate_hub.register(
+                random_address(), accounts[1], 1, random_vote_address(),
+                {'from': operator, 'value': required_margin}
+            )
+
+
+def test_vote_addr_invalid_length(candidate_hub, required_margin):
+    operator = accounts[0]
+    with brownie.reverts("vote address length should be 48"):
+        candidate_hub.register(
+            random_address(), accounts[1], 1, accounts[0].address,
+            {'from': operator, 'value': required_margin}
+        )
+
+
+def test_duplicate_vote_addr(candidate_hub, required_margin):
+    operator = accounts[0]
+    vote_address = random_vote_address()
+    candidate_hub.register(
+        random_address(), accounts[1], 1, vote_address,
+        {'from': operator, 'value': required_margin}
+    )
+    with brownie.reverts("vote address already exists"):
+        candidate_hub.register(
+            random_address(), accounts[0], 1, vote_address,
+            {'from': accounts[2], 'value': required_margin}
+        )
+
+
+def test_vote_addr_list_contains_duplicates(candidate_hub, required_margin, validator_set, set_candidate):
+    turn_round()
+    vote_address = validator_set.getValidatorsAndVoteAddresses()[1][0]
+    with brownie.reverts("vote address already exists"):
+        candidate_hub.register(
+            random_address(), accounts[0], 1, vote_address,
+            {'from': accounts[1], 'value': required_margin}
+        )
+
+
+def test_registration_index_correct_after_success(candidate_hub, required_margin):
+    vote_address = random_vote_address()
+    consensus_addr = random_address()
+    commission_thousandths = 100
+    tx = candidate_hub.register(
+        consensus_addr, accounts[0], commission_thousandths, vote_address,
+        {'from': accounts[1], 'value': required_margin}
+    )
+    expect_event(tx, "registered", {
+        'operateAddr': accounts[1],
+        'consensusAddr': consensus_addr,
+        'feeAddress': accounts[0],
+        'commissionThousandths': commission_thousandths,
+        'margin': required_margin,
+        'voteAddr': vote_address
+    })
+    commission_last_round = 100
+    status = 1
+    assert candidate_hub.candidateSet(0) == (
+        accounts[1],
+        consensus_addr,
+        accounts[0],
+        commission_thousandths,
+        required_margin,
+        status,
+        get_current_round(),
+        commission_last_round,
+        vote_address,
+    )
+    assert candidate_hub.operateMap(accounts[1]) == 1
+    assert candidate_hub.getConsensusMap(consensus_addr) == 1
+    consensus = register_candidate(operator=accounts[2])
+    assert candidate_hub.operateMap(accounts[2]) == 2
+    assert candidate_hub.getConsensusMap(consensus) == 2
+    assert candidate_hub.candidateSet(1)['operateAddr'] == accounts[2]
 
 
 def test_only_gov_can_call(candidate_hub, required_margin):
@@ -912,8 +1020,6 @@ def test_update_candidate(candidate_hub, required_margin):
         if consensus_addr is None:
             consensus_addr = consensus_address
         if ret is False:
-            if err == 'the consensus already exists':
-                pass
             with brownie.reverts(err):
                 candidate_hub.update(consensus_addr, fee_addr, commission, vote_address1, {'from': operate_addr})
         else:
@@ -924,8 +1030,96 @@ def test_update_candidate(candidate_hub, required_margin):
                 "consensusAddr": consensus_addr,
                 "feeAddress": fee_addr,
                 "commissionThousandths": commission,
+                "voteAddr": vote_address2
             })
-            assert tx.events['updated']['voteAddr'] == Web3.to_hex(vote_address2)
+
+
+def test_update_success(candidate_hub, required_margin):
+    consensus_address = random_address()
+    fee_address = random_address()
+    vote_address0 = random_vote_address()
+    round_value = 200
+    candidate_hub.register(consensus_address, fee_address, round_value, vote_address0,
+                           {'from': accounts[0], 'value': required_margin})
+    turn_round()
+    consensus_ = accounts[1]
+    fee_address_ = accounts[2]
+    vote_address1 = '0x938821669157ba8ed89e2cdd3956cadb9242c2ed8467bc322f636bb3bb5aeff4020e98dd949e47c081df84688c6cb881'
+    candidate_hub.update(consensus_, fee_address_, 300, vote_address1,
+                         {'from': accounts[0]})
+    state = 17
+    assert candidate_hub.candidateSet(0) == (
+        accounts[0], consensus_, fee_address_, 300, required_margin, state, get_current_round(), round_value,
+        vote_address1)
+
+
+def test_update_vote_addr_invalid_length_failed(candidate_hub, required_margin):
+    consensus_address = random_address()
+    fee_address = random_address()
+    vote_address0 = random_vote_address()
+    round_value = 200
+    candidate_hub.register(consensus_address, fee_address, round_value, vote_address0,
+                           {'from': accounts[0], 'value': required_margin})
+    consensus_ = accounts[1]
+    fee_address_ = accounts[2]
+    error_vote_address1 = '0x938821669157ba8ed89e2cdd3956cadb9242c2ed8467bc322f636bb3bb5aeff4020e98dd949e47c081df84688c6cb8'
+    with brownie.reverts("vote address length should be 48"):
+        candidate_hub.update(consensus_, fee_address_, 300, error_vote_address1,
+                             {'from': accounts[0]})
+
+
+def test_self_vote_addr_duplicate_failed(candidate_hub, required_margin):
+    consensus_address = random_address()
+    fee_address = random_address()
+    vote_address0 = random_vote_address()
+    round_value = 200
+    candidate_hub.register(consensus_address, fee_address, round_value, vote_address0,
+                           {'from': accounts[0], 'value': required_margin})
+    consensus_ = accounts[1]
+    fee_address_ = accounts[2]
+    candidate_hub.update(consensus_, fee_address_, 300, vote_address0,
+                         {'from': accounts[0]})
+    state = 1
+    assert candidate_hub.candidateSet(0) == (
+        accounts[0], consensus_, fee_address_, 300, required_margin, state, get_current_round(), round_value,
+        vote_address0)
+
+
+def test_update_vote_addr_list_contains_duplicates_failed(candidate_hub, required_margin):
+    vote_address_list = []
+    round_value = 200
+    for i in range(5):
+        vote_address = random_vote_address()
+        candidate_hub.register(random_address(), random_address(), round_value, vote_address,
+                               {'from': accounts[i], 'value': required_margin})
+        vote_address_list.append(vote_address)
+    consensus_ = accounts[6]
+    fee_address_ = accounts[7]
+    for i in range(1, 5):
+        with brownie.reverts(f"vote address already exists"):
+            candidate_hub.update(consensus_, fee_address_, 300, vote_address_list[i],
+                                 {'from': accounts[0]})
+
+
+def test_update_single_address_repeated_changes_success(candidate_hub, required_margin):
+    consensus_address = random_address()
+    fee_address = random_address()
+    vote_address0 = random_vote_address()
+    round_value = 200
+    candidate_hub.register(consensus_address, fee_address, round_value, vote_address0,
+                           {'from': accounts[0], 'value': required_margin})
+    new_consensus_address = random_address()
+    assert candidate_hub.candidateSet(0)['consensusAddr'] == consensus_address
+    candidate_hub.update(new_consensus_address, fee_address, round_value, random_vote_address(), {'from': accounts[0]})
+    assert candidate_hub.candidateSet(0)['consensusAddr'] == new_consensus_address
+    new_vote_address = random_vote_address()
+    candidate_hub.update(new_consensus_address, fee_address, round_value, new_vote_address, {'from': accounts[0]})
+    assert candidate_hub.candidateSet(0)['voteAddr'] == new_vote_address
+    new_fee_address = random_address()
+    candidate_hub.update(new_consensus_address, new_fee_address, round_value, new_vote_address, {'from': accounts[0]})
+    assert candidate_hub.candidateSet(0)['consensusAddr'] == new_consensus_address
+    assert candidate_hub.candidateSet(0)['feeAddr'] == new_fee_address
+    assert candidate_hub.candidateSet(0)['voteAddr'] == new_vote_address
 
 
 def test_add_margin(candidate_hub, required_margin):

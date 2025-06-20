@@ -26,7 +26,7 @@ def random_vote_address():
     sk = AugSchemeMPL.key_gen(seed)
     pk = sk.get_g1()
     vote_address = bytes(pk)
-    return vote_address
+    return Web3.to_hex(vote_address)
 
 
 def random_btc_tx_id():

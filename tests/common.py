@@ -2,7 +2,8 @@ from brownie import *
 from .utils import random_address, random_vote_address
 
 
-def register_candidate(consensus=None, fee_address=None, operator=None, commission=500, margin=None) -> str:
+def register_candidate(consensus=None, fee_address=None, operator=None, commission=500, margin=None,
+                       vote_address=None) -> str:
     if consensus is None:
         consensus = random_address()
     if not operator:
@@ -11,7 +12,8 @@ def register_candidate(consensus=None, fee_address=None, operator=None, commissi
         fee_address = operator
     if margin is None:
         margin = CandidateHubMock[0].requiredMargin()
-    vote_address = random_vote_address()
+    if vote_address is None:
+        vote_address = random_vote_address()
     tx = CandidateHubMock[0].register(
         consensus, fee_address, commission, vote_address,
         {'from': operator, 'value': margin}
@@ -26,10 +28,11 @@ def get_candidate(operator=None):
     return CandidateHubMock[0].candidateSet(idx - 1).dict()
 
 
-def turn_round(miners: list = None, tx_fee=100, round_count=1):
+def turn_round(miners: list = None, tx_fee=100, round_count=1,weights=None):
     if miners is None:
         miners = []
-    weights = [10] * len(miners)
+    if weights is None:
+        weights = [10] * len(miners)
     tx = None
 
     for _ in range(round_count):

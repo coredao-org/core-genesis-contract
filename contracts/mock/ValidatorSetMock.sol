@@ -125,6 +125,11 @@ contract ValidatorSetMock is ValidatorSet {
         return currentValidatorSet[index - 1];
     }
 
+    function getVoteRewardPercent() external view returns (uint256) {
+        return voteRewardPercent;
+    }
+
+
     function setValidatorSetMap(address validator) external {
         currentValidatorSetMap[validator] = 1;
     }

@@ -1,8 +1,10 @@
 import pytest
 import brownie
 from web3 import Web3, constants
-from brownie import *
-from .utils import expect_event, get_tracker, AccountTracker, update_system_contract_address, random_vote_address
+
+from .common import turn_round, register_candidate, get_current_round, execute_proposal
+from .delegate import delegate_coin_success
+from .utils import *
 from eth_abi import encode
 
 init_validators = [
@@ -29,13 +31,19 @@ felony_deposit = int(1e5)
 def setup(system_reward, validator_set, pledge_agent, core_agent, stake_hub):
     global account_tracker, system_reward_tracker, validator_set_tracker, stake_hub_tracker
     global validator_set_instance
-    global BLOCK_REWARD
+    global BLOCK_REWARD, block_reward
     validator_set_instance = validator_set
     BLOCK_REWARD = validator_set.BLOCK_REWARD()
     account_tracker = get_tracker(accounts[0])
     system_reward_tracker = get_tracker(system_reward)
     validator_set_tracker = get_tracker(validator_set)
     stake_hub_tracker = get_tracker(stake_hub)
+    block_reward = validator_set.blockReward()
+
+
+@pytest.fixture(scope="module", autouse=True)
+def deposit_for_reward(validator_set):
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(autouse=True)
@@ -210,6 +218,122 @@ def test_deposit_to_validator_with_positive_balance(validator_address, deposit_v
     __balance_check(0 - deposit_value, deposit_value, 0)
 
 
+def test_vote_addr_and_weights_mismatch_failed(set_candidate):
+    operators, consensuses = set_candidate
+    accounts[1].transfer(validator_set_instance.address, Web3.to_wei(10, 'ether'))
+    validator_set_tracker.balance()
+    weights = [10, 10]
+    with brownie.reverts("length not equal"):
+        validator_set_instance.vote(consensuses, weights)
+
+    validator_set_instance.vote([], [])
+
+
+def test_val_addrs_contains_non_validator(validator_set, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    consensuses.append(accounts[2])
+    weights = [10, 20, 30, 40]
+    validator_set.vote(consensuses, weights)
+    assert validator_set.getValidatorByConsensus(consensuses[0])['voteWeight'] == weights[0]
+    assert validator_set.getValidatorByConsensus(consensuses[1])['voteWeight'] == weights[1]
+    assert validator_set.getValidatorByConsensus(consensuses[2])['voteWeight'] == weights[2]
+    with brownie.reverts("no match validator"):
+        validator_set.getValidatorByConsensus(consensuses[3])
+
+
+@pytest.mark.xfail
+def test_invalid_input_format_failed(validator_set, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    consensuses.append(accounts[2])
+    weights = accounts[0]
+    with brownie.reverts():
+        validator_set.vote(consensuses, weights)
+
+
+def test_vote_success(validator_set):
+    operators = []
+    consensuses = []
+    vote_address_list = []
+    for operator in accounts[5:8]:
+        operators.append(operator)
+        vote_address = random_vote_address()
+        consensuses.append(register_candidate(operator=operator, vote_address=vote_address))
+        vote_address_list.append(vote_address)
+    turn_round()
+    weights = [10, 20, 30]
+    validator_set.vote(consensuses, weights)
+    for i in range(len(consensuses)):
+        validator = [operators[i], consensuses[i], operators[i], 1000, 0, vote_address_list[i], weights[i]]
+        assert validator_set.getValidatorByConsensus(consensuses[i]) == validator
+
+
+def test_repeated_vote_counts_accumulate_success(validator_set, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    weights = [10, 20, 30]
+    validator_set.vote(consensuses, weights)
+    validator_set.vote(consensuses, weights)
+    validator_set.vote(consensuses, weights)
+    for i in range(len(consensuses)):
+        assert validator_set.getValidatorByConsensus(consensuses[i])['voteWeight'] == weights[i] * 3
+
+    validator_set.vote(consensuses[:-1], weights[:-1])
+    assert validator_set.getValidatorByConsensus(consensuses[0])['voteWeight'] == weights[0] * 4
+    assert validator_set.getValidatorByConsensus(consensuses[1])['voteWeight'] == weights[1] * 4
+
+
+def test_vote_for_unelected_validator_failed(validator_set, set_candidate):
+    operators, consensuses = set_candidate
+    weights = [10, 20, 30]
+    validator_set.vote(consensuses, weights)
+    for i in range(len(consensuses)):
+        validator_set.vote([consensuses[i]], [weights[i]])
+    for i in range(len(consensuses)):
+        with brownie.reverts("no match validator"):
+            validator_set.getValidatorByConsensus(consensuses[i])
+
+
+@pytest.mark.parametrize("validator_state", ['minor', 'major'])
+def test_vote_address_contains_felony_failed(validator_set, set_candidate, slash_indicator, validator_state):
+    operators, consensuses = set_candidate
+    turn_round()
+    turn_round(consensuses)
+    tx0 = None
+    vote_state = False
+    if validator_state == 'minor':
+        slash_threshold = slash_indicator.misdemeanorThreshold()
+        event_name = 'validatorMisdemeanor'
+        vote_state = True
+    else:
+        slash_threshold = slash_indicator.felonyThreshold()
+        event_name = 'validatorFelony'
+    for count in range(slash_threshold):
+        tx0 = slash_indicator.slash(consensuses[0])
+    assert event_name in tx0.events
+    validator_set.vote([consensuses[0]], [10])
+    if vote_state:
+        assert validator_set.getValidatorByConsensus(consensuses[0])['voteWeight'] == 10
+    else:
+        with brownie.reverts("no match validator"):
+            validator_set.getValidatorByConsensus(consensuses[0])
+
+
+def test_vote_address_contains_unregistered_failed(validator_set, candidate_hub, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    candidate_hub.refuseDelegate({'from': operators[0]})
+    turn_round()
+    candidate_hub.unregister({'from': operators[0]})
+    weights = [10, 20, 30]
+    with brownie.reverts("no match validator"):
+        validator_set.getValidatorByConsensus(consensuses[0])
+    validator_set.vote(consensuses, weights)
+    with brownie.reverts("no match validator"):
+        validator_set.getValidatorByConsensus(consensuses[0])
+
+
 def test_update_failed_by_address_which_is_not_candidate():
     with brownie.reverts("the msg sender must be candidate contract"):
         validator_set_instance.updateValidatorSet([random_address], [random_address], [random_address], [100], [])
@@ -381,6 +505,167 @@ def test_distribute_reward_success_with_commissionThousandths_500():
     # in the event that there is a reward on the validator, but there is no staking, this part of the reward will be burned
     __balance_check(0 - value, 0, expect_incentive + expect_reward, 0)
     assert brownie.web3.eth.get_balance(validator['feeAddress']) == expect_reward
+
+
+def test_distribute_vote_reward_success(validator_set, system_reward):
+    coin_value = 10000
+    validator_set.updateBlockReward(20000)
+    operators = []
+    consensuses = []
+    fee_address = accounts[6:9]
+    for index, operator in enumerate(accounts[5:8]):
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator, fee_address=fee_address[index]))
+        delegate_coin_success(operator, accounts[99], coin_value)
+    weights = [10, 20, 30]
+    turn_round()
+    for consensus in consensuses:
+        validator_set.deposit(consensus, {"value": 10000, "from": accounts[99]})
+        validator_set.vote(consensuses, weights, {"from": accounts[99]})
+    __fake_validator_set()
+    trackers = get_trackers(fee_address)
+    block_reward = 30000
+    tx = validator_set.distributeReward(8)
+    receive_reward = block_reward * validator_set.blockRewardIncentivePercent() // 100
+    expect_event(tx, "receiveDeposit", {
+        'from': validator_set.address,
+        'amount': receive_reward * len(operators)
+    })
+    assert system_reward_tracker.delta() == receive_reward * len(operators)
+    validator_reward = (block_reward - receive_reward) // 2
+
+    fee_amount = []
+    for i in range(len(operators)):
+        expect_event(tx, "directTransfer", {
+            'operateAddress': operators[i],
+            'validator': fee_address[i],
+            'amount': validator_reward - (validator_reward * 10 // 100),
+            'totalReward': block_reward - receive_reward
+        }, idx=i)
+        fee_amount.append(validator_reward - (validator_reward * 10 // 100))
+    vote_reward = validator_reward * validator_set.INIT_VOTE_REWARD_PERCENT() // 100 * 3
+    vote_amount = [675, 1350, 2025]
+    for i in range(len(operators)):
+        expect_event(tx, "voteRewardTransfer", {
+            'operateAddress': operators[i],
+            'validator': fee_address[i],
+            'amount': vote_reward * weights[i] // sum(weights)
+        }, idx=i)
+        assert vote_reward * weights[i] // sum(weights) == vote_amount[i]
+        fee_amount[i] += vote_amount[i]
+    for index, tracker in enumerate(trackers):
+        assert tracker.delta() == fee_amount[index]
+
+
+def test_zero_vote_weight_sum_zero_reward_success(validator_set, system_reward, set_candidate):
+    coin_value = 10000
+    validator_set.updateBlockReward(20000)
+    operators, consensuses = set_candidate
+    for operator in operators:
+        delegate_coin_success(operator, accounts[99], coin_value)
+    weights = [0, 0, 0]
+    turn_round()
+    for consensus in consensuses:
+        validator_set.deposit(consensus, {"value": 10000, "from": accounts[99]})
+        validator_set.vote(consensuses, weights, {"from": accounts[99]})
+    __fake_validator_set()
+    trackers = get_trackers(operators)
+    income = 30000
+    temp_income = income - (block_reward * validator_set.blockRewardIncentivePercent() // 100)
+    tx = validator_set.distributeReward(get_current_round())
+    assert 'voteRewardTransfer' not in tx.events
+    for index, tracker in enumerate(trackers):
+        assert tracker.delta() == temp_income // 2
+
+
+def test_distribute_reward_by_weight_proportion_success(validator_set, system_reward, set_candidate):
+    coin_value = 10000
+    validator_set.updateBlockReward(20000)
+    operators, consensuses = set_candidate
+    for operator in operators:
+        delegate_coin_success(operator, accounts[99], coin_value)
+    weights0 = [10, 20, 90]
+    weights1 = [25, 30, 40]
+    turn_round()
+    for consensus in consensuses:
+        validator_set.deposit(consensus, {"value": 10000, "from": accounts[99]})
+    validator_set.vote(consensuses, weights0, {"from": accounts[99]})
+    validator_set.vote(consensuses[:-1], weights1[:-1], {"from": accounts[99]})
+    validator_set.vote(consensuses[:1], weights1[:1], {"from": accounts[99]})
+    validator_set.vote(consensuses, weights1, {"from": accounts[99]})
+    vote_weight = [85, 80, 130]
+    for index, consensus in enumerate(consensuses):
+        assert validator_set.getValidatorByConsensus(consensus).dict()['voteWeight'] == vote_weight[index]
+    __fake_validator_set()
+    trackers = get_trackers(operators)
+    income = 30000
+    temp_income = income - (block_reward * validator_set.blockRewardIncentivePercent() // 100)
+    validator_reward = temp_income // 2
+    vote_reward = validator_reward * validator_set.INIT_VOTE_REWARD_PERCENT() // 100
+    tx = validator_set.distributeReward(get_current_round())
+    for index, tracker in enumerate(trackers):
+        validator_fee = validator_reward - vote_reward
+        vote_fee = vote_reward * len(operators) * vote_weight[index] // sum(vote_weight)
+        assert tracker.delta() == validator_fee + vote_fee
+
+
+def test_vote_reward_as_validator_portion_success(validator_set, system_reward):
+    coin_value = 10000
+    validator_set.updateBlockReward(20000)
+    operators = []
+    consensuses = []
+    for operator in accounts[5:8]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator, commission=800))
+        delegate_coin_success(operator, accounts[99], coin_value)
+    weights0 = [10, 20, 50]
+    turn_round()
+    for consensus in consensuses:
+        validator_set.deposit(consensus, {"value": 10000, "from": accounts[99]})
+    validator_set.vote(consensuses, weights0, {"from": accounts[99]})
+    __fake_validator_set()
+    trackers = get_trackers(operators)
+    temp_income = block_reward - (block_reward * validator_set.blockRewardIncentivePercent() // 100)
+    validator_reward = temp_income * 800 // 1000
+    vote_reward = validator_reward * validator_set.INIT_VOTE_REWARD_PERCENT() // 100
+    validator_set.distributeReward(get_current_round())
+    for index, tracker in enumerate(trackers):
+        validator_fee = validator_reward - vote_reward
+        vote_fee = vote_reward * len(operators) * weights0[index] // sum(weights0)
+        assert tracker.delta() == validator_fee + vote_fee
+
+
+@pytest.mark.parametrize("vote_reward_percent", [0, 20, 99, 100])
+def test_vote_reward_after_update_success(validator_set, set_candidate, vote_reward_percent):
+    hex_value = padding_left(Web3.to_hex(vote_reward_percent), 64)
+    execute_proposal(
+        validator_set.address,
+        0,
+        "updateParam(string,bytes)",
+        encode(['string', 'bytes'], ['voteRewardPercent', Web3.to_bytes(hexstr=hex_value)]),
+        "update felonyThreshold"
+    )
+    assert validator_set.getVoteRewardPercent() == vote_reward_percent
+    coin_value = 10000
+    validator_set.updateBlockReward(20000)
+    operators, consensuses = set_candidate
+    for operator in operators:
+        delegate_coin_success(operator, accounts[99], coin_value)
+    weights = [10, 20, 30]
+    turn_round()
+    for consensus in consensuses:
+        validator_set.deposit(consensus, {"value": 10000, "from": accounts[99]})
+        validator_set.vote(consensuses, weights, {"from": accounts[99]})
+    __fake_validator_set()
+    trackers = get_trackers(operators)
+    temp_income = block_reward - (block_reward * validator_set.blockRewardIncentivePercent() // 100)
+    validator_reward = temp_income // 2
+    vote_reward = validator_reward * vote_reward_percent // 100
+    validator_set.distributeReward(get_current_round())
+    for index, tracker in enumerate(trackers):
+        validator_fee = validator_reward - vote_reward
+        vote_fee = vote_reward * len(operators) * weights[index] // sum(weights)
+        assert tracker.delta() == validator_fee + vote_fee
 
 
 def test_misdemeanor_failed_with_address_which_is_not_slash():

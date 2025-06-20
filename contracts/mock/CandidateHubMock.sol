@@ -44,6 +44,12 @@ contract CandidateHubMock is CandidateHub {
         dues = value;
     }
 
+    function mockRegister(uint256 value) external {
+        for (uint256 i = 0; i < value; i++) {
+            candidateSet.push();
+        }
+    }
+
 
     function setValidatorCount(uint256 value) external {
         validatorCount = value;
@@ -108,6 +114,10 @@ contract CandidateHubMock is CandidateHub {
 
     function getCandidate(address k) public view returns (Candidate memory) {
         return candidateSet[operateMap[k] - 1];
+    }
+
+    function getConsensusMap(address consensusAddr) public view returns (uint256) {
+        return consensusMap[consensusAddr];
     }
 
     function getScoreMock(address[] memory candidates, uint256 round) external returns (uint256[] memory scores) {

@@ -3,10 +3,22 @@ from eth_abi import encode
 from brownie import *
 from web3 import Web3
 
+from tests.common import register_candidate
+
 
 @pytest.fixture(scope="session", autouse=True)
 def is_development() -> bool:
     return network.show_active() == "development"
+
+
+@pytest.fixture()
+def set_candidate():
+    operators = []
+    consensuses = []
+    for operator in accounts[5:8]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    return operators, consensuses
 
 
 @pytest.fixture(scope="module", autouse=True)
