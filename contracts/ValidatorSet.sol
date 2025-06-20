@@ -25,8 +25,6 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
 
   bytes public constant INIT_VALIDATORSET_BYTES = hex"f90285ea944121f067b0f5135d77c29b2b329e8cb1bd96c96094f8b18cecc98d976ad253d38e4100a73d4e154726ea947f461f8a1c35edecd6816e76eb2e84eb661751ee94f8b18cecc98d976ad253d38e4100a73d4e154726ea94fd806ab93db5742944b7b50ce759e5eee5f6fe5094f8b18cecc98d976ad253d38e4100a73d4e154726ea947ef3a94ad1c443481fb3d86829355ca90477f8b594f8b18cecc98d976ad253d38e4100a73d4e154726ea9467d1ad48f91e131413bd0b04e823f3ae4f81e85394f8b18cecc98d976ad253d38e4100a73d4e154726ea943fb42cab4416024dc1b4c9e21b9acd0dfcef35f694f8b18cecc98d976ad253d38e4100a73d4e154726ea943511e3b8ac7336b99517d324145e9b5bb33e08a494f8b18cecc98d976ad253d38e4100a73d4e154726ea94729f39a54304fcc6ec279684c71491a385d7b9ae94f8b18cecc98d976ad253d38e4100a73d4e154726ea94f44a785fd9f23f0abd443541386e71356ce619dc94f8b18cecc98d976ad253d38e4100a73d4e154726ea942efd3cf0733421aec3e4202480d0a90bd157514994f8b18cecc98d976ad253d38e4100a73d4e154726ea94613b0f519ada008cb99b6130e89122ba416bf15994f8b18cecc98d976ad253d38e4100a73d4e154726ea94c0925eeb800ff6ba4695ded61562a10102152b5f94f8b18cecc98d976ad253d38e4100a73d4e154726ea9419e3c7d7e69f273f3f91c060bb438a007f6fc33c94f8b18cecc98d976ad253d38e4100a73d4e154726ea94e127f110d172a0c4c6209fe045dd71781e8fe9d494f8b18cecc98d976ad253d38e4100a73d4e154726ea94f778dc4a199a440dbe9f16d1e13e185bb179b3b794f8b18cecc98d976ad253d38e4100a73d4e154726";
 
-  uint256 public constant INIT_VOTE_REWARD_PERCENT = 10;
-
   /*********************** state of the contract **************************/
   uint256 public blockReward;
   uint256 public blockRewardIncentivePercent;
@@ -37,7 +35,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   // value is the index of the element in `currentValidatorSet`.
   mapping(address => uint256) public currentValidatorSetMap;
 
-  uint256 voteRewardPercent;
+  uint256 public voteRewardPercent;
 
   struct Validator {
     address operateAddress;
@@ -159,10 +157,6 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       voteWeightSum += v.voteWeight;
     }
     ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: incentiveSum }();
-
-    if (voteRewardPercent == 0) {
-      voteRewardPercent = INIT_VOTE_REWARD_PERCENT;
-    }
 
     uint256 vrPercent = voteWeightSum == 0 ? 0 : voteRewardPercent;
 
