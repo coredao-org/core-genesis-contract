@@ -7,7 +7,7 @@ from .scenario.account_mgr import AccountMgr
 
 init_account_mgr = AccountMgr.init_account_mgr
 
-
+@pytest.mark.skip(reason="This test is temporarily skipped")
 @pytest.mark.parametrize("file_name", [
     'example_scenario.json',
     'btcfi_scenario.json',

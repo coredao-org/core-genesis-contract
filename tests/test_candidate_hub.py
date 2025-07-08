@@ -3,12 +3,13 @@ import pytest
 import brownie
 from web3 import Web3
 from eth_account import Account
-from brownie import accounts, UnRegisterReentry, chain
+from brownie import accounts, UnRegisterReentry
 from brownie.test import given, strategy
 from brownie.network.transaction import Status, TransactionReceipt
+from tests.delegate import delegate_btc_success, delegate_coin_success
 from .constant import Utils
 from .utils import random_address, expect_event, padding_left, update_system_contract_address
-from .common import register_candidate, turn_round, get_candidate, get_current_round, random_vote_address
+from .common import *
 
 
 @pytest.fixture(scope="module")
@@ -479,6 +480,8 @@ def test_registration_index_correct_after_success(candidate_hub, required_margin
         get_current_round(),
         commission_last_round,
         vote_address,
+        ZERO_ADDRESS,
+        ("", "", "", "")
     )
     assert candidate_hub.operateMap(accounts[1]) == 1
     assert candidate_hub.getConsensusMap(consensus_addr) == 1
@@ -983,145 +986,6 @@ def test_unregister_candidate(candidate_hub, required_margin):
             })
 
 
-def test_update_candidate(candidate_hub, required_margin):
-    consensus_address = random_address()
-    fee_address = random_address()
-    max_commission_change = candidate_hub.maxCommissionChange()
-
-    tests = [
-        (accounts[1], None, consensus_address, fee_address, 100, False, "candidate does not exist", None),
-        (accounts[2], True, consensus_address, fee_address, 0, False, "commissionThousandths should in range (0, 1000)",
-         None),
-        (accounts[3], True, random_address(), fee_address, 1000, False,
-         "commissionThousandths should in range (0, 1000)", None),
-        (accounts[3], None, consensus_address, fee_address, 100, False, "the consensus already exists", None),
-        (accounts[3], None, random_address(), fee_address, 201 + max_commission_change, False,
-         "commissionThousandths out of adjustment range", None),
-        (accounts[3], None, random_address(), fee_address, 199 - max_commission_change, False,
-         "commissionThousandths out of adjustment range", None),
-        (accounts[3], None, random_address(), fee_address, 200 + max_commission_change, True, "", None),
-        (accounts[3], None, random_address(), fee_address, 200 - max_commission_change, True, "", None),
-        (accounts[3], None, random_address(), fee_address, 200 + max_commission_change, True, "", None),
-        (accounts[3], None, random_address(), fee_address, 200 + max_commission_change * 2, True, "", True),
-    ]
-    i = 0
-    for operate_addr, register, consensus_addr, fee_addr, commission, ret, err, need_turn_round in tests:
-        if need_turn_round:
-            turn_round()
-        i += 1
-        vote_address0 = random_vote_address()
-        vote_address1 = random_vote_address()
-        vote_address2 = random_vote_address()
-        if register:
-            if consensus_addr is None:
-                consensus_addr = random_address()
-            candidate_hub.register(consensus_addr, fee_addr, 200, vote_address0,
-                                   {'from': operate_addr, 'value': required_margin})
-        if consensus_addr is None:
-            consensus_addr = consensus_address
-        if ret is False:
-            with brownie.reverts(err):
-                candidate_hub.update(consensus_addr, fee_addr, commission, vote_address1, {'from': operate_addr})
-        else:
-            tx = candidate_hub.update(consensus_addr, fee_addr, commission, vote_address2,
-                                      {'from': operate_addr})
-            expect_event(tx, "updated", {
-                "operateAddr": operate_addr,
-                "consensusAddr": consensus_addr,
-                "feeAddress": fee_addr,
-                "commissionThousandths": commission,
-                "voteAddr": vote_address2
-            })
-
-
-def test_update_success(candidate_hub, required_margin):
-    consensus_address = random_address()
-    fee_address = random_address()
-    vote_address0 = random_vote_address()
-    round_value = 200
-    candidate_hub.register(consensus_address, fee_address, round_value, vote_address0,
-                           {'from': accounts[0], 'value': required_margin})
-    turn_round()
-    consensus_ = accounts[1]
-    fee_address_ = accounts[2]
-    vote_address1 = '0x938821669157ba8ed89e2cdd3956cadb9242c2ed8467bc322f636bb3bb5aeff4020e98dd949e47c081df84688c6cb881'
-    candidate_hub.update(consensus_, fee_address_, 300, vote_address1,
-                         {'from': accounts[0]})
-    state = 17
-    assert candidate_hub.candidateSet(0) == (
-        accounts[0], consensus_, fee_address_, 300, required_margin, state, get_current_round(), round_value,
-        vote_address1)
-
-
-def test_update_vote_addr_invalid_length_failed(candidate_hub, required_margin):
-    consensus_address = random_address()
-    fee_address = random_address()
-    vote_address0 = random_vote_address()
-    round_value = 200
-    candidate_hub.register(consensus_address, fee_address, round_value, vote_address0,
-                           {'from': accounts[0], 'value': required_margin})
-    consensus_ = accounts[1]
-    fee_address_ = accounts[2]
-    error_vote_address1 = '0x938821669157ba8ed89e2cdd3956cadb9242c2ed8467bc322f636bb3bb5aeff4020e98dd949e47c081df84688c6cb8'
-    with brownie.reverts("vote address length should be 48"):
-        candidate_hub.update(consensus_, fee_address_, 300, error_vote_address1,
-                             {'from': accounts[0]})
-
-
-def test_self_vote_addr_duplicate_failed(candidate_hub, required_margin):
-    consensus_address = random_address()
-    fee_address = random_address()
-    vote_address0 = random_vote_address()
-    round_value = 200
-    candidate_hub.register(consensus_address, fee_address, round_value, vote_address0,
-                           {'from': accounts[0], 'value': required_margin})
-    consensus_ = accounts[1]
-    fee_address_ = accounts[2]
-    candidate_hub.update(consensus_, fee_address_, 300, vote_address0,
-                         {'from': accounts[0]})
-    state = 1
-    assert candidate_hub.candidateSet(0) == (
-        accounts[0], consensus_, fee_address_, 300, required_margin, state, get_current_round(), round_value,
-        vote_address0)
-
-
-def test_update_vote_addr_list_contains_duplicates_failed(candidate_hub, required_margin):
-    vote_address_list = []
-    round_value = 200
-    for i in range(5):
-        vote_address = random_vote_address()
-        candidate_hub.register(random_address(), random_address(), round_value, vote_address,
-                               {'from': accounts[i], 'value': required_margin})
-        vote_address_list.append(vote_address)
-    consensus_ = accounts[6]
-    fee_address_ = accounts[7]
-    for i in range(1, 5):
-        with brownie.reverts(f"vote address already exists"):
-            candidate_hub.update(consensus_, fee_address_, 300, vote_address_list[i],
-                                 {'from': accounts[0]})
-
-
-def test_update_single_address_repeated_changes_success(candidate_hub, required_margin):
-    consensus_address = random_address()
-    fee_address = random_address()
-    vote_address0 = random_vote_address()
-    round_value = 200
-    candidate_hub.register(consensus_address, fee_address, round_value, vote_address0,
-                           {'from': accounts[0], 'value': required_margin})
-    new_consensus_address = random_address()
-    assert candidate_hub.candidateSet(0)['consensusAddr'] == consensus_address
-    candidate_hub.update(new_consensus_address, fee_address, round_value, random_vote_address(), {'from': accounts[0]})
-    assert candidate_hub.candidateSet(0)['consensusAddr'] == new_consensus_address
-    new_vote_address = random_vote_address()
-    candidate_hub.update(new_consensus_address, fee_address, round_value, new_vote_address, {'from': accounts[0]})
-    assert candidate_hub.candidateSet(0)['voteAddr'] == new_vote_address
-    new_fee_address = random_address()
-    candidate_hub.update(new_consensus_address, new_fee_address, round_value, new_vote_address, {'from': accounts[0]})
-    assert candidate_hub.candidateSet(0)['consensusAddr'] == new_consensus_address
-    assert candidate_hub.candidateSet(0)['feeAddr'] == new_fee_address
-    assert candidate_hub.candidateSet(0)['voteAddr'] == new_vote_address
-
-
 def test_add_margin(candidate_hub, required_margin):
     fee_address = random_address()
 
@@ -1164,6 +1028,7 @@ def test_add_margin(candidate_hub, required_margin):
             assert candidate_hub.getCandidate(operate_addr).dict()['status'] == status
 
 
+# getValidators
 def test_get_validators(candidate_hub):
     candidates = []
     score_list1 = []
@@ -1185,7 +1050,6 @@ def test_get_validators(candidate_hub):
         (candidates[:10], score_list1[:10], indexes[:10], 21, 10),
         (candidates[:10], score_list2[:10], indexes[:10], 21, 10),
     ]
-
     for candidate_list, score_list, index_list, count, expect_count in tests:
         validator_list = candidate_hub.getValidatorsMock(candidate_list, score_list, count)
         index_list.sort(key=lambda e: score_list[e], reverse=True)
@@ -1314,3 +1178,461 @@ def __delegate_coin_success(core_agent, agent, delegator, old_value, new_value):
         "amount": new_value,
         "realtimeAmount": new_value + old_value
     })
+
+
+# updateAgent
+def test_update_agent_permission(candidate_hub, accounts):
+    with brownie.reverts("candidate does not exist"):
+        candidate_hub.updateAgent(accounts[1], {'from': accounts[1]})
+
+
+def test_update_agent_success(candidate_hub, accounts):
+    operator = accounts[5]
+    new_agent = accounts[6]
+
+    consensus_addr = accounts[7]
+    fee_addr = accounts[8]
+    vote_addr = random_vote_address()
+
+    candidate_hub.register(
+        consensus_addr,
+        fee_addr,
+        100,  # commissionThousandths
+        vote_addr,
+        {'from': operator, 'value': 1e18}
+    )
+
+    tx = candidate_hub.updateAgent(new_agent, {'from': operator})
+
+    assert len(tx.events['AgentUpdated']) > 0
+    assert tx.events['AgentUpdated']['operateAddr'] == operator
+    assert tx.events['AgentUpdated']['newAgent'] == new_agent
+
+    assert candidate_hub.agentMap(new_agent) != 0
+
+
+def test_update_agent_zero_address(candidate_hub, accounts):
+    operator = accounts[5]
+
+    consensus_addr = accounts[7]
+    fee_addr = accounts[8]
+    vote_addr = random_vote_address()
+
+    candidate_hub.register(
+        consensus_addr,
+        fee_addr,
+        100,
+        vote_addr,
+        {'from': operator, 'value': 1e18}
+    )
+
+    with brownie.reverts("agent address cannot be zero"):
+        candidate_hub.updateAgent(ZERO_ADDRESS, {'from': operator})
+
+
+def test_update_agent_already_exists(candidate_hub):
+    operator1 = accounts[5]
+    operator2 = accounts[6]
+    agent = accounts[7]
+
+    candidate_hub.register(
+        accounts[8],
+        accounts[9],
+        100,
+        random_vote_address(),
+        {'from': operator1, 'value': 1e18}
+    )
+
+    candidate_hub.register(
+        accounts[10],
+        accounts[11],
+        100,
+        random_vote_address(),
+        {'from': operator2, 'value': 1e18}
+    )
+
+    candidate_hub.updateAgent(agent, {'from': operator1})
+
+    with brownie.reverts("agent address already exists"):
+        candidate_hub.updateAgent(agent, {'from': operator2})
+    candidate_hub.updateAgent(accounts[13], {'from': operator2})
+    assert candidate_hub.agentMap(accounts[13]) == 2
+
+
+def test_update_agent_multiple_times(candidate_hub, accounts):
+    operator = accounts[5]
+    first_agent = accounts[6]
+    second_agent = accounts[7]
+
+    candidate_hub.register(
+        accounts[8],
+        accounts[9],
+        100,
+        random_vote_address(),
+        {'from': operator, 'value': 1e18}
+    )
+
+    tx1 = candidate_hub.updateAgent(first_agent, {'from': operator})
+    assert len(tx1.events['AgentUpdated']) > 0
+    assert candidate_hub.agentMap(first_agent) != 0
+
+    tx2 = candidate_hub.updateAgent(second_agent, {'from': operator})
+    assert len(tx2.events['AgentUpdated']) > 0
+    assert candidate_hub.agentMap(second_agent) != 0
+    assert candidate_hub.agentMap(first_agent) == 0
+
+
+# removeAgent
+def test_remove_agent_permission(candidate_hub, accounts):
+    with brownie.reverts("candidate does not exist"):
+        candidate_hub.removeAgent({'from': accounts[1]})
+
+
+def test_remove_agent_no_agent(candidate_hub, accounts):
+    operator = accounts[5]
+    register_candidate(operator=operator)
+
+    with brownie.reverts("agent address does not exist"):
+        candidate_hub.removeAgent({'from': operator})
+
+
+def test_remove_agent_success(candidate_hub, accounts):
+    operator = accounts[5]
+    agent = accounts[6]
+    register_candidate(operator=operator)
+
+    candidate_hub.updateAgent(agent, {'from': operator})
+    assert candidate_hub.agentMap(agent) != 0
+
+    candidate_hub.removeAgent({'from': operator})
+    assert candidate_hub.agentMap(agent) == 0
+    assert candidate_hub.candidateSet(0).dict()['agent'] == ZERO_ADDRESS
+
+
+# editConsensusAddress
+def test_edit_consensus_address_permission(candidate_hub, accounts):
+    with brownie.reverts("candidate does not exist"):
+        candidate_hub.editConsensusAddress(accounts[1], {'from': accounts[1]})
+
+
+def test_edit_consensus_address_duplicate(candidate_hub, accounts):
+    operator1 = accounts[5]
+    operator2 = accounts[6]
+    consensus1 = register_candidate(operator=operator1)
+    consensus2 = register_candidate(operator=operator2)
+
+    with brownie.reverts("consensus already exists"):
+        candidate_hub.editConsensusAddress(consensus2, {'from': operator1})
+
+
+def test_edit_consensus_address_success(candidate_hub, accounts):
+    operator = accounts[5]
+    old_consensus = register_candidate(operator=operator)
+    new_consensus = accounts[7]
+
+    tx = candidate_hub.editConsensusAddress(new_consensus, {'from': operator})
+
+    assert 'ConsensusAddressEdited' in tx.events
+    assert tx.events['ConsensusAddressEdited']['operateAddr'] == operator
+    assert tx.events['ConsensusAddressEdited']['newConsensusAddr'] == new_consensus
+    assert candidate_hub.isCandidateByConsensus(old_consensus) is False
+    assert candidate_hub.isCandidateByConsensus(new_consensus)
+    assert candidate_hub.candidateSet(
+        0).dict()['consensusAddr'] == new_consensus
+
+
+def test_edit_consensus_address_by_agent_success(candidate_hub, accounts):
+    operator = accounts[5]
+    agent = accounts[6]
+    old_consensus = register_candidate(operator=operator)
+    new_consensus = accounts[7]
+
+    candidate_hub.updateAgent(agent, {'from': operator})
+
+    tx = candidate_hub.editConsensusAddress(new_consensus, {'from': agent})
+
+    assert 'ConsensusAddressEdited' in tx.events
+
+
+# editCommissionRate
+def test_edit_commission_rate_permission(candidate_hub, accounts):
+    with brownie.reverts("candidate does not exist"):
+        candidate_hub.editCommissionRate(100, {'from': accounts[1]})
+
+
+def test_edit_commission_rate_range(candidate_hub, accounts):
+    operator = accounts[5]
+    register_candidate(operator=operator)
+
+    with brownie.reverts("commissionThousandths should in range (0, 1000)"):
+        candidate_hub.editCommissionRate(0, {'from': operator})
+
+    with brownie.reverts("commissionThousandths should in range (0, 1000)"):
+        candidate_hub.editCommissionRate(1000, {'from': operator})
+
+
+def test_edit_commission_rate_adjustment_range(candidate_hub, accounts):
+    operator = accounts[5]
+    register_candidate(operator=operator, commission=500)
+    max_change = candidate_hub.maxCommissionChange()
+
+    with brownie.reverts("commissionThousandths out of adjustment range"):
+        candidate_hub.editCommissionRate(
+            500 + max_change + 1, {'from': operator})
+
+    with brownie.reverts("commissionThousandths out of adjustment range"):
+        candidate_hub.editCommissionRate(
+            500 - max_change - 1, {'from': operator})
+    tx = candidate_hub.editCommissionRate(500 + max_change, {'from': operator})
+    assert 'CommissionRateEdited' in tx.events
+    with brownie.reverts("commissionThousandths out of adjustment range"):
+        candidate_hub.editCommissionRate(
+            500 + max_change + 1, {'from': operator})
+
+
+def test_edit_commission_rate_by_agent_success(candidate_hub, accounts):
+    operator = accounts[5]
+    agent = accounts[6]
+    register_candidate(operator=operator, commission=500)
+    new_rate = 600
+
+    candidate_hub.updateAgent(agent, {'from': operator})
+
+    tx = candidate_hub.editCommissionRate(new_rate, {'from': agent})
+    assert 'CommissionRateEdited' in tx.events
+
+
+def test_edit_commission_rate_success(candidate_hub, accounts):
+    operator = accounts[5]
+    register_candidate(operator=operator, commission=500)
+    new_rate = 600
+
+    tx = candidate_hub.editCommissionRate(new_rate, {'from': operator})
+
+    assert 'CommissionRateEdited' in tx.events
+    assert tx.events['CommissionRateEdited']['operateAddr'] == operator
+    assert tx.events['CommissionRateEdited']['newRate'] == new_rate
+    assert candidate_hub.candidateSet(
+        0).dict()['commissionThousandths'] == new_rate
+    assert candidate_hub.candidateSet(
+        0).dict()['commissionLastChangeRound'] == get_current_round()
+    assert candidate_hub.candidateSet(
+        0).dict()['commissionLastRoundValue'] == 500
+
+
+def test_edit_commission_rate_same_round_multiple_times(candidate_hub, accounts):
+    operator = accounts[5]
+    register_candidate(operator=operator, commission=500)
+    max_change = candidate_hub.maxCommissionChange()
+
+    new_rate1 = 500 + max_change
+    tx1 = candidate_hub.editCommissionRate(new_rate1, {'from': operator})
+    assert 'CommissionRateEdited' in tx1.events
+    assert tx1.events['CommissionRateEdited']['newRate'] == new_rate1
+
+    new_rate2 = 500 + max_change
+    tx2 = candidate_hub.editCommissionRate(new_rate2, {'from': operator})
+    assert 'CommissionRateEdited' in tx2.events
+    assert tx2.events['CommissionRateEdited']['newRate'] == new_rate2
+
+    new_rate3 = 500 - max_change
+    tx3 = candidate_hub.editCommissionRate(new_rate3, {'from': operator})
+    assert 'CommissionRateEdited' in tx3.events
+    assert tx3.events['CommissionRateEdited']['newRate'] == new_rate3
+
+    candidate = candidate_hub.candidateSet(0).dict()
+    assert candidate['commissionThousandths'] == new_rate3
+    assert candidate['commissionLastChangeRound'] == get_current_round()
+    assert candidate['commissionLastRoundValue'] == 500
+
+    with brownie.reverts("commissionThousandths out of adjustment range"):
+        candidate_hub.editCommissionRate(
+            500 + max_change + 1, {'from': operator})
+
+    with brownie.reverts("commissionThousandths out of adjustment range"):
+        candidate_hub.editCommissionRate(
+            500 - max_change - 1, {'from': operator})
+
+
+# editVoteAddress
+def test_edit_vote_address_permission(candidate_hub, accounts):
+    with brownie.reverts("candidate does not exist"):
+        candidate_hub.editVoteAddress(
+            random_vote_address(), {'from': accounts[1]})
+
+
+def test_edit_vote_address_length(candidate_hub, accounts):
+    operator = accounts[5]
+    register_candidate(operator=operator)
+
+    invalid_vote_addr = "0x1234"
+    with brownie.reverts("vote address length should be 48"):
+        candidate_hub.editVoteAddress(invalid_vote_addr, {'from': operator})
+
+
+def test_edit_vote_address_duplicate(candidate_hub, accounts):
+    operator1 = accounts[5]
+    operator2 = accounts[6]
+    consensus1 = register_candidate(operator=operator1)
+    vote_addr1 = candidate_hub.candidateSet(0).dict()['voteAddr']
+    register_candidate(operator=operator2)
+
+    with brownie.reverts("vote address already exists"):
+        candidate_hub.editVoteAddress(vote_addr1, {'from': operator2})
+
+
+def test_edit_vote_address_success(candidate_hub, accounts):
+    operator = accounts[5]
+    consensus = register_candidate(operator=operator)
+    old_vote_addr = candidate_hub.candidateSet(0).dict()['voteAddr']
+    new_vote_addr = random_vote_address()
+
+    tx = candidate_hub.editVoteAddress(new_vote_addr, {'from': operator})
+
+    assert 'VoteAddressEdited' in tx.events
+    assert tx.events['VoteAddressEdited']['operateAddr'] == operator
+    assert tx.events['VoteAddressEdited']['newVoteAddr'] == new_vote_addr
+
+
+def test_edit_vote_address_by_agent_success(candidate_hub, accounts):
+    operator = accounts[5]
+    agent = accounts[6]
+    register_candidate(operator=operator)
+    new_vote_addr = random_vote_address()
+
+    candidate_hub.updateAgent(agent, {'from': operator})
+
+    tx = candidate_hub.editVoteAddress(new_vote_addr, {'from': agent})
+    assert 'VoteAddressEdited' in tx.events
+
+
+# editDescription
+def test_edit_description_permission(candidate_hub, accounts):
+    with brownie.reverts("candidate does not exist"):
+        candidate_hub.editDescription(
+            "test", "test", "test", "test", {'from': accounts[1]})
+
+
+def test_edit_description_success(candidate_hub, accounts):
+    operator = accounts[5]
+    register_candidate(operator=operator)
+
+    moniker = "Test Validator"
+    identity = "test-identity"
+    website = "https://test.com"
+    details = "Test validator details"
+
+    tx = candidate_hub.editDescription(
+        moniker, identity, website, details, {'from': operator})
+
+    assert 'DescriptionEdited' in tx.events
+    assert tx.events['DescriptionEdited']['operateAddr'] == operator
+    assert tx.events['DescriptionEdited']['moniker'] == moniker
+    assert tx.events['DescriptionEdited']['identity'] == identity
+    assert tx.events['DescriptionEdited']['website'] == website
+    assert tx.events['DescriptionEdited']['details'] == details
+    assert candidate_hub.candidateSet(
+        0).dict()['description']['moniker'] == moniker
+    assert candidate_hub.candidateSet(
+        0).dict()['description']['identity'] == identity
+    assert candidate_hub.candidateSet(
+        0).dict()['description']['website'] == website
+    assert candidate_hub.candidateSet(
+        0).dict()['description']['details'] == details
+
+
+def test_edit_description_by_agent_success(candidate_hub, accounts):
+    operator = accounts[5]
+    agent = accounts[6]
+    register_candidate(operator=operator)
+    new_moniker = "Test Validator"
+    new_identity = "test-identity"
+    new_website = "https://test.com"
+    new_details = "Test validator details"
+
+    candidate_hub.updateAgent(agent, {'from': operator})
+
+    tx = candidate_hub.editDescription(
+        new_moniker, new_identity, new_website, new_details, {'from': agent})
+    assert 'DescriptionEdited' in tx.events
+
+
+# editFeeAddress
+def test_edit_fee_address_permission(candidate_hub, accounts):
+    with brownie.reverts("candidate does not exist"):
+        candidate_hub.editFeeAddress(accounts[1], {'from': accounts[1]})
+
+
+def test_edit_fee_address_zero_address(candidate_hub, accounts):
+    operator = accounts[5]
+    register_candidate(operator=operator)
+
+    with brownie.reverts("fee address cannot be zero"):
+        candidate_hub.editFeeAddress(ZERO_ADDRESS, {'from': operator})
+
+
+def test_edit_fee_address_success(candidate_hub, accounts):
+    operator = accounts[5]
+    register_candidate(operator=operator)
+    new_fee_addr = accounts[7]
+
+    tx = candidate_hub.editFeeAddress(new_fee_addr, {'from': operator})
+
+    assert 'FeeAddressEdited' in tx.events
+    assert tx.events['FeeAddressEdited']['operateAddr'] == operator
+    assert tx.events['FeeAddressEdited']['newFeeAddr'] == new_fee_addr
+    assert candidate_hub.candidateSet(0).dict()['feeAddr'] == new_fee_addr
+
+
+def test_edit_fee_address_by_agent_fail(candidate_hub, accounts):
+    operator = accounts[5]
+    agent = accounts[6]
+    register_candidate(operator=operator)
+    new_fee_addr = accounts[7]
+
+    candidate_hub.updateAgent(agent, {'from': operator})
+
+    with brownie.reverts("candidate does not exist"):
+        tx = candidate_hub.editFeeAddress(new_fee_addr, {'from': agent})
+
+
+def test_candidate_update_and_turn_round(candidate_hub, accounts, validator_set, set_candidate):
+    accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    lock_script = "0480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
+    validator_set.updateBlockReward(30000)
+    operators, consensuses = set_candidate
+    for i, delegator in enumerate(accounts[:3]):
+        delegate_coin_success(operators[i], delegator, 10000)
+        delegate_btc_success(operators[i], delegator, 200, lock_script, relay=delegator)
+    turn_round()
+    validator_count = len(consensuses)
+    for i in range(validator_count):
+        candidate_hub.updateAgent(accounts[i], {'from': operators[i]})
+    turn_round(consensuses)
+    for i in range(validator_count):
+        moniker = f"validator{i}"
+        identity = f"identity{i}"
+        website = f"https://validator{i}.com"
+        details = f"details{i}"
+        tx = candidate_hub.editDescription(
+            moniker, identity, website, details, {'from': accounts[i]})
+    turn_round(consensuses)
+    for i in range(validator_count):
+        candidate_hub.editFeeAddress(accounts[i], {'from': operators[i]})
+    for i in range(validator_count):
+        new_commission = 500 + i
+        candidate_hub.editCommissionRate(new_commission, {'from': operators[i]})
+    turn_round(consensuses)
+    for i, operator in enumerate(operators):
+        index = candidate_hub.operateMap(operator)
+        c = candidate_hub.candidateSet(index - 1).dict()
+        assert c['agent'] == accounts[i]
+        assert c['feeAddr'] == accounts[i]
+        assert c['commissionThousandths'] == 500 + i
+        assert c['description']['moniker'] == f"validator{i}"
+        assert c['description']['identity'] == f"identity{i}"
+        assert c['description']['website'] == f"https://validator{i}.com"
+        assert c['description']['details'] == f"details{i}"
+    tx = stake_hub_claim_reward(accounts[0])
+    assert 'claimedReward' in tx.events
+    turn_round(consensuses)

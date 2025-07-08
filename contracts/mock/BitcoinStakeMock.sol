@@ -73,7 +73,7 @@ contract BitcoinStakeMock is BitcoinStake {
 
     function getRound2expireInfoMap(uint256 round) external view returns (address[] memory candidateList, uint256[] memory amounts) {
         ExpireInfo storage expireInfo = round2expireInfoMap[round];
-        address[] memory candidateList = expireInfo.candidateList;
+        candidateList = expireInfo.candidateList;
         amounts = new uint256[](candidateList.length);
         for (uint256 i = 0; i < candidateList.length; i++) {
             amounts[i] = expireInfo.amountMap[candidateList[i]];
