@@ -10,6 +10,8 @@ const validators = [
    },{% endfor %}
 ];
 
+const bLSPublicKeys = [];
+
 // ===============  Do not edit below ====
 function generateExtradata(validators) {
   let extraVanity =Buffer.alloc(32);
@@ -21,9 +23,16 @@ function generateExtradata(validators) {
 function extraDataSerialize(validators) {
   let n = validators.length;
   let arr = [];
-  for (let i = 0;i<n;i++) {
-    let validator = validators[i];
-    arr.push(Buffer.from(web3.utils.hexToBytes(validator.consensusAddr)));
+  // Validator count (1 byte) + validators (address + BLS key for each)
+  arr.push(Buffer.from([n])); // validator count as 1 byte
+
+  for (let i = 0; i < n; i++) {
+    // Add consensus address (20 bytes)
+    arr.push(Buffer.from(web3.utils.hexToBytes(validators[i].consensusAddr)));
+    // Add BLS key
+    if (typeof bLSPublicKeys[i] !== 'undefined') {
+      arr.push(Buffer.from(web3.utils.hexToBytes(bLSPublicKeys[i])));
+    }
   }
   return Buffer.concat(arr);
 }
@@ -36,12 +45,15 @@ function validatorUpdateRlpEncode(validators) {
       validators[i].consensusAddr,
       validators[i].feeAddr,
     ]);
+    if (typeof bLSPublicKeys[i] !== 'undefined') {
+      vals[i].push(bLSPublicKeys[i]);
+    }
   }
   return web3.utils.bytesToHex(RLP.encode(vals));
 }
 
-extraValidatorBytes = generateExtradata(validators);
-validatorSetBytes = validatorUpdateRlpEncode(validators);
+extraValidatorBytes = generateExtradata(validators,bLSPublicKeys);
+validatorSetBytes = validatorUpdateRlpEncode(validators,bLSPublicKeys);
 
 exports = module.exports = {
   extraValidatorBytes: extraValidatorBytes,

@@ -614,12 +614,24 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     Validator memory validator;
     RLPDecode.Iterator memory iter = itemValidator.iterator();
     bool success = false;
+    uint256 fieldCount = 0;
     while (iter.hasNext()) {
-      validator.consensusAddress = iter.next().toAddress();
-      validator.feeAddress = payable(iter.next().toAddress());
-      validator.operateAddress = validator.feeAddress;
-      validator.commissionThousandths = 1000;
-      success = true;
+      if (fieldCount == 0) {
+        validator.consensusAddress = iter.next().toAddress();
+      } else if (fieldCount == 1) {
+        validator.feeAddress = payable(iter.next().toAddress());
+        validator.operateAddress = validator.feeAddress;
+        validator.commissionThousandths = 1000;
+        success = true;
+      } else if (fieldCount == 2) {
+        // Optional field for BLS public key
+        bytes memory voteAddrBytes = iter.next().toBytes();
+        // Only set voteAddr if it's non-empty
+        if (voteAddrBytes.length > 0) {
+          validator.voteAddr = voteAddrBytes;
+        }
+      }
+      fieldCount++;
     }
     return (validator, success);
   }
