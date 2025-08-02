@@ -4,7 +4,6 @@ import os
 import random
 import binascii
 import ecdsa
-from _sha256 import sha256
 
 from blspy import AugSchemeMPL
 from web3 import Web3
@@ -31,7 +30,7 @@ def random_vote_address():
 
 def random_btc_tx_id():
     rand_bytes = random.randbytes(32)
-    tx_id = hashlib.sha256(sha256(rand_bytes).digest()).hexdigest()
+    tx_id = hashlib.sha256(hashlib.sha256(rand_bytes).digest()).hexdigest()
     return '0x' + tx_id
 
 
@@ -69,7 +68,7 @@ def expect_event(tx_receipt: TransactionReceipt, event_name, event_value: dict =
 
 def get_transaction_txid(btc_tx):
     try:
-        tx_id = '0x' + sha256(sha256(bytes.fromhex(btc_tx)).digest()).digest().hex()
+        tx_id = '0x' + hashlib.sha256(hashlib.sha256(bytes.fromhex(btc_tx)).digest()).digest().hex()
     except Exception:
         tx_id = '0x00'
     return tx_id
@@ -187,7 +186,8 @@ def update_system_contract_address(update_contract,
                                    btc_agent=None,
                                    core_agent=None,
                                    hash_power_agent=None,
-                                   configuration=None
+                                   configuration=None,
+                                   channel=None
                                    ):
     if candidate_hub is None:
         candidate_hub = CandidateHubMock[0]
@@ -221,10 +221,11 @@ def update_system_contract_address(update_contract,
         hash_power_agent = HashPowerAgentMock[0]
     if configuration is None:
         configuration = ConfigurationMock[0]
-
+    if channel is None:
+        channel = Channel[0]
     contracts = [
         validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub, gov_hub,
-        pledge_agent, burn, foundation, stake_hub, btc_stake, btc_agent, core_agent, hash_power_agent, configuration
+        pledge_agent, burn, foundation, stake_hub, btc_stake, btc_agent, core_agent, hash_power_agent, configuration, channel
     ]
     args = encode(['address'] * len(contracts), [c.address for c in contracts])
     getattr(update_contract, "updateContractAddr")(args)

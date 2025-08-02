@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
 import "../BitcoinAgent.sol";
@@ -30,9 +31,6 @@ contract BitcoinAgentMock is BitcoinAgent {
         grades.push(DualStakingGrade(value1, balue01));
     }
 
-    function setAssetWeight(uint256 value) external {
-        assetWeight = value;
-    }
 
     function getGradesLength() external view returns (uint256) {
         return grades.length;
@@ -45,6 +43,8 @@ contract BitcoinAgentMock is BitcoinAgent {
     function setIsActive(bool value) external {
         gradeActive = value;
     }
-
+    function setAssetWeight(uint256 value) external {
+        assetWeight = value;
+    }
 
 }

@@ -188,7 +188,7 @@ def test_proxy_claim_reward_success(core_agent, stake_hub):
     })
     expect_event(tx, "claimedReward", {
         "delegator": pledge_agent_proxy.address,
-        "amount": COIN_REWARD
+        "amounts": [COIN_REWARD, 0, 0]
     })
     assert core_agent.rewardMap(pledge_agent_proxy.address) == (0, 0)
 
@@ -1142,7 +1142,8 @@ def test_transfer_and_check_transfer_info(core_agent, validator_set, candidate_h
     assert tracker0.delta() == COIN_REWARD + COIN_REWARD // 2 * 2
 
 
-def test_multiple_transfers_and_check_transfer_info(core_agent,pledge_agent, validator_set, candidate_hub, set_candidate):
+def test_multiple_transfers_and_check_transfer_info(core_agent, pledge_agent, validator_set, candidate_hub,
+                                                    set_candidate):
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     transfer_amount0 = delegate_amount // 2
     transfer_amount1 = delegate_amount // 4
@@ -1646,7 +1647,7 @@ def test_operation_on_validator_with_no_transfer(core_agent, validator_set, oper
     elif operator_type == 'claim':
         tx = stake_hub_claim_reward(accounts[0])
         assert 'claimedReward' in tx.events
-        assert tx.events['claimedReward']['amount'] == COIN_REWARD * 3
+        assert tx.events['claimedReward']['amounts'] == [COIN_REWARD * 3, 0, 0]
         remain_reward = COIN_REWARD * 3
     else:
         delegate_coin_success(operators[3], accounts[0], operation_amount)
@@ -2358,7 +2359,7 @@ def test_candidate_data_cleared_without_pop(core_agent):
     assert delegator_info['transferredAmount'] == 0
     turn_round(consensuses, round_count=2)
     candidate_list = core_agent.getCandidateListByDelegator(accounts[0])
-    assert len(candidate_list) == 1
+    assert len(candidate_list) == 0
     tracker = get_tracker(accounts[0])
     stake_hub_claim_reward(accounts[0])
     assert tracker.delta() == 0

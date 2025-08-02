@@ -17,6 +17,7 @@ BLOCK_REWARD = 0
 TOTAL_REWARD = 0
 BTC_VALUE = 2000
 LOCK_SCRIPT = '0480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac'
+LOCK_TIMESTAMP = 1736956800
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -1433,7 +1434,8 @@ def test_pay_commission_by_id_through_btc_stake_claim_reward(
     delegator = accounts[0]
 
     partner, fee_address, partner_id, core_commission_rate, btc_commission_rate = set_channel_partner
-    btc_tx_id = delegate_btc_success(candidate, delegator, BTC_VALUE, LOCK_SCRIPT, channel_id=partner_id)
+    btc_tx_id = delegate_btc_success(
+        candidate, delegator, BTC_VALUE, LOCK_SCRIPT, lock_data=LOCK_TIMESTAMP, channel_id=partner_id)
     tx_map = btc_stake.btcTxMap(btc_tx_id)
     assert tx_map[2] == partner_id
     turn_round()
@@ -1457,7 +1459,7 @@ def test_pay_commission_by_id_btc_stake_invalid_channel(channel, btc_stake, set_
     candidate = operators[0]
     delegator = accounts[0]
 
-    btc_tx_id = delegate_btc_success(candidate, delegator, BTC_VALUE, LOCK_SCRIPT, lock_data=1736956800, channel_id=channel_id)
+    btc_tx_id = delegate_btc_success(candidate, delegator, BTC_VALUE, LOCK_SCRIPT, lock_data=LOCK_TIMESTAMP, channel_id=channel_id)
     tx_map = btc_stake.btcTxMap(btc_tx_id)
     assert tx_map[2] == channel_id
     turn_round()
@@ -1480,8 +1482,8 @@ def test_pay_commission_by_id_btc_stake_multiple_txs(
     delegator = accounts[0]
 
     partner, fee_address, partner_id, core_commission_rate, btc_commission_rate = set_channel_partner
-    delegate_btc_success(candidate1, delegator, BTC_VALUE, LOCK_SCRIPT, channel_id=partner_id)
-    delegate_btc_success(candidate2, delegator, BTC_VALUE, LOCK_SCRIPT, channel_id=partner_id)
+    delegate_btc_success(candidate1, delegator, BTC_VALUE, LOCK_SCRIPT, lock_data=LOCK_TIMESTAMP, channel_id=partner_id)
+    delegate_btc_success(candidate2, delegator, BTC_VALUE, LOCK_SCRIPT, lock_data=LOCK_TIMESTAMP, channel_id=partner_id)
     turn_round()
     turn_round(consensuses)
 
@@ -1523,8 +1525,8 @@ def test_pay_commission_by_id_btc_stake_mixed_channels(
     )
     partner2_id = channel.partnerIdMap(partner2)
 
-    delegate_btc_success(candidate, delegator, BTC_VALUE, LOCK_SCRIPT, channel_id=partner1_id)
-    delegate_btc_success(candidate, delegator, BTC_VALUE, LOCK_SCRIPT, channel_id=partner2_id)
+    delegate_btc_success(candidate, delegator, BTC_VALUE, LOCK_SCRIPT, lock_data=LOCK_TIMESTAMP, channel_id=partner1_id)
+    delegate_btc_success(candidate, delegator, BTC_VALUE, LOCK_SCRIPT, lock_data=LOCK_TIMESTAMP, channel_id=partner2_id)
 
     turn_round()
     turn_round(consensuses)
@@ -1899,7 +1901,7 @@ def test_delegate_coin_and_btc_mixed(
         {'value': channel_delegate_amount, 'from': delegator}
     )
     delegate_btc_success(operators[2], delegator, btc_value // 2, LOCK_SCRIPT)
-    delegate_btc_success(operators[2], delegator, btc_value // 2, LOCK_SCRIPT, channel_id=partner_id)
+    delegate_btc_success(operators[2], delegator, btc_value // 2, LOCK_SCRIPT, lock_data=LOCK_TIMESTAMP, channel_id=partner_id)
     delegate_power_success(operators[1], delegator, power_value)
     turn_round(consensuses, round_count=2)
 

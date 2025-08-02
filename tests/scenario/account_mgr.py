@@ -75,7 +75,7 @@ class AccountMgr:
 
         cls.__inited = True
 
-        ## Divide the 100 addresses in accounts as follows，because these accounts require funding initially
+        ## Divide the 100 addresses in accounts as follows, because these accounts require funding initially
         # accounts[0]~accounts[29] are allocated to the candidate operator
         # accounts[30]~accounts[89] are allocated to the delegator
         # accounts[90]~accounts[94] as backup random addresses

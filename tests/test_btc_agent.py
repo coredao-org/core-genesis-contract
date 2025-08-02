@@ -225,274 +225,6 @@ def test_only_stake_hub_can_call_claim_reward(btc_agent):
         btc_agent.claimReward(constants.ADDRESS_ZERO, 1000, 1, False)
 
 
-@pytest.mark.parametrize("grade", [True, False])
-def test_reward_claiming_after_grade_update(btc_agent, grade):
-    rates = [[0, 1000], [10000, 5000], [12000, 10000]]
-    stake_manager.set_lp_rates(rates)
-    btc_reward = 20000
-    btc_amount = 1
-    core_reward = 10000
-    rate = 5000
-    stake_manager.set_is_stake_hub_active(grade)
-    update_system_contract_address(btc_agent, stake_hub=accounts[0])
-    round_reward_manager.mock_btc_reward_map(
-        accounts[0], btc_reward, 0, btc_amount)
-    reward = btc_agent.claimReward(
-        accounts[0], core_reward, get_current_round() - 1, False).return_value
-    if grade:
-        float_reward = -btc_reward // 2
-        actual_reward = btc_reward * rate // Utils.DENOMINATOR
-    else:
-        actual_reward = btc_reward
-        float_reward = 0
-    assert reward == [actual_reward, float_reward, btc_amount]
-
-
-def test_grades_not_set(btc_agent):
-    stake_manager.set_lp_rates()
-    btc_reward = 20000
-    btc_amount = 1
-    core_reward = 10000
-    stake_manager.set_is_stake_hub_active(True)
-    update_system_contract_address(btc_agent, stake_hub=accounts[0])
-    round_reward_manager.mock_btc_reward_map(
-        accounts[0], btc_reward, 0, btc_amount)
-    reward = btc_agent.claimReward(
-        accounts[0], core_reward, get_current_round() - 1, False).return_value
-    assert reward[0] == btc_reward
-
-
-@pytest.mark.parametrize("grades", [
-    [[0, 5000]],
-    [[0, 1000], [5000, 5000]],
-    [[0, 1000], [5000, 5000], [10000, 10000]],
-    [[0, 1000], [5000, 5000], [10000, 10000], [11000, 12000]]
-])
-def test_grades_length_mismatch(btc_agent, grades):
-    stake_manager.set_lp_rates(grades)
-    btc_reward = 20000
-    btc_amount = 10
-    core_reward = 50000
-    stake_manager.set_is_stake_hub_active(True)
-    update_system_contract_address(btc_agent, stake_hub=accounts[0])
-    round_reward_manager.mock_btc_reward_map(
-        accounts[0], btc_reward, 0, btc_amount)
-    reward = btc_agent.claimReward(
-        accounts[0], core_reward, get_current_round() - 1, False).return_value
-    assert reward[0] == btc_reward // 2
-
-
-@pytest.mark.parametrize("tests", [
-    [[[0, 5000]], 10000, 10, 20000, 5000],
-    [[[0, 2000], [1000, 3000]], 10000, 20, 20000, 3000],
-    [[[0, 2000], [1000, 3000], [10000, 15000]], 10000, 10, 100000, 15000],
-])
-def test_update_core_amount_and_claim_reward(btc_agent, tests):
-    grades = tests[0]
-    stake_manager.set_lp_rates(grades)
-    btc_reward = tests[1]
-    btc_amount = tests[2]
-    core_amount = tests[3]
-    actual_btc_reward = tests[4]
-    unclaimed_reward = actual_btc_reward - btc_reward
-    stake_manager.set_is_stake_hub_active(True)
-    update_system_contract_address(btc_agent, stake_hub=accounts[0])
-    round_reward_manager.mock_btc_reward_map(
-        accounts[0], btc_reward, 0, btc_amount)
-    reward = btc_agent.claimReward.call(
-        accounts[0], core_amount, get_current_round() - 2, False)
-    assert reward == [actual_btc_reward, unclaimed_reward, btc_amount]
-    tx = btc_agent.claimReward(
-        accounts[0], core_amount, get_current_round() - 2, False)
-    dual_staking_rate = actual_btc_reward
-    expect_event(tx, 'storedBtcReward', {
-        'delegator': accounts[0],
-        'amount': actual_btc_reward,
-        'unclaimedAmount': 0,
-        'floatReward': unclaimed_reward,
-        'accStakedAmount': btc_amount,
-        'dualStakingRate': dual_staking_rate
-    })
-
-
-@pytest.mark.parametrize("claim", [True, False])
-@pytest.mark.parametrize("tests", [
-    [[[0, 5000]], 10000, 1, 2000, 5000],
-    [[[0, 2000], [1000, 3000]], 10000, 20, 20000, 3000],
-    [[[0, 2000], [1000, 3000], [10000, 15000]], 10000, 10, 100000, 15000],
-    [[[0, 2000], [1000, 3000], [10000, 5000]], 100000, 10, 100000, 50000],
-    [[[0, 2000], [1000, 3000], [10000, 15000]], 100000, 10, 100000, 150000]
-])
-def test_unclaimed_reward_record_correct(btc_agent, set_candidate, tests, claim):
-    stake_manager.set_lp_rates(tests[0])
-    stake_manager.set_is_stake_hub_active(True)
-    operators, consensuses = set_candidate
-    turn_round()
-    turn_round(consensuses, round_count=2)
-    btc_reward = tests[1]
-    btc_amount = tests[2]
-    core_amount = tests[3]
-    actual_btc_reward = tests[4]
-    unclaimed_reward = actual_btc_reward - btc_reward
-    update_system_contract_address(btc_agent, stake_hub=accounts[0])
-    round_reward_manager.mock_btc_reward_map(
-        accounts[0], btc_reward, 0, btc_amount)
-    reward = btc_agent.claimReward.call(
-        accounts[0], core_amount, get_current_round() - 1, False)
-    assert reward == [actual_btc_reward, unclaimed_reward, btc_amount]
-    tx = btc_agent.claimReward(
-        accounts[0], core_amount, get_current_round() - 1, claim)
-    dual_staking_rate = tests[0][-1][-1]
-    event_name = ['storedBtcReward']
-    if claim:
-        event_name = ['claimedBtcReward']
-    expect_event(tx, event_name[0], {
-        'amount': actual_btc_reward,
-        'unclaimedAmount': 0,
-        'floatReward': actual_btc_reward - btc_reward,
-        'accStakedAmount': btc_amount,
-        'dualStakingRate': dual_staking_rate
-    })
-
-
-@pytest.mark.parametrize("tests", [
-    {'btc_reward': 10000, 'duration_unclaimed': 4000},
-    {'btc_reward': 3000, 'duration_unclaimed': 0},
-    {'btc_reward': 3000, 'duration_unclaimed': 1000},
-    {'btc_reward': 3000, 'duration_unclaimed': 4000},
-    {'btc_reward': 3000, 'duration_unclaimed': 1000},
-    {'btc_reward': 20000, 'duration_unclaimed': 8000},
-    {'btc_reward': 5000, 'duration_unclaimed': 6000},
-    {'btc_reward': 5000, 'duration_unclaimed': 0},
-    {'btc_reward': 5000, 'duration_unclaimed': 0}
-])
-def test_claim_reward_with_additional_bonus(btc_agent, tests):
-    stake_manager.set_lp_rates([[0, 20000]])
-    btc_reward = tests['btc_reward']
-    additional_bonus = btc_reward * 2 - btc_reward
-    duration_unclaimed = tests['duration_unclaimed']
-    stake_manager.set_is_stake_hub_active(True)
-    turn_round()
-    round_reward_manager.mock_btc_reward_map(
-        accounts[0], btc_reward, duration_unclaimed, 100)
-    update_system_contract_address(btc_agent, stake_hub=accounts[0])
-    reward = btc_agent.claimReward.call(
-        accounts[0], 0, get_current_round() - 1, False)
-    actual_reward = btc_reward + additional_bonus
-    if duration_unclaimed > 0:
-        additional_bonus -= duration_unclaimed
-    assert reward == [actual_reward, additional_bonus, 100]
-
-
-@pytest.mark.parametrize("claim", [True, False])
-@pytest.mark.parametrize("tests", [
-    {'btc_reward': 10000, 'duration_unclaimed': 4000, 'btc_percentage': 12000, 'expect_reward': 12000,
-     'expect_surplus': -2000},
-    {'btc_reward': 10000, 'duration_unclaimed': 1000, 'btc_percentage': 12000, 'expect_reward': 12000,
-     'expect_surplus': 1000},
-    {'btc_reward': 10000, 'duration_unclaimed': 10000, 'btc_percentage': 18000, 'expect_reward': 18000,
-     'expect_surplus': -2000},
-    {'btc_reward': 10000, 'duration_unclaimed': 0, 'btc_percentage': 14000, 'expect_reward': 14000,
-     'expect_surplus': 4000},
-    {'btc_reward': 10000, 'duration_unclaimed': 2000, 'btc_percentage': 9000, 'expect_reward': 9000,
-     'expect_surplus': -3000},
-    {'btc_reward': 10000, 'duration_unclaimed': 0, 'btc_percentage': 15000, 'expect_reward': 15000,
-     'expect_surplus': 5000}
-])
-def test_btc_extra_pool_reward(btc_agent, tests, claim):
-    btc_reward = tests['btc_reward']
-    duration_unclaimed = tests['duration_unclaimed']
-    btc_percentage = tests['btc_percentage']
-    stake_manager.set_lp_rates([[0, btc_percentage]])
-    stake_manager.set_is_stake_hub_active(True)
-    turn_round()
-    actual_btc_reward = btc_reward * btc_percentage // Utils.DENOMINATOR
-    additional_bonus = actual_btc_reward - btc_reward
-    btc_acc_amount = 1100
-    round_reward_manager.mock_btc_reward_map(
-        accounts[0], btc_reward, duration_unclaimed, btc_acc_amount)
-    update_system_contract_address(btc_agent, stake_hub=accounts[0])
-    reward = btc_agent.claimReward.call(
-        accounts[0], 0, get_current_round() - 1, False)
-    if duration_unclaimed > 0:
-        additional_bonus -= duration_unclaimed
-    actual_reward = actual_btc_reward
-    assert actual_reward == tests['expect_reward']
-    assert additional_bonus == tests['expect_surplus']
-    assert reward == [actual_reward, additional_bonus, btc_acc_amount]
-    tx = btc_agent.claimReward(accounts[0], 0, get_current_round() - 1, claim)
-    event_name = ['storedBtcReward', 'storedBtcLstReward']
-    if claim:
-        event_name = ['claimedBtcReward', 'claimedBtcLstReward']
-    expect_event(tx, event_name[0], {
-        'delegator': accounts[0].address,
-        'amount': actual_btc_reward,
-        'unclaimedAmount': duration_unclaimed,
-        'floatReward': actual_btc_reward - btc_reward - duration_unclaimed,
-        'accStakedAmount': btc_acc_amount,
-        'dualStakingRate': btc_percentage
-    })
-
-
-@pytest.mark.parametrize("tests", [
-    {'btc_reward': 10000, 'duration_unclaimed': 0, 'btc_percentage': 8000, 'expect_reward': 8000,
-     'expect_surplus': -2000},
-    {'btc_reward': 10000, 'duration_unclaimed': 1000, 'btc_percentage': 8000, 'expect_reward': 8000,
-     'expect_surplus': -3000},
-    {'btc_reward': 3000, 'duration_unclaimed': 1000, 'btc_percentage': 0, 'expect_reward': 0, 'expect_surplus': -4000},
-    {'btc_reward': 20000, 'duration_unclaimed': 3000, 'btc_percentage': 10000, 'expect_reward': 20000,
-     'expect_surplus': -3000},
-    {'btc_reward': 10000, 'duration_unclaimed': 0, 'btc_percentage': 7000, 'expect_reward': 7000,
-     'expect_surplus': -3000},
-    {'btc_reward': 10000, 'duration_unclaimed': 2000, 'btc_percentage': 9000, 'expect_reward': 9000,
-     'expect_surplus': -3000},
-    {'btc_reward': 10000, 'duration_unclaimed': 2000, 'btc_percentage': 12000, 'expect_reward': 12000,
-     'expect_surplus': 0},
-    {'btc_reward': 10000, 'duration_unclaimed': 3000, 'btc_percentage': 12000, 'expect_reward': 12000,
-     'expect_surplus': -1000},
-    {'btc_reward': 10000, 'duration_unclaimed': 1000, 'btc_percentage': 12000, 'expect_reward': 12000,
-     'expect_surplus': 1000},
-    {'btc_reward': 10000, 'duration_unclaimed': 0, 'btc_percentage': 12000, 'expect_reward': 12000,
-     'expect_surplus': 2000},
-    {'btc_reward': 20000, 'duration_unclaimed': 0, 'btc_percentage': 0, 'expect_reward': 0, 'expect_surplus': -20000},
-    {'btc_reward': 20000, 'duration_unclaimed': 2000, 'btc_percentage': 0, 'expect_reward': 0,
-     'expect_surplus': -22000},
-    {'btc_reward': 20000, 'duration_unclaimed': 2000, 'btc_percentage': 5000, 'expect_reward': 10000,
-     'expect_surplus': -12000}
-])
-def test_btc_add_reward_to_pool(btc_agent, tests):
-    btc_reward = tests['btc_reward']
-    duration_unclaimed = tests['duration_unclaimed']
-    btc_percentage = tests['btc_percentage']
-    stake_manager.set_lp_rates([[0, btc_percentage]])
-    stake_manager.set_is_stake_hub_active(True)
-    turn_round()
-    actual_btc_reward = btc_reward * btc_percentage // Utils.DENOMINATOR
-    additional_bonus = actual_btc_reward - btc_reward
-    round_reward_manager.mock_btc_reward_map(
-        accounts[0], btc_reward, duration_unclaimed, 100)
-    update_system_contract_address(btc_agent, stake_hub=accounts[0])
-    reward = btc_agent.claimReward.call(
-        accounts[0], 0, get_current_round() - 1, False)
-    if duration_unclaimed > 0:
-        additional_bonus -= duration_unclaimed
-    actual_reward = actual_btc_reward
-    assert actual_reward == tests['expect_reward']
-    assert additional_bonus == tests['expect_surplus']
-    assert reward == [actual_reward, additional_bonus, 100]
-
-
-def test_get_acc_stake_amount_success(btc_agent, set_candidate):
-    btc_value = 200
-    operators, consensuses = set_candidate
-    turn_round()
-    delegate_btc_success(operators[1], accounts[0], btc_value, LOCK_SCRIPT)
-    turn_round(consensuses, round_count=2)
-    update_system_contract_address(btc_agent, stake_hub=accounts[0])
-    _, _, acc_staked_amount = btc_agent.claimReward(accounts[0], 100, get_current_round() - 1, False).return_value
-    assert acc_staked_amount == btc_value
-
-
 def test_get_grades(btc_agent, btc_stake):
     old_grades = [[0, 1000], [2000, 10000]]
     update_system_contract_address(btc_agent, gov_hub=accounts[0])
@@ -500,6 +232,94 @@ def test_get_grades(btc_agent, btc_stake):
     btc_agent.updateParam('grades', grades_encode)
     assert old_grades == btc_agent.getGrades()
 
+
+# getGrade
+def test_get_grade_inactive_no_grades(btc_agent):
+    btc_agent.setIsActive(False)
+    btc_agent.popLpRates()
+    percentage, stake_rate = btc_agent.getGrade(0)
+    assert percentage == 10000
+    assert stake_rate == 0
+
+
+def test_get_grade_inactive_with_grades(btc_agent):
+    btc_agent.setIsActive(False)
+    btc_agent.popLpRates()
+    btc_agent.setLpRates(0, 1000)
+    btc_agent.setLpRates(3000, 2000)
+    asset_weight = btc_agent.assetWeight()
+    percentage, stake_rate = btc_agent.getGrade(asset_weight * 10)
+    assert percentage == 10000
+    assert stake_rate == 0
+
+
+def test_get_grade_active_empty_grades(btc_agent):
+    btc_agent.setIsActive(True)
+    btc_agent.popLpRates()
+    percentage, stake_rate = btc_agent.getGrade(0)
+    assert percentage == 10000
+    assert stake_rate == 0
+
+
+def test_get_grade_active_selects_first_grade_for_low_rate(btc_agent):
+    btc_agent.setIsActive(True)
+    btc_agent.popLpRates()
+    # grades: (stakeRate, percentage)
+    btc_agent.setLpRates(0, 1000)
+    btc_agent.setLpRates(3000, 2000)
+    btc_agent.setLpRates(7000, 4000)
+    btc_agent.setLpRates(10000, 10000)
+    percentage, stake_rate = btc_agent.getGrade(0)
+    assert percentage == 1000
+    assert stake_rate == 0
+
+
+def test_get_grade_active_selects_middle_grade(btc_agent):
+    btc_agent.setAssetWeight(1e10)
+    btc_agent.setIsActive(True)
+    btc_agent.popLpRates()
+    btc_agent.setLpRates(0, 1000)
+    btc_agent.setLpRates(3000, 2000)
+    btc_agent.setLpRates(7000, 4000)
+    btc_agent.setLpRates(10000, 10000)
+    asset_weight = btc_agent.assetWeight()
+    percentage, stake_rate = btc_agent.getGrade(asset_weight * 7000)
+    assert percentage == 4000
+    assert stake_rate == asset_weight * 7000
+
+
+def test_get_grade_active_selects_correct_lower_bound(btc_agent):
+    btc_agent.setAssetWeight(1e10)
+    btc_agent.setIsActive(True)
+    btc_agent.popLpRates()
+    btc_agent.setLpRates(0, 1000)
+    btc_agent.setLpRates(3000, 2000)
+    btc_agent.setLpRates(7000, 4000)
+    btc_agent.setLpRates(10000, 10000)
+    asset_weight = btc_agent.assetWeight()
+    # rate between 3000 and 7000 should select grade stakeRate=3000
+    btc_amount = 3e8
+    coin_amount = 15000e18
+    percentage, stake_rate = btc_agent.getGrade(coin_amount / btc_amount)
+    assert percentage == 2000
+    assert stake_rate == asset_weight * 3000
+
+
+def test_get_grade_active_selects_highest_grade(btc_agent):
+    btc_agent.setAssetWeight(1e10)
+    btc_agent.setIsActive(True)
+    btc_agent.popLpRates()
+    btc_agent.setLpRates(0, 1000)
+    btc_agent.setLpRates(3000, 2000)
+    btc_agent.setLpRates(7000, 4000)
+    btc_agent.setLpRates(10000, 10000)
+    btc_agent.setLpRates(12000, 11000)
+    asset_weight = btc_agent.assetWeight()
+    btc_amount = 1e8
+    coin_amount = 12000e18
+    percentage, stake_rate = btc_agent.getGrade(coin_amount / btc_amount)
+    assert percentage == 11000
+    assert stake_rate == asset_weight * 12000
 
 def test_update_param_failed(btc_agent):
     update_system_contract_address(btc_agent, gov_hub=accounts[0])
@@ -622,43 +442,6 @@ def test_percentage_cannot_be_zero(btc_agent):
     grades_encode = rlp.encode([[1000, 0]])
     with brownie.reverts(f"lowest stakeRate must be zero"):
         btc_agent.updateParam('grades', grades_encode)
-
-
-def test_update_param_percentage_success(btc_agent):
-    percentage = 4000
-    update_system_contract_address(btc_agent, gov_hub=accounts[0])
-    hex_value = padding_left(Web3.to_hex(int(percentage)), 64)
-    tx = btc_agent.updateParam('lstGradePercentage', hex_value)
-    assert btc_agent.lstGradePercentage() == percentage
-    expect_event(tx, 'paramChange', {
-        'key': 'lstGradePercentage',
-        'value': hex_value
-    })
-
-
-def test_update_param_percentage_length_error(btc_agent):
-    percentage = 4000
-    update_system_contract_address(btc_agent, gov_hub=accounts[0])
-    hex_value = padding_left(Web3.to_hex(int(percentage)), 65)
-    with brownie.reverts(f"MismatchParamLength: lstGradePercentage"):
-        btc_agent.updateParam('lstGradePercentage', hex_value)
-
-
-@pytest.mark.skip(reason="deprecated")
-def test_revert_on_percentage_zero(btc_agent):
-    percentage = 0
-    update_system_contract_address(btc_agent, gov_hub=accounts[0])
-    hex_value = padding_left(Web3.to_hex(percentage), 64)
-    with brownie.reverts(f"OutOfBounds: lstGradePercentage, {percentage}, 1, 100000"):
-        btc_agent.updateParam('lstGradePercentage', hex_value)
-
-@pytest.mark.skip(reason="deprecated")
-def test_revert_on_percentage_exceeding_limit(btc_agent):
-    percentage = 100001
-    update_system_contract_address(btc_agent, gov_hub=accounts[0])
-    hex_value = padding_left(Web3.to_hex(percentage), 64)
-    with brownie.reverts(f"OutOfBounds: lstGradePercentage, {percentage}, 1, 100000"):
-        btc_agent.updateParam('lstGradePercentage', hex_value)
 
 
 @pytest.mark.parametrize("grade_active", [0, 1])

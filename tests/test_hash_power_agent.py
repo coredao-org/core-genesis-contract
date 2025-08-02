@@ -75,11 +75,7 @@ def test_distribute_reward_success(hash_power_agent):
         reward = reward_list[index] // sum_stake_amounts[index] * staked_amounts[index]
         __check_reward_power(accounts[index], {
             'reward': reward,
-            'accStakedAmount': staked_amounts[index]
         })
-    __check_reward_power(accounts[5], {
-        'accStakedAmount': 4
-    })
 
 
 def test_distribute_reward_with_new_validator(hash_power_agent):
@@ -95,13 +91,10 @@ def test_distribute_reward_with_new_validator(hash_power_agent):
     hash_power_agent.distributeReward(validators, reward_list, round_tag + 1)
     for index, v in enumerate(validators):
         reward = reward_list[index] // staked_amounts[index] * staked_amounts[index]
-        acc_stake_amount = staked_amounts[index]
         if index == 0:
             reward = 0
-            acc_stake_amount = 0
         __check_reward_power(accounts[index], {
             'reward': reward,
-            'accStakedAmount': acc_stake_amount
         })
 
 
@@ -148,12 +141,12 @@ def test_power_valid_for_one_round(btc_stake, set_candidate, hash_power_agent, r
     operators, consensuses = set_candidate
     delegate_power_success(operators[0], accounts[0], power_value)
     turn_round()
-    turn_round(consensuses)
+    tx = turn_round(consensuses)
     turn_round(consensuses, round_count=round_count)
     update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
-    reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[0], 0,
-                                                                            get_current_round() - 1, False).return_value
-    assert acc_staked_amount == power_value
+    reward_sum, unclaimed = hash_power_agent.claimReward(accounts[0], 0, get_current_round() - 1, False).return_value
+    total_reward = 13545
+    assert reward_sum == total_reward
 
 
 @pytest.mark.parametrize("claim", [True, False])
@@ -185,9 +178,8 @@ def test_power_claim_reward_success(hash_power_agent, claim):
     }, idx=2)
     for index, v in enumerate(validators):
         tx = hash_power_agent.claimReward(accounts[index], 0, get_current_round() - 1, claim)
-        reward_sum, unclaimed, acc_staked_amount = tx.return_value
+        reward_sum, unclaimed = tx.return_value
         reward = reward_list[index] // sum_stake_amounts[index] * staked_amounts[index]
-        actual_acc_staked_amount = staked_amounts[index]
         if claim:
             event_name = 'claimedHashReward'
         else:
@@ -195,41 +187,15 @@ def test_power_claim_reward_success(hash_power_agent, claim):
         expect_event(tx, event_name, {
             'delegator': accounts[index],
             'amount': reward,
-            'accStakedAmount': actual_acc_staked_amount
         })
         assert reward_sum == reward
-        assert actual_acc_staked_amount == actual_acc_staked_amount
         assert unclaimed == 0
-        __check_reward_power(accounts[5], {
-            'accStakedAmount': 4
-        })
 
 
 def test_claim_power_no_reward_success(hash_power_agent):
     update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
-    reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[0], 0,
-                                                                            get_current_round() - 1, False).return_value
+    reward_sum, unclaimed = hash_power_agent.claimReward(accounts[0], 0, get_current_round() - 1, False).return_value
     assert reward_sum == 0
-    assert acc_staked_amount == 0
-
-
-def test_acc_stake_amount_success(hash_power_agent, set_candidate, stake_hub):
-    turn_round()
-    operators, consensuses = set_candidate
-    staked_amounts = [6, 12, 15]
-    for index, v in enumerate(operators):
-        delegate_power_success(v, accounts[index], staked_amounts[index])
-    turn_round()
-    update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
-    reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[0], 0,
-                                                                            get_current_round() - 1, True).return_value
-    assert acc_staked_amount == 0
-    update_system_contract_address(hash_power_agent, stake_hub=stake_hub)
-    turn_round(consensuses)
-    update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
-    reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[0], 0,
-                                                                            get_current_round() - 1, True).return_value
-    assert acc_staked_amount == staked_amounts[0]
 
 
 def test_only_stake_hub_can_call_claim_reward(hash_power_agent):

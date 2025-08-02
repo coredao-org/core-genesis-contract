@@ -136,7 +136,7 @@ def test_core_agent_undelegate_coin(core_agent, candidate_hub):
          'value': required_coin_deposit},
         {'status': 'success', 'candidate': accounts[1], 'value': required_coin_deposit,
          'expect_cd': (0, required_coin_deposit * 2, 0, round_tag)},
-        {'status': 'failed', 'err': 'Not enough staked tokens', 'candidate': accounts[1],
+        {'status': 'failed', 'err': 'InsufficientTokens: 0', 'candidate': accounts[1],
          'value': required_coin_deposit * 2 + 1, 'turn_round': 1},
         {'status': 'failed', 'err': 'remain amount is too small', 'candidate': accounts[1],
          'value': required_coin_deposit * 2 - 1},

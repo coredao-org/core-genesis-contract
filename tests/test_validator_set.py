@@ -1523,6 +1523,7 @@ def test_exit_maintenance_turn_round_with_maintenance_slash(validator_set, candi
 
 def test_exit_maintenance_turn_round_slash_then_exit(validator_set, slash_indicator, candidate_hub,
                                                      set_candidate_maintenance):
+    accounts[99].transfer(candidate_hub.address, Web3.to_wei(1, 'ether'))
     operators, consensuses = set_candidate_maintenance
     turn_round()
     slash_indicator.slash(consensuses[0], {'from': accounts[0]})
@@ -1949,6 +1950,7 @@ def test_maintenance_with_less_alternate(validator_set, candidate_hub):
     turn_round(chain_get_validator_consensus())
     enter_maintenance(operators[3])
 
+
 def test_delegate_and_transfer_during_maintenance(validator_set, candidate_hub, set_candidate_maintenance):
     stake_manager = StakeManager()
     stake_manager.set_lp_rates()
@@ -1967,7 +1969,7 @@ def test_delegate_and_transfer_during_maintenance(validator_set, candidate_hub, 
     delegate_coin_success(operator, delegator, delegate_amount)
     txid = delegate_btc_success(operator, btc_delegator, btc_amount, LOCK_SCRIPT, relay=btc_delegator)
     transfer_coin_success(operator, operators[1], delegator, delegate_amount // 2)
-    transfer_btc_success(txid,operators[2],btc_delegator)
+    transfer_btc_success(txid, operators[2], btc_delegator)
     undelegate_coin_success(operator, delegator, delegate_amount // 4)
     delegate_coin_success(operator, delegator, delegate_amount // 10)
     txid2 = delegate_btc_success(operator, btc_delegator, btc_amount // 10, LOCK_SCRIPT, relay=btc_delegator)
@@ -1978,6 +1980,7 @@ def test_delegate_and_transfer_during_maintenance(validator_set, candidate_hub, 
     turn_round(chain_get_validator_consensus())
     stake_hub_claim_reward(delegator)
     turn_round(chain_get_validator_consensus())
+
 
 def test_validator_with_no_delegation_cannot_enter_maintenance(validator_set, candidate_hub, set_candidate_maintenance):
     operators, consensuses = set_candidate_maintenance
@@ -2563,6 +2566,98 @@ def test_get_validator_index_after_removal_success(validator_set, candidate_hub,
 
     index_after = validator_set.getValidatorIndexFromOps(first_operator)
     assert index_after == 0
+
+
+# getLivingValidators
+def test_get_living_validators_with_multiple_validators(validator_set):
+    operators = []
+    consensuses = []
+    vote_address_list = [random_vote_address() for _ in range(5)]
+
+    for index, operator in enumerate(accounts[10:15]):
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator, vote_address=vote_address_list[index]))
+        delegate_coin_success(operator, accounts[0], 1000 + index * 100)
+
+    turn_round()
+
+    result = validator_set.getLivingValidators()
+    consensus_addrs, vote_addrs = result
+
+    assert len(consensus_addrs) == len(vote_addrs)
+
+    current_validators = validator_set.getCurrentValidatorSet()
+    assert len(consensus_addrs) == len(current_validators)
+
+    for consensus_addr in consensus_addrs:
+        found = False
+        for validator in current_validators:
+            if validator['consensusAddress'] == consensus_addr:
+                found = True
+                break
+        assert found
+
+
+def test_get_living_validators_excludes_maintenance_validators(validator_set, set_candidate_maintenance):
+    operators, consensuses = set_candidate_maintenance
+
+    for i, operator in enumerate(operators[:3]):
+        delegate_coin_success(operator, accounts[0], 5000 + i * 100)
+
+    turn_round()
+    result_before = validator_set.getLivingValidators()
+    consensus_addrs_before, _ = result_before
+    tx = validator_set.enterMaintenance({'from': operators[0]})
+    assert 'validatorEnterMaintenance' in tx.events
+    result_after = validator_set.getLivingValidators()
+    consensus_addrs_after, vote_addrs_after = result_after
+    current_validators = validator_set.getCurrentValidatorSet()
+    assert len(consensus_addrs_after) == len(current_validators)
+    assert consensuses[0] in consensus_addrs_after
+
+
+def test_get_living_validators_correctness_of_vote_addresses(validator_set):
+    operators = []
+    consensuses = []
+    specific_vote_addresses = [random_vote_address() for _ in range(3)]
+    for index, operator in enumerate(accounts[20:23]):
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator, vote_address=specific_vote_addresses[index]))
+        delegate_coin_success(operator, accounts[0], 2000)
+    turn_round()
+    result = validator_set.getLivingValidators()
+    consensus_addrs, vote_addrs = result
+    for i, consensus_addr in enumerate(consensus_addrs):
+        if consensus_addr in consensuses:
+            consensus_index = consensuses.index(consensus_addr)
+            expected_vote_addr = specific_vote_addresses[consensus_index]
+            actual_vote_addr = vote_addrs[i]
+            assert actual_vote_addr == expected_vote_addr
+
+
+def test_canceled_and_felony_validators_not_returned(validator_set, candidate_hub, slash_indicator):
+    operators = [accounts[30], accounts[31], accounts[32]]
+    consensuses = []
+    for index, operator in enumerate(operators):
+        consensuses.append(register_candidate(operator=operator))
+    delegate_coin_success(operators[0], accounts[0], 1e18)
+    delegate_coin_success(operators[1], accounts[0], 1e18)
+    turn_round()
+
+    candidate_hub.refuseDelegate({'from': operators[0]})
+    turn_round()
+    candidate_hub.unregister({'from': operators[0]})
+    felony_threshold = slash_indicator.felonyThreshold()
+    for _ in range(felony_threshold):
+        slash_indicator.slash(consensuses[1])
+    turn_round()
+    validators = validator_set.getValidators()
+    assert consensuses[0] not in validators
+    assert consensuses[1] not in validators
+    consensus_addrs, _ = validator_set.getLivingValidators()
+    assert consensuses[0] not in consensus_addrs
+    assert consensuses[1] not in consensus_addrs
+    assert consensus_addrs == [consensuses[2]]
 
 
 # update maintainSlashPercent 

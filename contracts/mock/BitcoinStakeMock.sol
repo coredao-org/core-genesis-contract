@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
 import "../BitcoinStake.sol";
@@ -8,7 +9,7 @@ contract BitcoinStakeMock is BitcoinStake {
     uint64 public MONTH_TIMESTAMP = 2592000;
 
     event migrated(bytes32 indexed txid);
-    event mockDelegatedBtc(bytes32 indexed txid, address indexed candidate, address indexed delegator, uint32 outputIndex, uint64 amount, uint256 endRound);
+    event mockDelegatedBtc(bytes32 indexed txid, address indexed candidate, address indexed delegator, uint32 outputIndex, uint64 amount, uint256 endRound, uint32 channelId);
     event mockTransferredBtc(
         bytes32 indexed txid,
         address sourceCandidate,
@@ -29,7 +30,7 @@ contract BitcoinStakeMock is BitcoinStake {
         unclaimedReward = rewardMap[delegator].unclaimedReward;
         return (reward, unclaimedReward);
     }
-
+    
     function setRewardMap(address delegator, uint256 reward, uint256 unclaimedReward) external {
         rewardMap[delegator].reward = reward;
         rewardMap[delegator].unclaimedReward = unclaimedReward;
@@ -109,24 +110,11 @@ contract BitcoinStakeMock is BitcoinStake {
         }
     }
 
-    function calculateRewardMock(bytes32[] calldata txids, uint256 settleRound) external returns (uint256 amount, uint256 rewardUnclaimed, uint256 accStakedAmount) {
-        uint256 reward;
-        uint256 stakedAmount;
-        uint256 unclaimed;
-        bool expired;
-        for (uint256 i = txids.length; i != 0; i--) {
-            (reward, expired, unclaimed, stakedAmount) = _collectReward(txids[i - 1], settleRound);
-            amount += reward;
-            accStakedAmount += stakedAmount;
-            rewardUnclaimed += unclaimed;
-        }
-    }
 
-    function collectRewardMock(bytes32 txid, uint256 settleRound) external returns (uint256 reward, bool expired, uint256 rewardUnclaimed, uint256 accStakedAmount) {
-        return _collectReward(txid, settleRound);
-    }
 
-    function mockDelegateBtc(bytes32 txid, uint64 btcValue, address candidate, address delegator, uint32 lockTime, uint64 blockTimestamp, uint32 outputIndex) external nonReentrant {
+
+
+    function mockDelegateBtc(bytes32 txid, uint64 btcValue, address candidate, address delegator, uint32 lockTime, uint64 blockTimestamp, uint32 outputIndex, uint32 channelId) external nonReentrant {
         BtcTx storage bt = btcTxMap[txid];
         require(bt.amount == 0, "btc tx is already delegated.");
         {
@@ -141,7 +129,8 @@ contract BitcoinStakeMock is BitcoinStake {
             (btcAmount, outputIndex, delegator, candidate) = (btcValue, outputIndex, delegator, candidate);
             bt.amount = btcAmount;
             bt.outputIndex = outputIndex;
-            emit mockDelegatedBtc(txid, candidate, delegator, outputIndex, btcAmount, lockTime / SatoshiPlusHelper.ROUND_INTERVAL);
+            bt.channelId = channelId;
+            emit mockDelegatedBtc(txid, candidate, delegator, outputIndex, btcAmount, lockTime / SatoshiPlusHelper.ROUND_INTERVAL, channelId);
         }
         delegatorMap[delegator].txids.push(txid);
         candidateMap[candidate].realtimeAmount += btcAmount;
@@ -232,6 +221,17 @@ contract BitcoinStakeMock is BitcoinStake {
         tc.realtimeAmount += amount;
 
         emit mockTransferredBtc(txid, candidate, targetCandidate, msg.sender, bt.amount);
+    }
+
+    // mock contract for test
+    function collectRewardMock(bytes32 txid, uint256 coreAmount, uint256 drRound, uint256 settleRound, bool claim) external returns (uint256 reward, bool expired, int256 floatReward, uint256 remainingCoreAmount) {
+        return _collectReward(txid, coreAmount, drRound, settleRound, claim);
+    }
+    function getCalculateRoundMock(bytes32 txid, uint256 settleRound) external view returns (uint calculateRound, bool expired) {
+        return _getCalculateRound(txid, settleRound);
+    }
+    function applyDualStakingMock(uint256 coreAmount, uint256 bctAmount) external view returns (uint256, uint256) {
+        return _applyDualStaking(coreAmount, bctAmount);
     }
 
 

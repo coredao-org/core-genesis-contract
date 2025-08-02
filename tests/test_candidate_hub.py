@@ -554,6 +554,7 @@ def test_dues_cannot_greater_than_required_margin(candidate_hub, required_margin
         candidate_hub.updateParam("dues", value)
 
 
+# updateParam-validatorCount
 @pytest.mark.parametrize("validator_count", [6, 25, 41])
 def test_govern_validator_count_success(candidate_hub, required_margin, validator_count):
     value = padding_left(Web3.to_hex(validator_count), 64)
@@ -568,6 +569,25 @@ def test_validator_count_out_of_range(candidate_hub, required_margin, validator_
     update_system_contract_address(candidate_hub, gov_hub=accounts[0])
     with brownie.reverts(f"OutOfBounds: validatorCount, {validator_count}, 6, 41"):
         candidate_hub.updateParam("validatorCount", value)
+
+
+@pytest.mark.parametrize("validator_count", [19, 20, 21, 22])
+def test_update_validator_count_after_max_alternate_count(candidate_hub, validator_count):
+    old_validator_count = candidate_hub.validatorCount()
+    max_alternate = old_validator_count // 3
+    value = padding_left(Web3.to_hex(max_alternate), 64)
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    candidate_hub.updateParam("maxAlternateCount", value)
+    assert candidate_hub.maxAlternateCount() == max_alternate
+    assert old_validator_count == 21
+    assert max_alternate == 7
+    value2 = padding_left(Web3.to_hex(validator_count), 64)
+    if validator_count < 21:
+        with brownie.reverts(f"OutOfBounds: maxAlternateCount, {max_alternate}, 0, {validator_count // 3}"):
+            candidate_hub.updateParam("validatorCount", value2)
+    else:
+        candidate_hub.updateParam("validatorCount", value2)
+        assert candidate_hub.validatorCount() == validator_count
 
 
 @pytest.mark.parametrize("maxCommissionChange", [1, 500, 1000])

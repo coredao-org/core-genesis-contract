@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
 import "../CandidateHub.sol";
@@ -349,4 +350,5 @@ contract CandidateHubMock is CandidateHub {
     function mockGetAlternateCount(uint256 maxAlternateCount, uint256 count, uint256 candidateSize) public pure returns (uint256) {
         return getAlternateCount(maxAlternateCount, count, candidateSize);
     }
+    receive() external payable {}
 }

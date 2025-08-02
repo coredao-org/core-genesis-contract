@@ -166,6 +166,11 @@ def configuration(accounts):
     c.init()
     return c
 
+@pytest.fixture(scope="module")
+def channel(accounts):
+    c = accounts[0].deploy(Channel)
+    c.init()
+    return c
 
 # test contract
 @pytest.fixture(scope="module")
@@ -191,11 +196,12 @@ def set_system_contract_address(
         btc_agent,
         core_agent,
         hash_power_agent,
-        configuration
+        configuration,
+        channel
 ):
     contracts = [
         validator_set, slash_indicator, system_reward, btc_light_client, relay_hub, candidate_hub, gov_hub,
-        pledge_agent, burn, foundation, stake_hub, btc_stake, btc_agent, core_agent, hash_power_agent, configuration
+        pledge_agent, burn, foundation, stake_hub, btc_stake, btc_agent, core_agent, hash_power_agent, configuration, channel
     ]
     args = encode(['address'] * len(contracts), [c.address for c in contracts])
 

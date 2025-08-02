@@ -57,13 +57,16 @@ def get_tlp_rate(day):
 
 
 def get_lp_rate(coin_amount, asset_amount, asset):
-    discount = Utils.DENOMINATOR
-    level = (coin_amount * get_asset_weight(asset)) // (asset_amount * get_asset_weight('coin'))
+    percentage = Utils.DENOMINATOR
+    stake_rate = 0
+    rate = (coin_amount * get_asset_weight(asset)) // (asset_amount * get_asset_weight('coin'))
     for l in Discount.lp_rates:
-        if level >= l:
-            discount = Discount.lp_rates[l]
+        if rate >= l:
+            percentage = Discount.lp_rates[l]
+            stake_rate = l
             break
-    return level, discount
+    dual_amount = stake_rate * asset_amount
+    return stake_rate, percentage, dual_amount
 
 
 def init_btc_lst_count(btc_lst_stake, validator_count):
@@ -96,7 +99,7 @@ def init_current_round_factor(factor_map, stake_count, reward_cap):
         factor_map[s] = factor
 
 
-def init_stake_score(agents, total_reward, btc_lst_stake):
+def init_stake_score(agents, total_reward):
     stake_count = {
         'coin': 0,
         'power': 0,
@@ -115,11 +118,6 @@ def init_stake_score(agents, total_reward, btc_lst_stake):
         stake_count['coin'] += total_coin
         stake_count['btc'] += total_btc
         validator_count += 1
-    btc_lst_amount, single_agent_btc_lst, agent_btc_lst = init_btc_lst_count(btc_lst_stake, validator_count)
-    for agent in agents:
-        agent['total_btc'] += single_agent_btc_lst
-        agent['total_btc_lst'] = single_agent_btc_lst
-    stake_count['btc'] += agent_btc_lst
     return stake_count
 
 
@@ -137,10 +135,7 @@ def calc_agent_asset_reward_distribution(agent, asset, asset_factor):
     if asset == 'btc':
         agent['sum_btc'] = asset_amount
         total_btc_reward = agent[key_asset_reward]
-        lst_amount = agent['total_btc_lst']
-        agent['btc_lst_reward'] = total_btc_reward * lst_amount // asset_amount
-        agent[key_asset_reward] = total_btc_reward - agent['btc_lst_reward']
-        agent[key_asset_amount] -= lst_amount
+        agent[key_asset_reward] = total_btc_reward
 
 
 def calc_agent_asset_reward(agent, asset, unit_amount):
@@ -201,9 +196,9 @@ def calc_btc_delegator_reward(agent, stake_list, delegator_asset_reward, bonus, 
     for item in stake_list:
         stake_amount = item['value'] - item['undelegate_amount']
         if delegator_map['btc'].get(item['address']) is None:
-            delegator_map['btc'][item['address']] = item['value']
+            delegator_map['btc'][item['address']] = [item['value']]
         else:
-            delegator_map['btc'][item['address']] += item['value']
+            delegator_map['btc'][item['address']].append(item['value'])
         actual_account_btc_reward = agent['single_btc_reward'] * stake_amount // Utils.BTC_DECIMAL
         # staking duration discount logic
         if item['stake_duration'] < 360:
@@ -213,9 +208,9 @@ def calc_btc_delegator_reward(agent, stake_list, delegator_asset_reward, bonus, 
                                                                                      duration_discount)
                 bonus['total_bonus'] += unclaimed
         if delegator_asset_reward['btc'].get(item['address']) is None:
-            delegator_asset_reward['btc'][item['address']] = actual_account_btc_reward
+            delegator_asset_reward['btc'][item['address']] = [actual_account_btc_reward]
         else:
-            delegator_asset_reward['btc'][item['address']] += actual_account_btc_reward
+            delegator_asset_reward['btc'][item['address']].append(actual_account_btc_reward)
         print(f"btc reward: {agent['address']} on {item['address']} => {actual_account_btc_reward}")
 
 
@@ -250,28 +245,29 @@ def calc_core_discounted_reward(discount_asset, delegator_asset_reward, bonus, c
         delegator_info = delegator_map.get(r, {})
         for delegator in delegator_reward:
             coin_acc_stake_amount = delegator_map['coin'].get(delegator, 0)
-            asset_acc_stake_amount = delegator_info[delegator]
-            asset_reward = delegator_reward[delegator]
-            level, reward_discount = get_lp_rate(coin_acc_stake_amount, asset_acc_stake_amount, r)
-            actual_account_btc_reward = asset_reward * reward_discount // Utils.DENOMINATOR
-            if reward_discount >= Utils.DENOMINATOR:
-                actual_bonus = actual_account_btc_reward - asset_reward
-                system_reward = compensation_reward['system_reward']
-                if actual_bonus > compensation_reward['reward_pool']:
-                    system_reward -= actual_bonus * 10
-                    compensation_reward['reward_pool'] += actual_bonus * 10
-                compensation_reward['reward_pool'] -= actual_bonus
-            if asset_reward > actual_account_btc_reward:
-                compensation_reward['reward_pool'] += asset_reward - actual_account_btc_reward
-            bonus['reward_pool'] = compensation_reward['reward_pool']
-            delegator_reward[delegator] = actual_account_btc_reward
+            remaining_core_amount = coin_acc_stake_amount
+            for index,btc_amount in enumerate(delegator_info[delegator]):
+                asset_reward = delegator_reward[delegator][index]
+                stake_rate, percentage, dual_amount = get_lp_rate(remaining_core_amount, btc_amount, r)
+                if remaining_core_amount > dual_amount:
+                    remaining_core_amount -= dual_amount
+                else:
+                    remaining_core_amount = 0
+                actual_account_btc_reward = asset_reward * percentage // Utils.DENOMINATOR
+                if percentage >= Utils.DENOMINATOR:
+                    actual_bonus = actual_account_btc_reward - asset_reward
+                    system_reward = compensation_reward['system_reward']
+                    if actual_bonus > compensation_reward['reward_pool']:
+                        system_reward -= actual_bonus * 10
+                        compensation_reward['reward_pool'] += actual_bonus * 10
+                    compensation_reward['reward_pool'] -= actual_bonus
+                if asset_reward > actual_account_btc_reward:
+                    compensation_reward['reward_pool'] += asset_reward - actual_account_btc_reward
+                bonus['reward_pool'] = compensation_reward['reward_pool']
+                delegator_reward[delegator][index] = actual_account_btc_reward
 
 
-def calc_accrued_reward_per_asset(agents, btc_lst_stake, reward_unit_amount_map, asset_unit_reward_map):
-    # calculate the reward for BTC LST separately
-    asset = 'btc_lst'
-    asset_unit_reward = calc_btc_lst_asset_reward(agents, btc_lst_stake, asset, reward_unit_amount_map['btc'])
-    asset_unit_reward_map[asset] = asset_unit_reward
+def calc_accrued_reward_per_asset(agents, reward_unit_amount_map, asset_unit_reward_map):
     # calculate Core Power BTC reward
     for asset in reward_unit_amount_map:
         if asset_unit_reward_map.get(asset) is None:
@@ -287,7 +283,11 @@ def update_delegator_total_reward(asset_reward_map, account_rewards_map):
         for delegator in asset_reward_map[asset]:
             if account_rewards_map.get(delegator) is None:
                 account_rewards_map[delegator] = 0
-            account_rewards_map[delegator] += asset_reward_map[asset][delegator]
+            if asset != 'btc':
+                account_rewards_map[delegator] += asset_reward_map[asset][delegator]
+            else:
+                account_rewards_map[delegator] += sum(asset_reward_map[asset][delegator])
+            
 
 
 def get_core_lp_asset(n):
@@ -305,10 +305,8 @@ def calculate_coin_rewards(score, sum_score, coin_reward):
     return coin_reward * score // sum_score
 
 
-def parse_delegation(agents, block_reward, btc_lst_stake=None, state_map=None, compensation_reward=None,
+def parse_delegation(agents, block_reward, state_map=None, compensation_reward=None,
                      reward_cap=None):
-    if btc_lst_stake is None:
-        btc_lst_stake = {}
     if compensation_reward is None:
         compensation_reward = {
             'reward_pool': 0,
@@ -346,7 +344,7 @@ def parse_delegation(agents, block_reward, btc_lst_stake=None, state_map=None, c
     }
 
     # init asset score for 3 assets: coin, power, btc
-    stake_count = init_stake_score(agents, total_reward, btc_lst_stake)
+    stake_count = init_stake_score(agents, total_reward)
 
     # init asset factor for 3 assets: coin, power, btc
     init_current_round_factor(factor_map, stake_count, reward_cap)
@@ -359,10 +357,10 @@ def parse_delegation(agents, block_reward, btc_lst_stake=None, state_map=None, c
             calc_agent_asset_reward_distribution(agent, asset, factor_map[asset])
 
     asset_unit_reward_map = {}
-    # calculate the accrued reward for each asset (coin power btc btc_lst)
-    calc_accrued_reward_per_asset(agents, btc_lst_stake, reward_unit_amount_map, asset_unit_reward_map)
+    # calculate the accrued reward for each asset (coin power btc)
+    calc_accrued_reward_per_asset(agents, reward_unit_amount_map, asset_unit_reward_map)
 
-    # keys coin & power & btc & btc_lst
+    # keys coin & power & btc
     delegator_asset_reward = defaultdict(dict)
 
     # keys total_bonus
@@ -370,9 +368,6 @@ def parse_delegation(agents, block_reward, btc_lst_stake=None, state_map=None, c
 
     # keys coin & power & btc
     delegator_map = defaultdict(dict)
-
-    # calculate rewards for each asset of the delegator
-    calc_btc_lst_delegator_reward(btc_lst_stake, asset_unit_reward_map, delegator_asset_reward, bonus, delegator_map)
     for agent in agents:
         calc_coin_delegator_reward(agent, agent.get('coin', []), delegator_asset_reward, delegator_map)
         calc_power_delegator_reward(agent, agent.get('power', []), delegator_asset_reward, delegator_map)
@@ -394,9 +389,19 @@ def parse_delegation(agents, block_reward, btc_lst_stake=None, state_map=None, c
 
 
 if __name__ == '__main__':
-    reward, unclaimed_reward, account_rewards, round_reward = parse_delegation([{
+    DELEGATE_VALUE = 2000000
+    BTC_VALUE = 200
+    MONTH = 30
+    _, unclaimed_reward, account_rewards, _ = parse_delegation([{
         "address": 'v0',
-        "active": True,
-        "coin": [set_delegate('a1', 1000)],
-        "btc": [set_delegate('a0', 200)]
-    }], 13545)
+        "coin": [set_delegate('a0', DELEGATE_VALUE), set_delegate('a1', DELEGATE_VALUE)],
+        "btc": [set_delegate('a0', BTC_VALUE, stake_duration=MONTH)]
+    }, {
+        "address": 'v1',
+        "coin": [set_delegate('a0', DELEGATE_VALUE), set_delegate('a1', DELEGATE_VALUE)],
+        "btc": [set_delegate('a0', BTC_VALUE, stake_duration=MONTH)]
+    }, {
+        "address": 'v2',
+        "power": [set_delegate('a2', 100)],
+        "coin": [set_delegate('a0', DELEGATE_VALUE // 2), set_delegate('a1', DELEGATE_VALUE // 2)],
+    }], 13545, state_map={'core_lp': True})

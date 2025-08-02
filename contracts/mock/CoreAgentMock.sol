@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
 import {CoreAgent} from "../CoreAgent.sol";
@@ -46,10 +47,11 @@ contract CoreAgentMock is CoreAgent {
     }
 
 
-    function getDelegatorMap(address delegator) external view returns (address[] memory, uint256) {
+    function getDelegatorMap(address delegator) external view returns (address[] memory, uint256, uint256) {
         address[] memory candidates = delegatorMap[delegator].candidates;
         uint256 amount = delegatorMap[delegator].amount;
-        return (candidates, amount);
+        uint256 channelAmount = delegatorMap[delegator].channelAmount;
+        return (candidates, amount, channelAmount);
     }
 
     function getAccruedRewardMap(address validator, uint256 round) external view returns (uint256) {
@@ -57,11 +59,16 @@ contract CoreAgentMock is CoreAgent {
         return accruedReward;
     }
 
-    function setAccruedRewardMap(address candidate, uint256 round, uint256 amount) external {
+    function setAccruedRewardMap(address candidate, uint256 round, uint256 amount) public {
         accruedRewardMap[candidate][round] = amount;
     }
 
     function setCoreRewardMap(address delegator, uint256 reward, uint256 accStakedAmount) external {
+        uint256 accrueRound = roundTag - 1;
+        address[] memory candidates = delegatorMap[delegator].candidates;
+        for (uint256 i = 0; i < candidates.length; ++i) {
+            setAccruedRewardMap(candidates[i], accrueRound, 0);
+        }
         rewardMap[delegator] = Reward(reward, accStakedAmount);
     }
     
@@ -73,17 +80,20 @@ contract CoreAgentMock is CoreAgent {
             candidateMap[candidate].continuousRewardEndRounds.push(endRound);
         }
     }
+    function setCoinDelegatorMap(address candidate, address delegator, uint256 stakedAmount, uint256 realtimeAmount) external {
+        CoinDelegator storage d = candidateMap[candidate].cDelegatorMap[delegator];
+        d.stakedAmount = stakedAmount;
+        d.realtimeAmount = realtimeAmount; 
+    }
 
     function getRewardAmount() external view returns (uint256) {
         return rewardAmountM;
     }
 
-    function collectCoinRewardMock(address agent, address delegator, uint256 settleRound) external returns (uint256, uint256) {
-        uint256 avgStakedAmount;
+    function collectCoinRewardMock(address agent, address delegator) external returns (uint256 reward, uint256 stakedAmount1, uint256 stakedAmount2) {
         Candidate storage a = candidateMap[agent];
         CoinDelegator storage d = a.cDelegatorMap[delegator];
-        (rewardAmountM, avgStakedAmount) = _collectRewardFromCandidate(agent, d, settleRound);
-        return (rewardAmountM, avgStakedAmount);
+        (reward, stakedAmount1, stakedAmount2) = _collectRewardFromCandidate(agent, d);
     }
 
     function _mockCollectReward(address candidate, uint256 stakedAmount, uint256 realtimeAmount, uint256 transferredAmount, uint256 changeRound) internal returns (uint256 reward, bool changed, uint256 accStakedAmount) {

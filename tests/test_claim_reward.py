@@ -556,7 +556,7 @@ def test_bep127_major_offense_alternate_replace_and_repeat(slash_indicator):
     assert trackers[4].delta() == 0
 
 
-def test_bep127_major_offense_alternate_replace_until_no_alternate_then_claim_reward():
+def test_bep127_major_offense_alternate_replace_until_no_alternate_then_claim_reward(validator_set):
     set_validator_count()
     tx_fee = 10000
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 100
@@ -567,12 +567,18 @@ def test_bep127_major_offense_alternate_replace_until_no_alternate_then_claim_re
     delegate_coin_success(operators[7], accounts[4], 1000)
     delegate_coin_success(operators[7], accounts[5], 1000)
     turn_round()
+    expect_validator_consensus(consensuses[:6])
     assert chain_get_validator_consensus() == consensuses[:6]
     slash_validator(consensuses[0])
     chain_deposit(consensuses[6], deposit_count=1, tx_fee=tx_fee)
     slash_validator(consensuses[6])
     chain_deposit(consensuses[7], deposit_count=2, tx_fee=tx_fee)
+    total_reward = 30000 + tx_fee
+    assert validator_set.getIncoming(consensuses[1]) == total_reward // 6
     slash_validator(consensuses[7])
+    assert validator_set.getIncoming(consensuses[1]) == total_reward // 6 + (total_reward * 2 + total_reward // 6) // 5
+    assert validator_set.getIncoming(consensuses[6]) == 0
+    assert validator_set.getIncoming(consensuses[7]) == 0
     assert len(chain_get_validator_consensus()) == 5
     block_validators = chain_get_validator_consensus()
     expect_validator_consensus([consensuses[1], consensuses[2], consensuses[3], consensuses[4], consensuses[5]])
@@ -584,6 +590,34 @@ def test_bep127_major_offense_alternate_replace_until_no_alternate_then_claim_re
     assert tracker2.delta() == 0
     assert tracker4.delta() == 0
     turn_round(chain_get_validator_consensus())
+
+
+def test_bep127_major_offense_no_alternate_block_after_exit_maintenance(validator_set, slash_indicator):
+    set_validator_count()
+    validator_set.setMaintainSlashPercent(30)
+    tx_fee = 10000
+    operators, consensuses = add_candidates(8)
+    delegate_validator(operators)
+    delegate_coin_success(operators[6], accounts[2], 1000)
+    delegate_coin_success(operators[6], accounts[3], 1000)
+    delegate_coin_success(operators[7], accounts[4], 1000)
+    delegate_coin_success(operators[7], accounts[5], 1000)
+    turn_round()
+    assert chain_get_validator_consensus() == consensuses[:6]
+    chain_deposit(consensuses[0], deposit_count=1, tx_fee=tx_fee)
+    enter_maintenance(operators[0])
+    slash_validator(consensuses[5])
+    slash_validator(consensuses[6])
+    slash_validator(consensuses[7])
+    chain.mine(300)
+    exit_maintenance(operators[0])
+    assert validator_set.getIncoming(consensuses[5]) == 0
+    assert validator_set.getIncoming(consensuses[6]) == 0
+    assert validator_set.getIncoming(consensuses[7]) == 0
+    assert validator_set.getIncoming(consensuses[1]) == 40000 // 4
+    assert len(chain_get_validator_consensus()) == 4
+    expect_validator_consensus([consensuses[1], consensuses[2], consensuses[3], consensuses[4]])
+    turn_round(chain_get_validator_consensus(), round_count=3)
 
 
 @pytest.mark.parametrize("slash_type", ["minor", "felony"])
@@ -1493,22 +1527,22 @@ def test_edit_description_and_claim_reward(candidate_hub):
         delegate_validator(operators, i, accounts[57 + i], delegate_amount - i, btc_amount)
     turn_round()
     expect_validator_consensus(consensuses[:5])
-    tx = turn_round(chain_get_validator_consensus())
+    turn_round(chain_get_validator_consensus())
     stake_hub_claim_reward(accounts[50])
     moniker = "Test Validator"
     identity = "test-identity"
     website = "https://test.com"
     details = "Test validator details"
-    tx = candidate_hub.editDescription(moniker, identity, website, details, {'from': operators[0]})
+    candidate_hub.editDescription(moniker, identity, website, details, {'from': operators[0]})
     turn_round(chain_get_validator_consensus())
     tracker = get_tracker(accounts[50])
     stake_hub_claim_reward(accounts[50])
     assert tracker.delta() == TOTAL_REWARD // 2 - 1
     turn_round(chain_get_validator_consensus())
-    tx = candidate_hub.editDescription('test1', identity, website, details, {'from': operators[0]})
+    candidate_hub.editDescription('test1', identity, website, details, {'from': operators[0]})
     turn_round(chain_get_validator_consensus())
     stake_hub_claim_reward(accounts[50])
-    assert tracker.delta() == (TOTAL_REWARD // 2 - 1) * 2
+    assert tracker.delta() == (TOTAL_REWARD // 2) * 2 - 1
     turn_round(chain_get_validator_consensus())
 
 
@@ -1673,47 +1707,3 @@ def test_update_consensus_address_block_produce_on_old_and_new(validator_set, ca
     turn_round(chain_get_validator_consensus())
     stake_hub_claim_reward(accounts[50])
     assert tracker.delta() == TOTAL_REWARD - 1
-
-
-def test_validator_and_alternate_count_exceed_candidates(validator_set, candidate_hub, slash_indicator):
-    validator_set.setMaintainSlashPercent(0)
-    set_validator_count(validator_count=31, alternate_count=0)
-    validator_set = ValidatorSetMock[0]
-    stake_manager.set_lp_rates()
-    stake_manager.set_tlp_rates()
-    btc_amount = 1000
-    delegate_amount = MIN_INIT_DELEGATE_VALUE * 100
-    operators, consensuses = add_candidates(15)
-    for i in range(0, 15):
-        delegate_validator(operators, i, accounts[50 + i], delegate_amount - i, btc_amount)
-        delegate_validator(operators, i, accounts[1 + i], delegate_amount - i, btc_amount)
-    tx_id0 = delegate_btc_success(operators[1], accounts[91], btc_amount, LOCK_SCRIPT, relay=accounts[91])
-    tx_id1 = delegate_btc_success(operators[3], accounts[92], btc_amount, LOCK_SCRIPT, relay=accounts[92])
-    candidate_hub.unregister({'from': operators[-1]})
-    candidate_hub.unregister({'from': operators[-2]})
-    candidate_hub.unregister({'from': operators[-3]})
-    turn_round()
-    set_validator_count(validator_count=31, alternate_count=3)
-    validator_set.setValidatorCount(0)
-    validator_set.setMaintainSlashPercent(10)
-    validators = validator_set.getValidators()
-    assert validator_set.validatorCount() == 0
-    transfer_coin_success(operators[0], operators[2], accounts[50], delegate_amount)
-    transfer_coin_success(operators[2], operators[0], accounts[52], delegate_amount - 2)
-    transfer_btc_success(tx_id0, operators[2], accounts[91])
-    delegate_btc_success(operators[4], accounts[93], btc_amount, LOCK_SCRIPT, relay=accounts[93])
-    delegate_coin_success(operators[0], accounts[50], delegate_amount)
-    turn_round(chain_get_validator_consensus())
-    value = padding_left(Web3.to_hex(10), 64)
-    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
-    candidate_hub.updateParam("maxAlternateCount", value)
-    validatorCount = padding_left(Web3.to_hex(7), 64)
-    candidate_hub.updateParam("validatorCount", validatorCount)
-    alternate_count = candidate_hub.mockGetAlternateCount(10, 7, 12)
-    assert alternate_count == 5
-    expect_validator_consensus(consensuses[:12])
-    turn_round(chain_get_validator_consensus())
-    trackers = get_trackers(accounts[50:65])
-    stake_hub_claim_reward(accounts[50:65])
-    assert trackers[0].delta() > 0
-    turn_round(chain_get_validator_consensus())

@@ -5,7 +5,7 @@ from eth_account.signers.local import LocalAccount
 
 from .delegate import delegate_coin_success
 from .utils import *
-from .common import register_candidate, turn_round, execute_proposal, stake_hub_claim_reward
+from .common import register_candidate, turn_round, execute_proposal, stake_hub_claim_reward, enter_maintenance
 
 misdemeanorThreshold = 0
 felonyThreshold = 0
@@ -139,6 +139,7 @@ def test_clean(slash_indicator, validator_set):
         for account, count in zip(slash_accounts, counts):
             assert slash_indicator.getSlashIndicator(account.address)[1] == max([count - decrease_value, 0])
 
+
 # submitFinalityViolationEvidence
 def test_old_block_involved_failed(slash_indicator, validator_set, set_candidate):
     signature = os.urandom(96).hex()
@@ -153,6 +154,7 @@ def test_old_block_involved_failed(slash_indicator, validator_set, set_candidate
     vote_addr = random_vote_address()
     with brownie.reverts(f"too old block involved"):
         slash_indicator.submitFinalityViolationEvidence((vote_a, vote_b, vote_addr), {'from': accounts[0]})
+
 
 def test_vote_addrs_length_le_1(slash_indicator):
     register_candidate(operator=accounts[0])
@@ -347,6 +349,7 @@ def test_validator_restoration_after_felony_success(slash_indicator, validator_s
     tx = slash_indicator.mockSubmitFinalityViolationEvidence((vote_a, vote_b, vote_addr_list[2]), {'from': accounts[2]})
     candidate_hub.addMargin({'from': operators[2], 'value': slash_indicator.felonyDeposit()})
     assert 'validatorFelony' in tx.events
+    assert slash_indicator.indicators(consensuses[2])['count'] == 0
     turn_round(consensuses, round_count=2)
     assert len(validator_set.getValidators()) == 2
     stake_hub_claim_reward(accounts[0])
@@ -379,6 +382,66 @@ def test_penalty_non_validator_voter(slash_indicator, validator_set, system_rewa
     assert 'validatorFelony' not in tx.events
     turn_round(consensuses, round_count=2)
     assert len(validator_set.getValidators()) == 3
+
+
+def test_double_sign_felony_on_maintain_status_submit_evidence(slash_indicator, validator_set, candidate_hub):
+    candidate_hub.setMaxAlternateCount(1)
+    candidate_hub.setValidatorCount(2)
+    vote_list = [random_vote_address() for _ in range(3)]
+    consensuses = []
+    for index, operator in enumerate(accounts[1:4]):
+        consensuses.append(register_candidate(operator=operator, vote_address=vote_list[index]))
+    delegate_coin_success(accounts[1], accounts[0], 10000)
+    turn_round()
+    tx = enter_maintenance(accounts[1])
+    assert 'validatorEnterMaintenance' in tx.events
+    signature = os.urandom(96).hex()
+    src_num = 100
+    src_hash_list = [random_bytes_data() for _ in range(2)]
+    tar_hash_list = [random_bytes_data() for _ in range(2)]
+    vote_a = build_vote_data(src_num, src_hash_list[0], 200, tar_hash_list[0], signature)
+    vote_b = build_vote_data(src_num + 1, src_hash_list[1], 120, tar_hash_list[1], signature)
+    tx = slash_indicator.mockSubmitFinalityViolationEvidence((vote_a, vote_b, vote_list[0]), {'from': accounts[0]})
+    assert 'validatorFelony' in tx.events
+    turn_round(consensuses)
+    assert slash_indicator.indicators(consensuses[0])['count'] == 0
+    assert slash_indicator.indicators(consensuses[1])['count'] == 0
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == 0
+
+
+def test_submit_finality_violation_evidence_then_slash(slash_indicator, validator_set, candidate_hub):
+    candidate_hub.setMaxAlternateCount(1)
+    candidate_hub.setValidatorCount(3)
+    vote_list = [random_vote_address() for _ in range(3)]
+    consensuses = []
+    for index, operator in enumerate(accounts[1:4]):
+        consensuses.append(register_candidate(operator=operator, vote_address=vote_list[index]))
+    delegate_coin_success(accounts[1], accounts[0], 10000)
+    turn_round()
+    felony = 30
+    misdemeanor = 5
+    slash_indicator.setMisdemeanorThreshold(misdemeanor)
+    slash_indicator.setFelonyThreshold(felony)
+    for _ in range(misdemeanor * 5):
+        slash_indicator.slash(consensuses[0])
+    assert slash_indicator.indicators(consensuses[0])['count'] == 25
+    signature = os.urandom(96).hex()
+    src_num = 100
+    src_hash_list = [random_bytes_data() for _ in range(2)]
+    tar_hash_list = [random_bytes_data() for _ in range(2)]
+    vote_a = build_vote_data(src_num, src_hash_list[0], 200, tar_hash_list[0], signature)
+    vote_b = build_vote_data(src_num + 1, src_hash_list[1], 120, tar_hash_list[1], signature)
+    tx = slash_indicator.mockSubmitFinalityViolationEvidence((vote_a, vote_b, vote_list[0]), {'from': accounts[0]})
+    assert 'validatorFelony' in tx.events
+    assert slash_indicator.indicators(consensuses[0])['count'] == 0
+    candidate_hub.addMargin({'from': accounts[1], 'value': slash_indicator.felonyDeposit()})
+    turn_round(consensuses, round_count=3)
+    assert slash_indicator.indicators(consensuses[0])['count'] == 0
+    for _ in range(misdemeanor * 5):
+        tx = slash_indicator.slash(consensuses[0])
+    assert 'validatorMisdemeanor' in tx.events
 
 
 def test_only_gov_can_call(slash_indicator):

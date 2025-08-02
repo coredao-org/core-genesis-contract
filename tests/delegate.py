@@ -1,4 +1,5 @@
 import time
+import hashlib
 
 from tests.common import get_current_round, stake_hub_claim_reward
 from tests.utils import *
@@ -61,7 +62,6 @@ def build_btc_stake_opreturn(agent_address, delegate_address, lock_data, chain_i
                              version=1, channel_id=0):
     if channel_id > 0:
         version = 2
-    assert 1 <= version <= 2
     if isinstance(lock_data, int):
         hex_result = value2hex(lock_data)
         lock_time_hex = reverse_by_bytes(hex_result)
@@ -73,14 +73,13 @@ def build_btc_stake_opreturn(agent_address, delegate_address, lock_data, chain_i
     chain_id_hex = format(int(chain_id), 'x').zfill(4)
     delegate_address_hex = str(delegate_address)[2:].lower()
     agent_address_hex = str(agent_address)[2:]
+    core_fee_hex = format(core_fee, 'x').zfill(2)
     message = flag_hex + version_hex + chain_id_hex + delegate_address_hex + agent_address_hex
-    if version == 1:
-        core_fee_hex = format(core_fee, 'x').zfill(2)
-        message += core_fee_hex
     if version == 2:
         assert channel_id > 0
         channel_id_hex = int_to_varint_hex(channel_id)
         message += channel_id_hex
+    message += core_fee_hex
     message += op_return_data
 
     message_length = remove_0x(hex(len(message) // 2))
@@ -99,10 +98,9 @@ def build_btc_stake_opreturn(agent_address, delegate_address, lock_data, chain_i
         'agent_address_hex': agent_address_hex,
         'op_return_data': op_return_data,
         'hex_value': op_return,
-        'message': message
+        'message': message,
+        'core_fee_hex': core_fee_hex
     }
-    if version == 1:
-        opreturn_info['core_fee_hex'] = core_fee_hex
     if version == 2:
         opreturn_info['channel_id'] = channel_id_hex
     return opreturn_info
@@ -450,7 +448,7 @@ class BtcScript:
             script_hash = f"{hex(Opcode.OP_HASH160)}14{public_key_hash}{hex(Opcode.OP_EQUAL)}"
             pay_address = '0x' + script_hash.replace('0x', '')
         elif lock_script_type == 'p2wsh':
-            redeem_script = sha256(bytes.fromhex(lock_script)).hexdigest()
+            redeem_script = hashlib.sha256(bytes.fromhex(lock_script)).hexdigest()
             script_hash = f"{op2hex(Opcode.OP_0)}{hex(Opcode.OP_DATA_32)}{redeem_script}"
             pay_address = '0x' + script_hash.replace('0x', '')
         return pay_address
@@ -484,12 +482,12 @@ class BtcScript:
             lock_script = '0x' + script_hash.replace('0x', '')
         elif lock_script_type == AddressType.P2WSH:  # 34 bytes
             public_key_hash = public_key_2pkhash(lock_public_key)
-            redeem_script = sha256(bytes.fromhex(public_key_hash.replace('0x', ''))).hexdigest()
+            redeem_script = hashlib.sha256(bytes.fromhex(public_key_hash.replace('0x', ''))).hexdigest()
             script_hash = f"{op2hex(Opcode.OP_0)}{hex(Opcode.OP_DATA_32)}{redeem_script}"
             lock_script = '0x' + script_hash.replace('0x', '')
         elif lock_script_type == AddressType.P2TAPROOT:  # 34 bytes
             public_key_hash = public_key_2pkhash(lock_public_key)
-            redeem_script = sha256(bytes.fromhex(public_key_hash.replace('0x', ''))).hexdigest()
+            redeem_script = hashlib.sha256(bytes.fromhex(public_key_hash.replace('0x', ''))).hexdigest()
             script_hash = f"{op2hex(Opcode.OP_1)}{hex(Opcode.OP_DATA_32)}{redeem_script}"
             lock_script = '0x' + script_hash.replace('0x', '')
         return lock_script
@@ -650,8 +648,13 @@ class RoundRewardManager:
         BitcoinAgentMock[0].setCoreRewardMap(delegator, reward, acc_stake_amount)
 
     @staticmethod
-    def mock_btc_reward_map(delegator, reward, unclaimed_reward, delegate_amount):
-        BitcoinStakeMock[0].setBtcRewardMap(delegator, reward, unclaimed_reward, delegate_amount)
+    def mock_btc_reward_map(candidate, roundTag, reward, unclaimed_reward, btc_amount=1):
+        BitcoinStakeMock[0].setAccruedRewardPerBTCMap(candidate, roundTag - 1,
+                                                      (reward + unclaimed_reward) * 1e8 // btc_amount)
+        if unclaimed_reward > 0:
+            BitcoinStakeMock[0].setIsActive(True)
+            BitcoinStakeMock[0].popTtlpRates()
+            BitcoinStakeMock[0].setTlpRates(0, reward / (reward + unclaimed_reward) * 10000)
 
     @staticmethod
     def mock_power_reward_map(delegator, reward, delegate_amount):

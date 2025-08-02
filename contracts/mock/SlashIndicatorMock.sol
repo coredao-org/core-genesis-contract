@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
 import "../SlashIndicator.sol";
@@ -73,12 +74,13 @@ contract SlashIndicatorMock is SlashIndicator {
         // require(verifyBLSSignature(evidence.voteA, evidence.voteAddr) &&
         // verifyBLSSignature(evidence.voteB, evidence.voteAddr), "verify signature failed");
 
-        (address[] memory vals, bytes[] memory voteAddrs) = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getValidatorsAndVoteAddresses();
+        (address[] memory vals, bytes[] memory voteAddrs) = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getLivingValidators();
         if (voteAddrs.length <= 1) {
             return;
         }
         for (uint256 i; i < voteAddrs.length; ++i) {
             if (BytesLib.equal(voteAddrs[i], evidence.voteAddr)) {
+                indicators[vals[i]].count = 0;
                 ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(msg.sender), rewardForReportFinalityViolation);
                 IValidatorSet(VALIDATOR_CONTRACT_ADDR).felony(vals[i], felonyRound, felonyDeposit);
                 break;

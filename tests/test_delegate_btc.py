@@ -127,7 +127,7 @@ def test_claim_btc_staking_rewards_success(btc_stake, set_candidate):
     tx = stake_hub_claim_reward(accounts[0])
     expect_event(tx, "claimedReward", {
         "delegator": accounts[0],
-        "amount": TOTAL_REWARD - FEE
+        "amounts": [0, 0, TOTAL_REWARD - FEE]
     })
     assert tracker.delta() == TOTAL_REWARD - FEE
 
@@ -433,7 +433,9 @@ def test_multiple_btc_receipts_to_single_address(btc_stake, set_candidate):
     turn_round(consensuses)
     tx = stake_hub_claim_reward(accounts[0])
     assert 'claimedReward' not in tx.events
-    turn_round(consensuses, round_count=2)
+    turn_round(consensuses)
+    delegate_btc_success(operators[2], accounts[0], BTC_VALUE, LOCK_SCRIPT, LOCK_TIME, accounts[2])
+    turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     stake_hub_claim_reward(accounts[0])
     _, _, account_rewards, round_reward = parse_delegation([{

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: Apache2.0
 pragma solidity ^0.8.0;
 
 import {Configuration} from "../Configuration.sol";
