@@ -33,11 +33,9 @@ def chain_deposit(miners, tx_fee=100,deposit_count=1):
         for miner in miners:
             for _ in range(deposit_count):
                 tx  = ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[99]})
-                print(f'chain_deposit>>>>>>>>>>deposit_count{deposit_count}:', tx.events)
     else:
         for _ in range(deposit_count):
             tx = ValidatorSetMock[0].deposit(miners, {"value": tx_fee, "from": accounts[99]})
-            print(f'chain_deposit>>>>>>>>>>deposit_count{deposit_count}:',tx.events)
             
         
 
@@ -51,7 +49,6 @@ def chain_vote(miners, weights):
 
 def chain_get_validator_consensus():
     consensus, vote_addresses = ValidatorSetMock[0].getValidatorsAndVoteAddresses()
-    print(f'chain_get_validator_consensus>>>>>>>>consensus:{consensus}')
     return consensus
 
 def turn_round(miners: list = None, tx_fee=100, round_count=1, weights=None):
@@ -108,11 +105,9 @@ def stake_hub_claim_reward(account):
     if isinstance(account, list):
         for i in account:
             tx = StakeHubMock[0].claimReward({'from': i})
-            print(f'stake_hub_claim_reward>>>>>>>>account:{i}', tx.events)
 
     else:
         tx = StakeHubMock[0].claimReward({'from': account})
-        print(f'stake_hub_claim_reward>>>>>>>>account:{account}', tx.events)
     return tx
 
 
@@ -143,22 +138,18 @@ def slash_validator(consensus,slash_type='felony'):
 
 def refuse_delegate(operator):
     tx = CandidateHubMock[0].refuseDelegate({'from': operator})
-    print(f'refuse_delegate>>>>>>>>operator:{operator}', tx.events)
     return tx
 
 def accept_delegate(operator):
     tx = CandidateHubMock[0].acceptDelegate({'from': operator})
-    print(f'accept_delegate>>>>>>>>operator:{operator}', tx.events)
     return tx
 
 def enter_maintenance(operator):
     tx = ValidatorSetMock[0].enterMaintenance({'from': operator})
     assert 'validatorEnterMaintenance' in tx.events
-    print(f'enter_maintenance>>>>>>>>operator:{operator}', tx.events)
     return tx
 
 def exit_maintenance(operator):
     tx = ValidatorSetMock[0].exitMaintenance({'from': operator})
     assert 'validatorExitMaintenance' in tx.events
-    print(f'exit_maintenance>>>>>>>>operator:{operator}', tx.events)
     return tx

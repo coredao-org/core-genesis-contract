@@ -563,7 +563,10 @@ def test_transfer_with_partial_undelegate_and_claimed_rewards(core_agent, valida
     delegate_coin_success(operators[1], accounts[2], delegate_amount)
     turn_round()
     transfer_coin_success(operators[0], operators[2], accounts[0], transfer_amount)
-    undelegate_coin_success(operators[0], accounts[1], undelegate_amount)
+    amount = undelegate_amount
+    if undelegate_type == 'all':
+        amount = 0
+    undelegate_coin_success(operators[0], accounts[1], amount)
     transfer_coin_success(operators[1], operators[2], accounts[2], transfer_amount)
     turn_round(consensuses, round_count=1)
     tracker1 = get_tracker(accounts[1])

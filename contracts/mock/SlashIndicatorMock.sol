@@ -32,9 +32,6 @@ contract SlashIndicatorMock is SlashIndicator {
         }
     }
 
-    function getSlashValidators() external view returns (address[] memory) {
-        return validators;
-    }
 
     function getIndicators() public view returns (address[] memory, uint256[] memory) {
         address[] memory v = new address[](validators.length);
@@ -50,7 +47,14 @@ contract SlashIndicatorMock is SlashIndicator {
         return ecrecovery(hash, sig);
     }
 
+    function setMisdemeanorThreshold(uint256 _misdemeanorThreshold) external {
+        misdemeanorThreshold = _misdemeanorThreshold;
+    }
+    function setFelonyThreshold(uint256 _felonyThreshold) external {
+        felonyThreshold = _felonyThreshold;
+    }
 
+    // for uint test
     function mockSubmitFinalityViolationEvidence(FinalityEvidence memory evidence) external onlyInit {
         if (rewardForReportFinalityViolation == 0) {
             rewardForReportFinalityViolation = INIT_REWARD_FOR_REPORT_FINALITY_VIOLATION;
@@ -86,12 +90,6 @@ contract SlashIndicatorMock is SlashIndicator {
                 break;
             }
         }
-    }
-    function setMisdemeanorThreshold(uint256 _misdemeanorThreshold) external {
-        misdemeanorThreshold = _misdemeanorThreshold;
-    }
-    function setFelonyThreshold(uint256 _felonyThreshold) external {
-        felonyThreshold = _felonyThreshold;
     }
     function mockSlashWithBlockCount(address validator, uint256 blockCount) external {
         slashWithBlockCount(validator, blockCount);

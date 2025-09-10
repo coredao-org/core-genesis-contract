@@ -940,6 +940,8 @@ def test_btc_transaction_with_witness_as_output_address(btc_stake, set_candidate
         "000000000017a9144c35996fbf4026de7c8fe79c4320c248a10e4bf28702483045022100e32dd040238c19321407b7dfbba957e5988755779030dbcc52e6ae22a2a2088402202eeb497ae61aee9eba97cc4f5d34ba814c3ad1c0bf3286edaba05f044ab4bba401210386f359aa5a42d821370bf07a5ad86c1ff2d892662699103e462ae04d082d83ac00000000")
     lock_script = '041e28fd65b17576a914a808bc3c1ba547b0ba2df4abf1396f35c4d23b4f88ac'
     scrip_pubkey = 'a9144c35996fbf4026de7c8fe79c4320c248a10e4bf287'
+    with brownie.reverts("BitcoinHelper: invalid tx"):   
+        tx = btc_stake.delegate(btc_tx, 200, [], 22, lock_script)
     btc_tx = remove_witness_data_from_raw_tx(btc_tx, scrip_pubkey)
     tx = btc_stake.delegate(btc_tx, 200, [], 22, lock_script)
     assert 'delegated' in tx.events

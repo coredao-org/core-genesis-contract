@@ -257,13 +257,13 @@ def run_stake_operation(operation, candidate, account, operation_amount, target_
 def run_proxy_stake_operation(operation, candidate, account, operation_amount, target_agent=None, candidates=None):
     tx = None
     if operation == 'proxy_delegate':
-        tx = old_delegate_coin_success(candidate, account, operation_amount, False)
+        tx = proxy_delegate_coin_success(candidate, account, operation_amount)
     elif operation == 'proxy_undelegate':
-        tx = old_undelegate_coin_success(candidate, account, operation_amount, False)
+        tx = proxy_undelegate_coin_success(candidate, account, operation_amount)
     elif operation == 'proxy_transfer':
-        tx = old_transfer_coin_success(candidate, target_agent, account, operation_amount, False)
+        tx = proxy_transfer_coin_success(candidate, target_agent, account, operation_amount)
     elif operation == 'proxy_claim':
-        tx = old_claim_reward_success(candidates, account)
+        tx = proxy_claim_reward_success(candidates, account)
     return tx
 
 
@@ -316,77 +316,26 @@ def delegate_power_success(candidate, delegator, value=1, stake_round=0):
     stake_round = get_current_round() - 6 + stake_round
     BtcLightClientMock[0].setMiners(stake_round, candidate, [delegator] * value)
 
-
-# mock delegate 
-def mock_delegate_btc_success(agent, delegator, btc_amount, lock_time=None, block_timestamp=0, output_index=0,
-                              tx_id=None, channel_id=0):
-    if tx_id is None:
-        tx_id = random_btc_tx_id()
-    if lock_time is None:
-        lock_time = LOCK_TIME
-    tx = BitcoinStakeMock[0].mockDelegateBtc(tx_id, btc_amount, agent, delegator, lock_time, block_timestamp,
-                                             output_index, channel_id)
-    assert 'mockDelegatedBtc' in tx.events
-    return tx_id
-
-
-def mock_transfer_btc_success(tx_id, target_candidate):
-    tx = BitcoinStakeMock[0].mockTransferBtc(tx_id, target_candidate)
-    assert 'mockTransferredBtc' in tx.events
-
-
-def mock_delegate_coin_success(candidate, delegator, amount):
-    tx = CoreAgentMock[0].mockDelegateCoin(candidate, {'value': amount, 'from': delegator})
-    assert 'mockDelegatedCoin' in tx.events
-
-
-def mock_transfer_coin_success(source_agent, target_agent, delegator, amount):
-    tx = CoreAgentMock[0].mockTransferCoin(source_agent, target_agent, amount, {'from': delegator})
-    assert 'mockTransferredCoin' in tx.events
-
-    return tx
-
-
-def mock_undelegate_coin_success(candidate, delegator, amount):
-    tx = CoreAgentMock[0].mockUndelegateCoin(candidate, amount, {'from': delegator})
-    assert 'mockUndelegatedCoin' in tx.events
-    return tx
-
-
 # old delegate
-def old_delegate_coin_success(candidate, account, amount, old=True):
-    if old is True:
-        tx = PledgeAgentMock[0].delegateCoinOld(candidate, {'value': amount, 'from': account})
-        assert 'delegatedCoinOld' in tx.events
-    else:
-        tx = PledgeAgentMock[0].delegateCoin(candidate, {'value': amount, 'from': account})
-        assert 'delegatedCoin' in tx.events
-
+def proxy_delegate_coin_success(candidate, account, amount):
+    tx = PledgeAgentMock[0].delegateCoin(candidate, {'value': amount, 'from': account})
+    assert 'delegatedCoin' in tx.events
     return tx
 
 
-def old_undelegate_coin_success(candidate, account, amount=0, old=True):
-    if old is True:
-        tx = PledgeAgentMock[0].undelegateCoinOld(candidate, amount, {'from': account})
-        assert 'undelegatedCoinOld' in tx.events
-
-    else:
-        tx = PledgeAgentMock[0].undelegateCoin(candidate, amount, {'from': account})
-        assert 'undelegatedCoin' in tx.events
+def proxy_undelegate_coin_success(candidate, account, amount=0):
+    tx = PledgeAgentMock[0].undelegateCoin(candidate, amount, {'from': account})
+    assert 'undelegatedCoin' in tx.events
     return tx
 
 
-def old_transfer_coin_success(source_agent, target_agent, account, amount=0, old=True):
-    if old is True:
-        tx = PledgeAgentMock[0].transferCoinOld(source_agent, target_agent, amount, {'from': account})
-        assert 'transferredCoinOld' in tx.events
-    else:
-        tx = PledgeAgentMock[0].transferCoin(source_agent, target_agent, amount, {'from': account})
-        assert 'transferredCoin' in tx.events
+def proxy_transfer_coin_success(source_agent, target_agent, account, amount=0):
+    tx = PledgeAgentMock[0].transferCoin(source_agent, target_agent, amount, {'from': account})
+    assert 'transferredCoin' in tx.events
     return tx
 
 
-def old_claim_reward_success(candidates, account=None):
+def proxy_claim_reward_success(candidates, account=None):
     if isinstance(account, list):
         for a in account:
             tx = PledgeAgentMock[0].claimReward(candidates, {'from': a})
@@ -395,42 +344,6 @@ def old_claim_reward_success(candidates, account=None):
             account = accounts[0]
         tx = PledgeAgentMock[0].claimReward(candidates, {'from': account})
     return tx
-
-
-def old_claim_btc_reward_success(tx_ids, account=None):
-    if account is None:
-        account = accounts[0]
-    tx = PledgeAgentMock[0].claimBtcReward(tx_ids, {'from': account})
-    return tx
-
-
-def old_turn_round(miners: list = None, tx_fee=100, round_count=1):
-    if miners is None:
-        miners = []
-    tx = None
-    for _ in range(round_count):
-        for miner in miners:
-            ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[99]})
-        tx = CandidateHubMock[0].turnRoundOld()
-        chain.sleep(1)
-    return tx
-
-
-def old_delegate_btc_success(btc_value, agent, delegator, lock_time=None, tx_id=None, script=None, fee=1):
-    if script is None:
-        script, _, timestamp = random_btc_lock_script()
-        if lock_time is None:
-            lock_time = timestamp
-    if tx_id is None:
-        tx_id = random_btc_tx_id()
-    PledgeAgentMock[0].delegateBtcMock(tx_id, btc_value, agent, delegator, script, lock_time, fee)
-    return tx_id
-
-
-def old_transfer_btc_success(tx_id, agent):
-    tx = PledgeAgentMock[0].transferBtcOld(tx_id, agent)
-    return tx_id
-
 
 class BtcScript:
     @staticmethod
@@ -588,25 +501,15 @@ class BtcStake:
         self.tx_id = get_transaction_txid(btc_tx)
         return btc_tx
 
-
-def random_btc_lst_lock_script():
+def build_btc_lock_script(timestamp=None):
     private_key = generate_private_key()
     private_key_hex = get_public_key(private_key)
-    script_type = random.choice(
-        [AddressType.P2SH, AddressType.P2PKH, AddressType.P2WPKH, AddressType.P2WSH, AddressType.P2TAPROOT])
-    script = BtcScript().k2_btc_lst_script(private_key_hex, script_type)
-    return script
-
-
-def random_btc_lock_script():
-    private_key = generate_private_key()
-    private_key_hex = get_public_key(private_key)
-    timestamp = random.randint(int(time.time()), int(time.time()) + 1000000)
-    scrip_type = random.choice(['hash', 'key'])
-    lock_script_type = random.choice(['p2sh', 'p2wsh'])
+    if timestamp is None:
+        timestamp = random.randint(int(time.time()), int(time.time()) + 1000000)
+    scrip_type = random.choice(['hash','key'])
+    lock_script_type = random.choice(['p2sh','p2wsh'])
     script, pay_address = BtcScript().k2_btc_script(private_key_hex, timestamp, scrip_type, lock_script_type)
     return script, pay_address, timestamp
-
 
 class StakeManager:
     @staticmethod

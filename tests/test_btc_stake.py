@@ -75,29 +75,6 @@ def test_btc_stake_init_can_only_run_once(btc_stake):
     with brownie.reverts("the contract already init"):
         btc_stake.init()
 
-
-@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
-def test_revert_if_not_called_by_only_pledge_agent(btc_stake):
-    candidates = accounts[:3]
-    amounts = [1000, 2000, 3000]
-    realtime_amounts = [2000, 2000, 4000]
-    with brownie.reverts("the sender must be pledge agent contract"):
-        btc_stake._initializeFromPledgeAgent(candidates, amounts, realtime_amounts)
-
-
-@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
-def test_initialize_from_pledge_agent_success(btc_stake):
-    update_system_contract_address(btc_stake, pledge_agent=accounts[0])
-    candidates = accounts[:3]
-    amounts = [1000, 2000, 3000]
-    realtime_amounts = [2000, 2000, 4000]
-    btc_stake._initializeFromPledgeAgent(candidates, amounts, realtime_amounts)
-    for index, i in enumerate(candidates):
-        c = btc_stake.candidateMap(i)
-        assert c[0] == amounts[index]
-        assert c[1] == realtime_amounts[index]
-
-
 def test_delegate_btc_with_lock_time_in_tx(btc_stake, set_candidate, stake_hub, btc_agent):
     turn_round()
     operators, consensuses = set_candidate
@@ -664,7 +641,7 @@ def test_undelegate_success(btc_stake, set_candidate):
     lock_script, btc_tx = __create_btc_stake_scrip_and_btc_tx(operators[0], accounts[0], BTC_VALUE)
     btc_stake.delegate(btc_tx, block_height, [], index, lock_script)
     turn_round(consensuses, round_count=2)
-    script, pay_address, _ = random_btc_lock_script()
+    script, pay_address, _ = build_btc_lock_script()
     btc_tx_info = {}
     inputs = [build_input(get_transaction_txid(btc_tx))]
     outputs = [build_output(BTC_VALUE // 2, pay_address)]
@@ -692,7 +669,7 @@ def test_btc_undelegate_no_reward_impact(btc_stake, set_candidate, round_count):
     lock_script, btc_tx = __create_btc_stake_scrip_and_btc_tx(operators[0], accounts[0], BTC_VALUE)
     btc_stake.delegate(btc_tx, block_height, [], index, lock_script)
     turn_round(consensuses)
-    script, pay_address, _ = random_btc_lock_script()
+    script, pay_address, _ = build_btc_lock_script()
     btc_tx_info = {}
     inputs = [build_input(get_transaction_txid(btc_tx))]
     outputs = [build_output(BTC_VALUE // 2, pay_address)]
@@ -718,7 +695,7 @@ def test_no_btc_tx_undelegated(btc_stake, set_candidate):
     lock_script, btc_tx = __create_btc_stake_scrip_and_btc_tx(operators[0], accounts[0], BTC_VALUE)
     btc_stake.delegate(btc_tx, block_height, [], index, lock_script)
     turn_round(consensuses)
-    script, pay_address, _ = random_btc_lock_script()
+    script, pay_address, _ = build_btc_lock_script()
     btc_tx_info = {}
     inputs = [build_input(get_transaction_txid(btc_tx), 1)]
     outputs = [build_output(BTC_VALUE // 2, pay_address)]
@@ -738,7 +715,7 @@ def test_single_transaction_repeated_undelegate(btc_stake, set_candidate):
     index = 3000
     tx_id0 = delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
     pay_address0 = get_btc_script().k2_btc_pay_address(LOCK_SCRIPT, 'p2sh')
-    _, pay_address1, _ = random_btc_lock_script()
+    _, pay_address1, _ = build_btc_lock_script()
     btc_tx = btc_delegate.build_btc(
         set_outputs([BTC_VALUE, pay_address1], [BTC_VALUE, pay_address0]),
         opreturn=set_op_return([operators[1], accounts[1], LOCK_SCRIPT])
@@ -746,7 +723,7 @@ def test_single_transaction_repeated_undelegate(btc_stake, set_candidate):
     btc_stake.delegate(btc_tx, 201, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
     tx_id1 = get_transaction_txid(btc_tx)
     turn_round(consensuses)
-    script, pay_address, _ = random_btc_lock_script()
+    script, pay_address, _ = build_btc_lock_script()
     btc_tx_info = {}
     inputs = [build_input(tx_id0, 0), build_input(tx_id1, 2)]
     outputs = [build_output(BTC_VALUE // 2, pay_address)]
@@ -774,7 +751,7 @@ def test_failed_btc_transaction_repeated_undelegate(btc_stake, set_candidate):
     index = 3000
     tx_id0 = delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
     pay_address0 = get_btc_script().k2_btc_pay_address(LOCK_SCRIPT, 'p2sh')
-    _, pay_address1, _ = random_btc_lock_script()
+    _, pay_address1, _ = build_btc_lock_script()
     btc_tx = btc_delegate.build_btc(
         set_outputs([BTC_VALUE, pay_address1], [BTC_VALUE, pay_address0]),
         opreturn=set_op_return([operators[1], accounts[1], LOCK_SCRIPT])
@@ -782,7 +759,7 @@ def test_failed_btc_transaction_repeated_undelegate(btc_stake, set_candidate):
     btc_stake.delegate(btc_tx, 201, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
     tx_id1 = get_transaction_txid(btc_tx)
     turn_round(consensuses)
-    _, pay_address, _ = random_btc_lock_script()
+    _, pay_address, _ = build_btc_lock_script()
     btc_tx_info = {}
     inputs = [build_input(tx_id0, 1), build_input(tx_id1, 0)]
     outputs = [build_output(BTC_VALUE // 2, pay_address)]
@@ -800,14 +777,14 @@ def test_undelegate_then_successful_stake(btc_stake, set_candidate):
     index = 3000
     tx_id0 = delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
     pay_address0 = get_btc_script().k2_btc_pay_address(LOCK_SCRIPT, 'p2sh')
-    _, pay_address1, _ = random_btc_lock_script()
+    _, pay_address1, _ = build_btc_lock_script()
     btc_tx = btc_delegate.build_btc(
         set_outputs([BTC_VALUE, pay_address1], [BTC_VALUE, pay_address0]),
         opreturn=set_op_return([operators[1], accounts[1], LOCK_SCRIPT])
     )
     tx_id1 = get_transaction_txid(btc_tx)
     turn_round(consensuses)
-    _, pay_address, _ = random_btc_lock_script()
+    _, pay_address, _ = build_btc_lock_script()
     btc_tx_info = {}
     inputs = [build_input(tx_id0, 0), build_input(tx_id1, 2)]
     outputs = [build_output(BTC_VALUE // 2, pay_address)]
@@ -1486,19 +1463,15 @@ def test_calculateRewards_some_zero_rewards(btc_stake, set_candidate, btc_agent,
 # getCalculateRound
 def test_get_calculate_round_mock_basic(btc_stake, set_candidate):
     operators, _ = set_candidate
-    txid = Web3.to_bytes(hexstr='0x' + '11' * 32)
     lock_time = LOCK_TIME + Utils.ROUND_INTERVAL * 3
-    block_ts = LOCK_TIME
     btc_amount = 1 * Utils.BTC_DECIMAL
-    btc_stake.mockDelegateBtc(txid, btc_amount, operators[0], accounts[0], lock_time, block_ts, 0, 0)
-
+    lock_script, pay_address, _ = build_btc_lock_script(lock_time)
+    txid = delegate_btc_success(operators[0], accounts[0], btc_amount, lock_script,lock_data=lock_time)
     unlock_round_minus_1 = lock_time // Utils.ROUND_INTERVAL - 1
-
     settle_round_low = unlock_round_minus_1 - 1
     calc_round, expired = btc_stake.getCalculateRoundMock(txid, settle_round_low)
     assert expired is False
     assert calc_round == settle_round_low
-
     settle_round_high = unlock_round_minus_1 + 2
     calc_round, expired = btc_stake.getCalculateRoundMock(txid, settle_round_high)
     assert expired is True
@@ -1876,58 +1849,6 @@ def test_transfer_to_zero_address(btc_stake, set_candidate):
     error_msg = encode_args_with_signature("InactiveCandidate(address)", [ZERO_ADDRESS])
     with brownie.reverts(error_msg):
         transfer_btc_success(tx_id, ZERO_ADDRESS, accounts[0])
-
-
-@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
-def test_move_data_success(btc_stake, pledge_agent, set_candidate):
-    operators, consensuses = set_candidate
-    btc_amount = BTC_VALUE // 2
-    end_round = LOCK_TIME // Utils.ROUND_INTERVAL
-    tx_id = old_delegate_btc_success(btc_amount, operators[2], accounts[1], lock_time=LOCK_TIME, script=LOCK_SCRIPT)
-    btc_stake.moveData([tx_id])
-    __check_receipt_map_info(tx_id, {
-        'candidate': operators[2],
-        'delegator': accounts[1],
-        'round': 1
-    })
-    __check_btc_tx_map_info(tx_id, {
-        'amount': btc_amount,
-        'outputIndex': 0,
-        'blockTimestamp': 0,
-        'lockTime': LOCK_TIME // Utils.ROUND_INTERVAL * Utils.ROUND_INTERVAL,
-        'usedHeight': 0
-    })
-    assert __get_delegator_btc_map(accounts[1])[0] == tx_id
-    tx_ids = []
-    for i in range(2):
-        tx_id = old_delegate_btc_success(btc_amount + i, operators[i], accounts[i], lock_time=LOCK_TIME,
-                                         script=LOCK_SCRIPT)
-        tx_ids.append(tx_id)
-    btc_stake.moveData(tx_ids)
-    for i in range(2):
-        __check_receipt_map_info(tx_ids[i], {
-            'candidate': operators[i],
-            'delegator': accounts[i],
-            'round': 1
-        })
-    agents, amounts = __get_round2_expire_info_map(end_round)
-    assert agents[0] == operators[2]
-    assert amounts[0] == btc_amount + 1
-
-
-@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
-def test_move_data_with_btc_already_collateralized(btc_stake, pledge_agent, set_candidate):
-    operators, consensuses = set_candidate
-    btc_amount = BTC_VALUE // 2
-    tx_id = old_delegate_btc_success(btc_amount, operators[1], accounts[1], lock_time=LOCK_TIME, script=LOCK_SCRIPT)
-    btc_stake.moveData([tx_id])
-    __check_receipt_map_info(tx_id, {
-        'candidate': operators[1],
-        'delegator': accounts[1],
-        'round': 1
-    })
-    btc_stake.moveData([tx_id])
-
 
 def test_get_grades_success(btc_stake, pledge_agent, set_candidate):
     update_system_contract_address(btc_stake, gov_hub=accounts[0])

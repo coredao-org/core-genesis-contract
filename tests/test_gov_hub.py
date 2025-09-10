@@ -594,21 +594,6 @@ def test_execute_early_then_propose(gov_hub, pledge_agent, is_pre_exec):
         chain.mine(gov_hub.votingPeriod() * 2)
     gov_hub.execute(1)
     assert pledge_agent.btcFactor() == 0
-    pledge_agent.setBtcFactor(20)
-    gov_hub.propose(
-        [pledge_agent.address],
-        [0],
-        ["updateParam(string,bytes)"],
-        [encode(['string', 'bytes'], ['clearDeprecatedMembers', padding_value])],
-        ['pledgeAgent clearDeprecatedMembers']
-    )
-    chain.mine(1)
-    for member in gov_hub.getMembers()[:3]:
-        gov_hub.castVote(2, True, {'from': member})
-    if is_pre_exec is False:
-        chain.mine(gov_hub.votingPeriod() * 2)
-    gov_hub.execute(2)
-    assert pledge_agent.btcFactor() == 0
 
 
 @pytest.mark.parametrize("is_pre_exec", [True, False])

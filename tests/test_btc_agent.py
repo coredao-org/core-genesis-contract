@@ -62,25 +62,6 @@ def test_btc_agent_init_once_only(btc_agent):
     with brownie.reverts("the contract already init"):
         btc_agent.init()
 
-
-@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
-def test_initialize_from_pledge_agent_success(btc_agent):
-    candidates = accounts[:3]
-    amounts = [100, 200, 300]
-    update_system_contract_address(btc_agent, pledge_agent=accounts[0])
-    btc_agent._initializeFromPledgeAgent(candidates, amounts)
-    for index, candidate in enumerate(candidates):
-        assert btc_agent.candidateMap(candidate)[1] == amounts[index]
-
-
-@pytest.mark.skip(reason="the data migration part has been removed, skip it.")
-def test_only_pledge_agent_can_call(btc_agent):
-    candidates = accounts[:3]
-    amounts = [100, 200, 300]
-    with brownie.reverts("the sender must be pledge agent contract"):
-        btc_agent._initializeFromPledgeAgent(candidates, amounts)
-
-
 @pytest.mark.parametrize('lst_btc_amount', [0, 4000])
 def test_distribute_reward_success(btc_agent, btc_stake, lst_btc_amount):
     history_reward = 200

@@ -2568,6 +2568,39 @@ def test_get_validator_index_after_removal_success(validator_set, candidate_hub,
     assert index_after == 0
 
 
+# getRankedValidatorList
+def test_get_ranked_validator_list_success(validator_set, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    ranked_list = validator_set.getRankedValidatorList()
+    assert ranked_list == consensuses
+
+
+def test_get_ranked_validator_list_after_update(validator_set):
+    operate_addr_list = [account for account in accounts[:3]]
+    consensus_addr_list = [account for account in accounts[3:6]]
+    fee_addr_list = [account for account in accounts[6:9]]
+    vote_addr_list = [random_vote_address() for _ in range(3)]
+    commission_thousandths = [100 for _ in range(3)]
+    validator_count = 3
+    update_system_contract_address(validator_set, candidate_hub=accounts[0])
+    validator_set.updateValidatorSet(
+        operate_addr_list,
+        consensus_addr_list,
+        fee_addr_list,
+        commission_thousandths,
+        vote_addr_list,
+        validator_count
+    )
+    ranked_list = validator_set.getRankedValidatorList()
+    assert ranked_list == consensus_addr_list
+
+
+def test_get_ranked_validator_list_empty(validator_set):
+    ranked_list = validator_set.getRankedValidatorList()
+    assert len(ranked_list) == 0
+
+
 # getLivingValidators
 def test_get_living_validators_with_multiple_validators(validator_set):
     operators = []
@@ -2690,6 +2723,23 @@ def test_update_maintain_slash_percent_success(validator_set, value):
     tx = validator_set.updateParam('maintainSlashPercent', hex_value)
 
     assert validator_set.maintainSlashPercent() == value
+
+
+# update turnLength 
+@pytest.mark.parametrize("value", [1, 2, 3, 7, 8, 9])
+def test_update_turn_length_success(validator_set, value):
+    __update_gov_address()
+    hex_value = padding_left(Web3.to_hex(value), 64)
+    tx = validator_set.updateParam('turnLength', hex_value)
+    assert validator_set.turnLength() == value
+
+
+@pytest.mark.parametrize("value", [0, 10])
+def test_update_turn_length_invalid_value(validator_set, value):
+    __update_gov_address()
+    hex_value = padding_left(Web3.to_hex(value), 64)
+    with brownie.reverts(f"OutOfBounds: turnLength, {value}, 1, 9"):
+        validator_set.updateParam('turnLength', hex_value)
 
 
 # updateRankedValidatorList
@@ -2956,3 +3006,14 @@ def test_get_working_validators_consistency(validator_set, set_candidate_mainten
     working_count = validator_set.getWorkingCount()
     working_validators = validator_set.getWorkingValidators()
     assert working_count == len(working_validators)
+
+# getTurnLength
+def test_get_turn_length_success(validator_set):
+    assert validator_set.getTurnLength() == 1
+
+def test_get_turn_length_after_update(validator_set):
+    __update_gov_address()
+    hex_value = padding_left(Web3.to_hex(2), 64)
+    tx = validator_set.updateParam('turnLength', hex_value)
+    assert validator_set.turnLength() == 2
+    

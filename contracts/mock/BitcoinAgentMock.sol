@@ -5,30 +5,23 @@ import "../BitcoinAgent.sol";
 
 contract BitcoinAgentMock is BitcoinAgent {
     
-    function initializeFromPledgeAgentMock(address[] memory candidates, uint256[] memory amounts) external  {
-    uint256 s = candidates.length;
-    for (uint256 i = 0; i < s; ++i) {
-      candidateMap[candidates[i]].stakeAmount = amounts[i];
-    }
-  }
-
     
-    function setCandidateMap(address agent, uint256 value, uint256 value1) external {
-        candidateMap[agent] = StakeAmount(value, value1);
+    function setCandidateMap(address candidate, uint256 lstStakeAmount, uint256 stakeAmount) external {
+        candidateMap[candidate] = StakeAmount(lstStakeAmount, stakeAmount);
     }
     
-    function setInitLpRates(uint32 value1, uint32 value01, uint32 value2, uint32 value02, uint32 value3, uint32 value03, uint32 value4, uint32 value04) external {
-        while (grades.length > 0) {
-            grades.pop();
+    function setInitLpRates(
+        uint32[4] calldata values,
+        uint32[4] calldata rates
+    ) external {
+        delete grades;
+        for (uint256 i = 0; i < 4; i++) {
+            grades.push(DualStakingGrade(values[i], rates[i]));
         }
-        grades.push(DualStakingGrade(value1, value01));
-        grades.push(DualStakingGrade(value2, value02));
-        grades.push(DualStakingGrade(value3, value03));
-        grades.push(DualStakingGrade(value4, value04));
     }
 
-    function setLpRates(uint32 value1, uint32 balue01) external {
-        grades.push(DualStakingGrade(value1, balue01));
+    function setLpRates(uint32 stakeRate, uint32 percentage) external {
+        grades.push(DualStakingGrade(stakeRate, percentage));
     }
 
 

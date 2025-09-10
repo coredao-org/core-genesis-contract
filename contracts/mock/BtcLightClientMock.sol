@@ -57,21 +57,4 @@ contract BtcLightClientMock is BtcLightClient {
         }
     }
 
-    function addMinerPowerMock(bytes32 blockHash) external {
-        addMinerPower(blockHash);
-    }
-    /// Get powers of given candidates (number of BTC blocks delegated to candidates) in a specific round
-    /// @param roundTimeTag The specific round time
-    /// @param candidates The given candidates to get their powers
-    /// @return powers The corresponding powers of given candidates
-    function getRoundPowersMock(uint256 roundTimeTag, address[] calldata candidates) external view returns (uint256[] memory powers) {
-        uint256 count = candidates.length;
-        powers = new uint256[](count);
-
-        RoundPower storage r = roundPowerMap[roundTimeTag];
-        for (uint256 i = 0; i < count; ++i) {
-            powers[i] = r.powerMap[candidates[i]].miners.length;
-        }
-        return powers;
-    }
 }

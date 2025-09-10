@@ -25,15 +25,17 @@ class Discount:
     state_map = {}
 
     def get_init_discount(self):
-        tlp_rates = []
-        lp_rates = []
+        tlp_rates_keys = []
+        tlp_rates_values = []
+        lp_rates_keys = []
+        lp_rates_values = []
         for t in list(self.tlp_rates.keys())[::-1]:
-            tlp_rates.append(t)
-            tlp_rates.append(self.tlp_rates[t])
+            tlp_rates_keys.append(t)
+            tlp_rates_values.append(self.tlp_rates[t])
         for l in list(self.lp_rates.keys())[::-1]:
-            lp_rates.append(l)
-            lp_rates.append(self.lp_rates[l])
-        return tlp_rates, lp_rates
+            lp_rates_keys.append(l)
+            lp_rates_values.append(self.lp_rates[l])
+        return tlp_rates_keys, tlp_rates_values, lp_rates_keys, lp_rates_values
 
 
 def set_delegate(address, value, undelegate_amount=0, stake_duration=500):

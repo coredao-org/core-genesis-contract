@@ -631,7 +631,7 @@ def test_proxy_claim_reward_success(stake_hub, btc_agent, pledge_agent, set_cand
     operators, consensuses = set_candidate
     turn_round()
     delegate_coin_success(operators[0], accounts[2], delegate_amount)
-    script, pay_address, timestamp = random_btc_lock_script()
+    script, pay_address, timestamp = build_btc_lock_script()
     delegate_btc_success(operators[1], accounts[2], 100, script, timestamp, relay=accounts[2])
     turn_round(consensuses, round_count=2)
     tracker = get_tracker(accounts[0])
@@ -785,9 +785,9 @@ def test_onStakeChange_success(stake_hub, set_candidate):
     turn_round()
     delegate_amount = 500000
     btc_value = 100
-    mock_delegate_coin_success(operators[0], accounts[0], delegate_amount)
+    delegate_coin_success(operators[0], accounts[0], delegate_amount)
     turn_round()
-    mock_delegate_btc_success(operators[1], accounts[0], btc_value)
+    delegate_btc_success(operators[1], accounts[0], btc_value,LOCK_SCRIPT)
     turn_round(consensuses, round_count=2)
     current_round = get_current_round()
     tx = stake_hub.onStakeChange(accounts[0])
@@ -816,8 +816,8 @@ def test_calculateReward_invalid_after_operation(stake_hub, set_candidate, onSta
     turn_round()
     delegate_amount = 500000
     btc_value = 100
-    mock_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    mock_delegate_btc_success(operators[1], accounts[0], btc_value)
+    delegate_coin_success(operators[0], accounts[0], delegate_amount)
+    delegate_btc_success(operators[1], accounts[0], btc_value,LOCK_SCRIPT)
     turn_round(consensuses, round_count=2)
     if onStakeChange:
         stake_hub.onStakeChange(accounts[0])
@@ -1099,8 +1099,9 @@ def test_stake_hub_calculate_reward(stake_hub, btc_agent, candidate_hub, core_ag
     delegate_coin_success(operators[1], accounts[1], test['add_core'])
     delegate_btc_success(operators[0], accounts[1], test['add_btc'], LOCK_SCRIPT, relay=accounts[1])
     turn_round(consensuses, round_count=2)
-    graders = [1000, 5000, 4000, 7000, 5000, 8000, 10000, 10000]
+    graders_keys = [1000,4000,5000,10000]
+    graders_values = [5000,7000,8000,10000]
     if test.get('is_active'):
         btc_agent.setIsActive(True)
-        btc_agent.setInitLpRates(*graders)
+        btc_agent.setInitLpRates(graders_keys,graders_values)
     assert stake_hub.calculateRewardMock(accounts[1]).return_value == (test['expect_rewards'])

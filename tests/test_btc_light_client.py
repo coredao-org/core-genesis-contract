@@ -40,18 +40,20 @@ def update_default_block_gasprice(btc_light_client):
     btc_light_client.updateParam('storeBlockGasPrice', hex_value, {'from': accounts[0]})
 
 
+# storeBlockHeader
+
 def test_store_zero_block(btc_light_client):
-    tx = btc_light_client.storeBlockHeader("0x0")
+    tx = btc_light_client.storeBlockHeader("0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
     expect_event(tx, "StoreHeaderFailed", {'returnCode': "10030"})
 
-
-def test_store_wrong_length_block(btc_light_client):
-    tx = btc_light_client.storeBlockHeader(btc_block_data[0][:80])
-    expect_event(tx, "StoreHeaderFailed", {"returnCode": "10090"})
+@pytest.mark.parametrize("length", [79, 80, 81, 159, 160])
+def test_store_wrong_length_block(btc_light_client,length):
+    with brownie.reverts("block bytes length must >= 80"):
+        tx = btc_light_client.storeBlockHeader(btc_block_data[0][:length])
 
 
 def test_store_change_nonce_block(btc_light_client):
-    tx = btc_light_client.storeBlockHeader(btc_block_data[0][:80] + '00')
+    tx = btc_light_client.storeBlockHeader(btc_block_data[0][:160] + '00')
     expect_event(tx, "StoreHeaderFailed", {"returnCode": "10090"})
 
 

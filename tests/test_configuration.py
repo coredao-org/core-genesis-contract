@@ -50,6 +50,7 @@ def test_only_gov_can_call(configuration, core_agent):
 def test_add_config_success(configuration, core_agent):
     event_prototype = "Transfer(address,address,uint256)"
     signature = Web3.keccak(text=event_prototype)
+    signature1 = Web3.keccak(text="btcExpired")
     value = [
         to_bytes(hexstr=accounts[0].address),
         [
@@ -65,7 +66,7 @@ def test_add_config_success(configuration, core_agent):
                     [to_bytes(hexstr=accounts[3].address), 7000],
                     [to_bytes(hexstr=accounts[4].address), 3000]
                 ],
-                'btcExpired',
+                signature1,
                 100000
             ]
         ],
@@ -80,7 +81,7 @@ def test_add_config_success(configuration, core_agent):
     assert config_fee['events'] == [
         [signature.hex(), 20000,
          (('0x96C42C56fdb78294F96B0cFa33c92bed7D75F96a', 2000), ('0x97e9fA3b2AeA5aa56376a5FB5Cbf153ae91b0660', 8000))],
-        [hex_32bytes, 100000,
+        [signature1.hex(), 100000,
          (('0xA904540818AC9c47f2321F97F1069B9d8746c6DB', 7000), ('0x316b2Fa7C8a2ab7E21110a4B3f58771C01A71344', 3000))]
     ]
     assert configuration.configAddresses(0) == accounts[0]
@@ -127,6 +128,25 @@ def test_add_config_invalid_length(configuration, length):
     with brownie.reverts("MismatchParamLength: addConfig"):
         configuration.updateParam('addConfig', value_encode)
 
+def test_add_config_events_length_error(configuration):
+    value = [
+        to_bytes(hexstr=accounts[0].address),
+        [
+            [
+                [
+                    [to_bytes(hexstr=accounts[3].address), 7000],
+                    [to_bytes(hexstr=accounts[4].address), 3000]
+                ],
+                'btcExpired',
+                100000
+            ]
+        ],
+        1000
+    ]
+    value_encode = rlp.encode(value)
+    with brownie.reverts("invalid input length"):
+        configuration.updateParam('addConfig', value_encode)
+
 
 def test_invalid_parameter_format(configuration):
     value = to_bytes(hexstr=accounts[0].address).hex()
@@ -168,7 +188,7 @@ def test_contract_address_already_exists(configuration):
                     [to_bytes(hexstr=accounts[3].address), 7000],
                     [to_bytes(hexstr=accounts[4].address), 3000]
                 ],
-                'btcExpired',
+                Web3.keccak(text='btcExpired'),
                 100000
             ]
         ],
@@ -196,7 +216,7 @@ def test_events_length_zero(configuration):
 def test_events_length_exceeds_max(configuration, events_length):
     bytes_length = 64
     event = [
-        [[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 100000
+        [[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 100000
     ]
     events = []
     for i in range(events_length):
@@ -221,7 +241,7 @@ def test_ratio_exceeds_maximum(configuration):
             [[[to_bytes(hexstr=accounts[3].address), 4000], [to_bytes(hexstr=accounts[3].address), 2000],
               [to_bytes(hexstr=accounts[3].address), 2000], [to_bytes(hexstr=accounts[3].address), 1000],
               [to_bytes(hexstr=accounts[3].address), 500], [to_bytes(hexstr=accounts[3].address), 500]],
-             'transfer', 100000]
+             Web3.keccak(text='transfer'), 100000]
         ],
         1000
     ]
@@ -241,7 +261,7 @@ def test_ratio_must_equal_10000(configuration, percentages):
         [
             [[[to_bytes(hexstr=accounts[3].address), percentage1], [to_bytes(hexstr=accounts[3].address), percentage2],
               [to_bytes(hexstr=accounts[3].address), percentage3]],
-             'transfer', 100000]
+             Web3.keccak(text='transfer'), 100000]
         ],
         1000
     ]
@@ -257,11 +277,12 @@ def test_ratio_must_equal_10000(configuration, percentages):
 @pytest.mark.parametrize("gas", [[0, 1000001], [1, 1000002], [2, 1000003], [3, 1000003]])
 def test_gas_exceeds_maximum(configuration, gas):
     events = [
-        [[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 1000000],
-        [[[to_bytes(hexstr=accounts[3].address), 6000], [to_bytes(hexstr=accounts[3].address), 4000]], 'transfer',
+        [[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 1000000],
+        [[[to_bytes(hexstr=accounts[3].address), 6000], [to_bytes(hexstr=accounts[3].address), 4000]],
+         Web3.keccak(text='transfer'),
          1000000],
-        [[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 1000000],
-        [[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 1000000],
+        [[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 1000000],
+        [[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 1000000],
     ]
     events[gas[0]][-1] = gas[1]
     value = [
@@ -275,7 +296,7 @@ def test_gas_exceeds_maximum(configuration, gas):
 
 
 def test_rewards_invalid_format(configuration):
-    event1 = [[['test1', 10000]], 'transfer', 100000]
+    event1 = [[['test1', 10000]], Web3.keccak(text='transfer'), 100000]
     event2 = [[[to_bytes(hexstr=accounts[3].address), 'transfertransfertransfertransfertransfer']], 'transfer', 100000]
     value1 = [
         to_bytes(hexstr=accounts[0].address),
@@ -325,7 +346,7 @@ def test_add_config_multiple_times(configuration):
         [
             [
                 [[to_bytes(hexstr=accounts[2].address), 5000], [to_bytes(hexstr=accounts[3].address), 5000]],
-                'transfer', 100000
+                Web3.keccak(text='transfer'), 100000
             ]
         ],
         1000
@@ -347,7 +368,7 @@ def test_add_config_rewards_empty(configuration):
         [
             [
                 [],
-                'transfer', 100000
+                Web3.keccak(text='transfer'), 100000
             ]
         ],
         1000
@@ -465,15 +486,16 @@ def test_governance_after_limit_with_excess_events(configuration):
     padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(maximum_reward), bytes_length))
     configuration.updateParam('updateMaxEvents', padding_value)
     events = [
-        [[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 1000000],
-        [[[to_bytes(hexstr=accounts[3].address), 6000], [to_bytes(hexstr=accounts[3].address), 4000]], 'transfer',
+        [[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 1000000],
+        [[[to_bytes(hexstr=accounts[3].address), 6000], [to_bytes(hexstr=accounts[3].address), 4000]],
+         Web3.keccak(text='transfer'),
          1000000],
-        [[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 1000000],
-        [[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 1000000],
-        [[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 1000000],
-        [[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 1000000],
-        [[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 1000000],
-        [[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 1000000]
+        [[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 1000000],
+        [[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 1000000],
+        [[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 1000000],
+        [[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 1000000],
+        [[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 1000000],
+        [[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 1000000]
     ]
     value = [
         to_bytes(hexstr=accounts[0].address),
@@ -490,7 +512,7 @@ def test_total_configurations_no_limit(configuration):
     padding_value = Web3.to_bytes(hexstr=padding_left(Web3.to_hex(maximum_reward), bytes_length))
     configuration.updateParam('updateMaxEvents', padding_value)
     events = [
-        [[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 1000000]
+        [[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 1000000]
     ]
     value = [
         to_bytes(hexstr=accounts[0].address),
@@ -730,7 +752,7 @@ def test_update_nonexistent_contract_address(configuration):
         [[[
             [to_bytes(hexstr=accounts[3].address), 7000],
             [to_bytes(hexstr=accounts[4].address), 3000]],
-            'btcExpired',
+            Web3.keccak(text='btcExpired'),
             100000]], 1000
     ]
     value_encode = rlp.encode(value)
@@ -752,7 +774,7 @@ def test_update_events_zero_length_success(configuration):
 
 @pytest.mark.parametrize("events_length", [3, 4, 5])
 def test_update_events_exceed_max_length(configuration, events_length):
-    event = [[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 100000]
+    event = [[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 100000]
     events = []
     for i in range(events_length):
         events.append(event)
@@ -804,7 +826,7 @@ def test_update_ratio_must_equal_10000(configuration, percentages):
         [
             [[[to_bytes(hexstr=accounts[3].address), percentage1], [to_bytes(hexstr=accounts[3].address), percentage2],
               [to_bytes(hexstr=accounts[3].address), percentage3]],
-             'transfer', 100000]
+             Web3.keccak(text='transfer'), 100000]
         ],
         1000
     ]
@@ -819,11 +841,12 @@ def test_update_ratio_must_equal_10000(configuration, percentages):
 @pytest.mark.parametrize("gas", [[0, 1000001], [1, 1000002], [2, 1000003], [3, 1000003]])
 def test_update_gas_exceeds_maximum(configuration, gas):
     events = [
-        [[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 1000000],
-        [[[to_bytes(hexstr=accounts[3].address), 6000], [to_bytes(hexstr=accounts[3].address), 4000]], 'transfer',
+        [[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 1000000],
+        [[[to_bytes(hexstr=accounts[3].address), 6000], [to_bytes(hexstr=accounts[3].address), 4000]],
+         Web3.keccak(text='transfer'),
          1000000],
-        [[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 1000000],
-        [[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 1000000],
+        [[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 1000000],
+        [[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 1000000],
     ]
     events[gas[0]][-1] = gas[1]
     value = [
@@ -861,14 +884,14 @@ def test_update_events_reward_invalid_format(configuration):
 
 @pytest.mark.parametrize("is_multiple_data", [True, False])
 @pytest.mark.parametrize("event", [
-    [[[]], 'transfer', 100000],
+    [[[]], Web3.keccak(text='transfer'), 100000],
     [[[to_bytes(hexstr=ZERO_ADDRESS)]]],
     [[[10000]]],
     [[[to_bytes(hexstr=ZERO_ADDRESS), 10000]]],
     [[[to_bytes(hexstr=ZERO_ADDRESS), 10000]], 100000],
     [[[to_bytes(hexstr=ZERO_ADDRESS), 10000]], 'transfer']])
 def test_update_config_governance_invalid_parameter(configuration, event, is_multiple_data):
-    events = [[[[to_bytes(hexstr=accounts[3].address), 10000]], 'transfer', 1000000]]
+    events = [[[[to_bytes(hexstr=accounts[3].address), 10000]], Web3.keccak(text='transfer'), 1000000]]
     if is_multiple_data:
         events.append(event)
     else:
@@ -887,7 +910,8 @@ def test_update_config_multiple_times(configuration):
     _add_config(accounts[1])
     value = [
         to_bytes(hexstr=accounts[1].address),
-        [[[[to_bytes(hexstr=accounts[2].address), 5000], [to_bytes(hexstr=accounts[3].address), 5000]], 'transfer',
+        [[[[to_bytes(hexstr=accounts[2].address), 5000], [to_bytes(hexstr=accounts[3].address), 5000]],
+          Web3.keccak(text='transfer'),
           100000]
          ],
         []
@@ -907,7 +931,8 @@ def test_update_config_multiple_times(configuration):
 def test_update_after_readding_deleted_config(configuration):
     value = [
         to_bytes(hexstr=accounts[4].address),
-        [[[[to_bytes(hexstr=accounts[2].address), 5000], [to_bytes(hexstr=accounts[3].address), 5000]], 'transfer',
+        [[[[to_bytes(hexstr=accounts[2].address), 5000], [to_bytes(hexstr=accounts[3].address), 5000]],
+          Web3.keccak(text='transfer'),
           100000]
          ],
         []
@@ -925,7 +950,8 @@ def test_update_after_readding_deleted_config(configuration):
 
 def test_add_config_function(configuration):
     function = [
-        [[[to_bytes(hexstr=accounts[2].address), 5000], [to_bytes(hexstr=accounts[3].address), 5000]], 'transfer',
+        [[[to_bytes(hexstr=accounts[2].address), 5000], [to_bytes(hexstr=accounts[3].address), 5000]],
+         Web3.keccak(text='transfer'),
          100000]]
     value = [
         to_bytes(hexstr=accounts[0].address),
@@ -936,7 +962,8 @@ def test_add_config_function(configuration):
     config_fee = configuration.getConfig(accounts[0])
     assert len(config_fee['functions']) == 0
     function = [
-        [[[to_bytes(hexstr=accounts[2].address), 6000], [to_bytes(hexstr=accounts[3].address), 4000]], 'transfer',
+        [[[to_bytes(hexstr=accounts[2].address), 6000], [to_bytes(hexstr=accounts[3].address), 4000]],
+         Web3.keccak(text='transfer'),
          100000]]
     value[-1] = function
     configuration.updateParam('updateConfig', list2_elp_encode(value))
@@ -946,7 +973,8 @@ def test_add_config_function(configuration):
 
 def test_update_function_and_events(configuration):
     function = [
-        [[[to_bytes(hexstr=accounts[2].address), 5000], [to_bytes(hexstr=accounts[3].address), 5000]], 'transfer',
+        [[[to_bytes(hexstr=accounts[2].address), 5000], [to_bytes(hexstr=accounts[3].address), 5000]],
+         Web3.keccak(text='transfer'),
          100000]]
     value = [
         to_bytes(hexstr=accounts[0].address),
