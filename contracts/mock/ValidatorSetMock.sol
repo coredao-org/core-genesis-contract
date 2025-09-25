@@ -4,6 +4,8 @@ pragma solidity 0.8.4;
 import "../ValidatorSet.sol";
 
 contract ValidatorSetMock is ValidatorSet {
+    uint256 public subsidyReduceInterval = 10512000;
+    
     function developmentInit() external {
         blockReward = blockReward / 1e14;
         voteRewardPercent = 10;
@@ -14,24 +16,16 @@ contract ValidatorSetMock is ValidatorSet {
         delete currentValidatorSet;
 
         bytes memory initValidatorSet = hex"f901d1f85b9401bca3615d24d3c638836691517b2b9b49b054b1943ae030dc3717c66f63d6e8f1d1508a5c941ff46db099a1dbde53606922478636c65b06f9683e10bde7f6cbee8f0ebbb803d0beef91fa47f2727ef8533cb5166e54a52d08b8f85b94a458499604a85e90225a14946f36368ae24df16d94de442f5ba55687a24f04419424e0dc2593cc9f4cb099a1dbde53606922478636c65b06f9683e10bde7f6cbee8f0ebbb803d0beef91fa47f2727ef8533cb5166e54a52d08b8f85b945e00c0d5c4c10d4c805aba878d51129a89d513e094cb089be171e256acdaac1ebbeb32ffba0dd438eeb099a1dbde53606922478636c65b06f9683e10bde7f6cbee8f0ebbb803d0beef91fa47f2727ef8533cb5166e54a52d08b8f85b941cd652bc64af3f09b490daae27f46e53726ce230940a53b7e0ffd97357e444b85f4d683c1d8e22879ab099a1dbde53606922478636c65b06f9683e10bde7f6cbee8f0ebbb803d0beef91fa47f2727ef8533cb5166e54a52d08b8f85b94da37ccecbb2d7c83ae27ee2bebfe8ebce162c60094d82c24274ebbfe438788d684dc6034c3c67664a4b099a1dbde53606922478636c65b06f9683e10bde7f6cbee8f0ebbb803d0beef91fa47f2727ef8533cb5166e54a52d08b8";
-        bytes memory initVoteAddress = hex"99a1dbde53606922478636c65b06f9683e10bde7f6cbee8f0ebbb803d0beef91fa47f2727ef8533cb5166e54a52d08b8";
-        (Validator[] memory validatorSet, bool valid) = decodeValidatorSet(initValidatorSet);
+        (bool valid) = decodeValidatorSet(initValidatorSet);
         require(valid, "failed to parse init validatorSet");
-        uint256 validatorSize = validatorSet.length;
-        for (uint256 i = 0; i < validatorSize; i++) {
-            validatorSet[i].voteAddr = initVoteAddress;
-            validatorSet[i].voteWeight = 0;
-            currentValidatorSet.push(validatorSet[i]);
-            currentValidatorSetMap[validatorSet[i].consensusAddress] = i + 1;
-        }
     }
     
     function updateBlockReward(uint256 _blockReward) external {
         blockReward = _blockReward;
     }
 
-    function updateSubsidyReduceInterval(uint256 _internal) external {
-        SUBSIDY_REDUCE_INTERVAL = _internal;
+    function updateSubsidyReduceInterval(uint256 _subsidyReduceInterval) external {
+        subsidyReduceInterval = _subsidyReduceInterval;
     }
 
     function jailValidator(address operateAddress, uint256 round, uint256 fine) external {
@@ -42,6 +36,11 @@ contract ValidatorSetMock is ValidatorSet {
         uint index = currentValidatorSetMap[consensus];
         require(index > 0, "no match validator");
         return currentValidatorSet[index - 1];
+    }
+    function getValidatorExByConsensus(address consensus) external view returns (ValidatorEx memory) {
+        uint index = currentValidatorSetMap[consensus];
+        require(index > 0, "no match validator");
+        return exMap[consensus];
     }
 
     function getVoteRewardPercent() external view returns (uint256) {
@@ -84,4 +83,26 @@ contract ValidatorSetMock is ValidatorSet {
         }
         IStakeHub(STAKE_HUB_ADDR).addRoundReward{value: rewardSum}(agentList, rewardList, roundTag);
     }
+    function decodeValidatorSetMock(bytes memory initValidatorSet) external returns (bool) {
+        return decodeValidatorSet(initValidatorSet);
+    }
+    function depositMock(address valAddr) external payable onlyCoinbase onlyInit onlyZeroGasPrice {
+        if (block.number % subsidyReduceInterval == 0) {
+            blockReward = blockReward * REDUCE_FACTOR / 10000;
+        }
+        uint256 value = msg.value;
+        if (address(this).balance >= totalInCome + value + blockReward) {
+            value += blockReward;
+        }
+        uint256 index = currentValidatorSetMap[valAddr];
+        if (index != 0) {
+            Validator storage validator = currentValidatorSet[index - 1];
+            totalInCome = totalInCome + value;
+            validator.income = validator.income + value;
+            emit validatorDeposit(valAddr, value);
+        } else {
+            emit deprecatedDeposit(valAddr, value);
+        }
+    }
+
 }

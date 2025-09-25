@@ -16,10 +16,11 @@ def set_up(slash_indicator):
         encode(['string', 'bytes'], ['felonyThreshold', Web3.to_bytes(hexstr=hex_value)]),
         "update felonyThreshold"
     )
+
+
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set, gov_hub):
     accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
-
 
 
 @pytest.fixture()
@@ -35,6 +36,7 @@ def set_candidate_maintenance(candidate_hub):
         delegate_coin_success(operator, accounts[1], 1e18)
     return operators, consensuses
 
+
 # slash
 def test_slash(slash_indicator, validator_set):
     for slash_address, times, count in (
@@ -48,7 +50,8 @@ def test_slash(slash_indicator, validator_set):
         result = slash_indicator.getSlashIndicator(slash_address)
         assert result[1] == count
 
-def test_slash_force_enter_maintenance(slash_indicator,candidate_hub, validator_set, set_candidate_maintenance):
+
+def test_slash_force_enter_maintenance(slash_indicator, candidate_hub, validator_set, set_candidate_maintenance):
     candidate_hub.setMaxAlternateCount(5)
     operators, consensuses = set_candidate_maintenance
     validator = consensuses[0]
@@ -59,21 +62,44 @@ def test_slash_force_enter_maintenance(slash_indicator,candidate_hub, validator_
     validator_set.deposit(validator, {"value": 10000, "from": accounts[99]})
 
     for _ in range(2):
-        tx= slash_indicator.slash(validator)
+        tx = slash_indicator.slash(validator)
     assert 'validatorEnterMaintenance' in tx.events
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] != 0
     old_enter_maintenance_height = validator['enterMaintenanceHeight']
 
     result = slash_indicator.getSlashIndicator(consensuses[0])
-    assert result[1] == 2  
+    assert result[1] == 2
     slash_indicator.slash(consensuses[0])
-    tx  = slash_indicator.slash(consensuses[0])
-    assert 'validatorEnterMaintenance' not  in tx.events
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    tx = slash_indicator.slash(consensuses[0])
+    assert 'validatorEnterMaintenance' not in tx.events
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] == old_enter_maintenance_height
 
-
+@pytest.mark.parametrize("slash", ['felony', 'misdemeanor'])
+def test_slash_force_update_voteWeight_success(slash_indicator,validator_set,set_candidate,slash):
+    operators, consensuses = set_candidate
+    turn_round()
+    vote_weight = [10, 20, 30]
+    chain_vote(consensuses, vote_weight)
+    for i in range(3):
+        assert validator_set.getValidatorExByConsensus(consensuses[i])['voteWeight'] == vote_weight[i]
+    if slash == 'felony':
+        slash_indicator.setFelonyThreshold(3)
+        event_name = 'validatorFelony'
+        actual_weight = 0
+    else:
+        event_name = 'validatorMisdemeanor'
+        slash_indicator.setFelonyThreshold(10)
+        slash_indicator.setMisdemeanorThreshold(3)
+        actual_weight = 10
+    validator = validator_set.exMap(consensuses[0])
+    assert validator['voteWeight'] == vote_weight[0]
+    for _ in range(3):
+        tx = slash_indicator.slash(consensuses[0])
+    assert event_name in tx.events
+    validator = validator_set.exMap(consensuses[0])
+    assert validator['voteWeight'] == actual_weight
 
 def test_double_sign_slash(slash_indicator, candidate_hub):
     tests = [(
@@ -285,8 +311,8 @@ def test_slash_with_block_count_new_validator_success(slash_indicator, validator
     slash_indicator.mockSlashWithBlockCount(validator, block_count)
 
     result = slash_indicator.getSlashIndicator(validator)
-    assert result[0] == chain.height 
-    assert result[1] == block_count 
+    assert result[0] == chain.height
+    assert result[1] == block_count
 
     assert slash_indicator.validators(0) == validator
 
@@ -302,7 +328,7 @@ def test_slash_with_block_count_existing_validator_success(slash_indicator, set_
 
     slash_indicator.mockSlashWithBlockCount(validator, 3)
     result2 = slash_indicator.getSlashIndicator(validator)
-    assert result2[1] == 8 
+    assert result2[1] == 8
 
     assert result2[0] == chain.height
 

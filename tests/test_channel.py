@@ -1481,7 +1481,7 @@ def test_pay_commission_by_id_through_btc_stake_claim_reward(
     btc_tx_id = delegate_btc_success(
         candidate, delegator, BTC_VALUE, LOCK_SCRIPT, lock_data=LOCK_TIMESTAMP, channel_id=partner_id)
     tx_map = btc_stake.btcTxMap(btc_tx_id)
-    assert tx_map[2] == partner_id
+    assert tx_map[-1] == partner_id
     turn_round()
     turn_round(consensuses)
 
@@ -1505,7 +1505,7 @@ def test_pay_commission_by_id_btc_stake_invalid_channel(channel, btc_stake, set_
 
     btc_tx_id = delegate_btc_success(candidate, delegator, BTC_VALUE, LOCK_SCRIPT, lock_data=LOCK_TIMESTAMP, channel_id=channel_id)
     tx_map = btc_stake.btcTxMap(btc_tx_id)
-    assert tx_map[2] == channel_id
+    assert tx_map[-1] == channel_id
     turn_round()
     turn_round(consensuses)
 

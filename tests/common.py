@@ -28,28 +28,24 @@ def get_candidate(operator=None):
     return CandidateHubMock[0].candidateSet(idx - 1).dict()
 
 
-def chain_deposit(miners, tx_fee=100,deposit_count=1):
+def chain_deposit(miners, tx_fee=100, deposit_count=1):
     if isinstance(miners, list):
         for miner in miners:
             for _ in range(deposit_count):
-                tx  = ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[99]})
+                tx = ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[99]})
     else:
         for _ in range(deposit_count):
             tx = ValidatorSetMock[0].deposit(miners, {"value": tx_fee, "from": accounts[99]})
-            
-        
+
 
 def chain_vote(miners, weights):
-    if isinstance(miners, list):
-        for miner in miners:
-            ValidatorSetMock[0].vote(miner, weights, {"from": accounts[99]})
-    else:
-        ValidatorSetMock[0].vote(miners, weights, {"from": accounts[99]})
+    ValidatorSetMock[0].vote(miners, weights, {"from": accounts[99]})
 
 
 def chain_get_validator_consensus():
     consensus, vote_addresses = ValidatorSetMock[0].getValidatorsAndVoteAddresses()
     return consensus
+
 
 def turn_round(miners: list = None, tx_fee=100, round_count=1, weights=None):
     if miners is None:
@@ -77,10 +73,12 @@ def execute_proposal(target, value, signature, calldata, msg):
     GovHubMock[0].execute(proposal_id)
     return proposal_id
 
+
 def expect_validator_consensus(consensuses):
     assert len(chain_get_validator_consensus()) == len(consensuses)
     for consensus in chain_get_validator_consensus():
         assert consensus in consensuses
+
 
 def register_relayer(relayer_address=None):
     if relayer_address is None:
@@ -121,8 +119,8 @@ def claim_stake_and_relay_reward(account):
     return tx0
 
 
-def slash_validator(consensus,slash_type='felony'):
-    tx =None
+def slash_validator(consensus, slash_type='felony'):
+    tx = None
     slash_indicator = SlashIndicatorMock[0]
     if slash_type == 'felony':
         slash_threshold = slash_indicator.felonyThreshold()
@@ -136,18 +134,22 @@ def slash_validator(consensus,slash_type='felony'):
         assert 'validatorMisdemeanor' in tx.events
     return tx
 
+
 def refuse_delegate(operator):
     tx = CandidateHubMock[0].refuseDelegate({'from': operator})
     return tx
+
 
 def accept_delegate(operator):
     tx = CandidateHubMock[0].acceptDelegate({'from': operator})
     return tx
 
+
 def enter_maintenance(operator):
     tx = ValidatorSetMock[0].enterMaintenance({'from': operator})
     assert 'validatorEnterMaintenance' in tx.events
     return tx
+
 
 def exit_maintenance(operator):
     tx = ValidatorSetMock[0].exitMaintenance({'from': operator})

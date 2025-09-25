@@ -208,6 +208,7 @@ def test_getRoundTag_success(candidate_hub):
     assert round_tag == init_round
 
 
+# turnRound
 def test_turnRound_after_new_validator(candidate_hub, set_candidate):
     operators, consensuses = set_candidate
     turn_round()
@@ -278,8 +279,36 @@ def test_turnround_update_voteaddrlist_success(candidate_hub, validator_set, sla
     assert validator_set.getValidatorsAndVoteAddresses()[0] == consensuses
     assert validator_set.getValidatorsAndVoteAddresses()[1] == vote_address_list
     turn_round(consensuses)
-    assert validator_set.currentValidatorSet(0) == [operators[0], consensuses[0], operators[0], 1000, 0,
-                                                    vote_address_list[0], 0, 0]
+    assert validator_set.currentValidatorSet(0) == [operators[0], consensuses[0], operators[0], 1000, 0]
+    assert validator_set.exMap(consensuses[0])['voteAddr'] == vote_address_list[0]
+    assert validator_set.exMap(consensuses[0])['voteWeight'] == 0
+    assert validator_set.exMap(consensuses[0])['enterMaintenanceHeight'] == 0
+
+
+def test_turnRound_update_validatorEx_success(candidate_hub, validator_set, slash_indicator):
+    operators = []
+    consensuses = []
+    vote_address_list = [random_vote_address() for _ in range(3)]
+    for index, operator in enumerate(accounts[5:8]):
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator, vote_address=vote_address_list[index]))
+    turn_round(consensuses)
+    weights = [30, 50, 80]
+    chain_vote(consensuses, weights)
+    for i in range(3):
+        assert validator_set.exMap(consensuses[i])['voteAddr'] == vote_address_list[i]
+        assert validator_set.exMap(consensuses[i])['voteWeight'] == weights[i]
+        assert validator_set.exMap(consensuses[i])['enterMaintenanceHeight'] == 0
+    turn_round(consensuses)
+    for i in range(3):
+        assert validator_set.exMap(consensuses[i])['voteAddr'] == vote_address_list[i]
+        assert validator_set.exMap(consensuses[i])['voteWeight'] == 0
+        assert validator_set.exMap(consensuses[i])['enterMaintenanceHeight'] == 0
+    chain_vote(consensuses, weights)
+    for i in range(3):
+        assert validator_set.exMap(consensuses[i])['voteAddr'] == vote_address_list[i]
+        assert validator_set.exMap(consensuses[i])['voteWeight'] == weights[i]
+        assert validator_set.exMap(consensuses[i])['enterMaintenanceHeight'] == 0
 
 
 @pytest.mark.parametrize("times", [
@@ -478,11 +507,10 @@ def test_registration_index_correct_after_success(candidate_hub, required_margin
         required_margin,
         status,
         get_current_round(),
-        commission_last_round,
-        vote_address,
-        ZERO_ADDRESS,
-        ("", "", "", "")
+        commission_last_round
     )
+    assert candidate_hub.exMap(accounts[1])['voteAddr'] == vote_address
+    assert candidate_hub.exMap(accounts[1])['agent'] == ZERO_ADDRESS
     assert candidate_hub.operateMap(accounts[1]) == 1
     assert candidate_hub.getConsensusMap(consensus_addr) == 1
     consensus = register_candidate(operator=accounts[2])
@@ -1350,7 +1378,7 @@ def test_update_agent_success(candidate_hub, accounts):
     assert len(tx.events['AgentUpdated']) > 0
     assert tx.events['AgentUpdated']['operateAddr'] == operator
     assert tx.events['AgentUpdated']['newAgent'] == new_agent
-
+    assert candidate_hub.exMap(operator)['agent'] == new_agent
     assert candidate_hub.agentMap(new_agent) != 0
 
 
@@ -1395,11 +1423,14 @@ def test_update_agent_already_exists(candidate_hub):
     )
 
     candidate_hub.updateAgent(agent, {'from': operator1})
-
     with brownie.reverts("agent address already exists"):
         candidate_hub.updateAgent(agent, {'from': operator2})
     candidate_hub.updateAgent(accounts[13], {'from': operator2})
     assert candidate_hub.agentMap(accounts[13]) == 2
+    candidate_hub.updateAgent(accounts[11], {'from': operator1})
+    candidate_hub.updateAgent(agent, {'from': operator2})
+    assert candidate_hub.agentMap(accounts[11]) == 1
+    assert candidate_hub.agentMap(agent) == 2
 
 
 def test_update_agent_multiple_times(candidate_hub, accounts):
@@ -1429,6 +1460,16 @@ def test_update_agent_multiple_times(candidate_hub, accounts):
 def test_remove_agent_permission(candidate_hub, accounts):
     with brownie.reverts("candidate does not exist"):
         candidate_hub.removeAgent({'from': accounts[1]})
+    candidate_hub.register(
+        accounts[8],
+        accounts[9],
+        100,
+        random_vote_address(),
+        {'from': accounts[1], 'value': 1e18}
+    )
+    candidate_hub.updateAgent(accounts[2], {'from': accounts[1]})
+    with brownie.reverts("candidate does not exist"):
+        candidate_hub.removeAgent({'from': accounts[2]})
 
 
 def test_remove_agent_no_agent(candidate_hub, accounts):
@@ -1446,10 +1487,11 @@ def test_remove_agent_success(candidate_hub, accounts):
 
     candidate_hub.updateAgent(agent, {'from': operator})
     assert candidate_hub.agentMap(agent) != 0
+    assert candidate_hub.exMap(operator)['agent'] == agent
 
     candidate_hub.removeAgent({'from': operator})
     assert candidate_hub.agentMap(agent) == 0
-    assert candidate_hub.candidateSet(0).dict()['agent'] == ZERO_ADDRESS
+    assert candidate_hub.exMap(operator)['agent'] == ZERO_ADDRESS
 
 
 # editConsensusAddress
@@ -1480,8 +1522,7 @@ def test_edit_consensus_address_success(candidate_hub, accounts):
     assert tx.events['ConsensusAddressEdited']['newConsensusAddr'] == new_consensus
     assert candidate_hub.isCandidateByConsensus(old_consensus) is False
     assert candidate_hub.isCandidateByConsensus(new_consensus)
-    assert candidate_hub.candidateSet(
-        0).dict()['consensusAddr'] == new_consensus
+    assert candidate_hub.candidateSet(0).dict()['consensusAddr'] == new_consensus
 
 
 def test_edit_consensus_address_by_agent_success(candidate_hub, accounts):
@@ -1611,9 +1652,12 @@ def test_remove_candidate_agent_map_index(candidate_hub, slash_indicator):
     for i in range(5):
         assert candidate_hub.operateMap(operators[i]) == i + 1
         assert candidate_hub.getConsensusMap(consensuses[i]) == i + 1
-    for i in range(1, 4):
+    for i in range(1, 5):
         assert candidate_hub.agentMap(agents[i]) == i + 1
     assert candidate_hub.agentMap(agents[0]) == 0
+    vote_addr = random_vote_address()
+    candidate_hub.editVoteAddress(vote_addr, {'from': operators[0]})
+    assert candidate_hub.exMap(operators[0])['voteAddr'] == vote_addr
     felony_threshold = slash_indicator.felonyThreshold()
     for _ in range(felony_threshold):
         tx = slash_indicator.slash(consensuses[0])
@@ -1626,6 +1670,7 @@ def test_remove_candidate_agent_map_index(candidate_hub, slash_indicator):
     assert candidate_hub.agentMap(agents[0]) == 0
     assert candidate_hub.operateMap(operators[0]) == 0
     assert candidate_hub.getConsensusMap(consensuses[0]) == 0
+    assert candidate_hub.exMap(operators[0])['voteAddr'] == ZERO_ADDRESS
 
 
 def test_remove_candidate_agent_map_index_with_all_agents(candidate_hub, slash_indicator):
@@ -1649,7 +1694,7 @@ def test_remove_candidate_agent_map_index_with_all_agents(candidate_hub, slash_i
     assert candidate_hub.agentMap(agents[-1]) == 3
     vote_addr = random_vote_address()
     candidate_hub.editVoteAddress(vote_addr, {'from': agents[-1]})
-    assert candidate_hub.candidateSet(2).dict()['voteAddr'] == vote_addr
+    assert candidate_hub.exMap(operators[-1])['voteAddr'] == vote_addr
     assert candidate_hub.candidateSet(2).dict()['operateAddr'] == operators[-1]
 
 
@@ -1672,18 +1717,22 @@ def test_edit_vote_address_length(candidate_hub, accounts):
 def test_edit_vote_address_duplicate(candidate_hub, accounts):
     operator1 = accounts[5]
     operator2 = accounts[6]
+    operator3 = accounts[7]
     consensus1 = register_candidate(operator=operator1)
-    vote_addr1 = candidate_hub.candidateSet(0).dict()['voteAddr']
+    vote_addr1 = candidate_hub.exMap(operator1)['voteAddr']
     register_candidate(operator=operator2)
-
+    register_candidate(operator=operator3)
     with brownie.reverts("vote address already exists"):
         candidate_hub.editVoteAddress(vote_addr1, {'from': operator2})
+    vote_addr2 = candidate_hub.exMap(operator3)['voteAddr']
+    with brownie.reverts("vote address already exists"):
+        candidate_hub.editVoteAddress(vote_addr2, {'from': operator2})
 
 
 def test_edit_vote_address_success(candidate_hub, accounts):
     operator = accounts[5]
     consensus = register_candidate(operator=operator)
-    old_vote_addr = candidate_hub.candidateSet(0).dict()['voteAddr']
+    old_vote_addr = candidate_hub.exMap(operator)['voteAddr']
     new_vote_addr = random_vote_address()
 
     tx = candidate_hub.editVoteAddress(new_vote_addr, {'from': operator})
@@ -1691,6 +1740,7 @@ def test_edit_vote_address_success(candidate_hub, accounts):
     assert 'VoteAddressEdited' in tx.events
     assert tx.events['VoteAddressEdited']['operateAddr'] == operator
     assert tx.events['VoteAddressEdited']['newVoteAddr'] == new_vote_addr
+    assert candidate_hub.exMap(operator)['voteAddr'] == new_vote_addr
 
 
 def test_edit_vote_address_by_agent_success(candidate_hub, accounts):
@@ -1703,57 +1753,6 @@ def test_edit_vote_address_by_agent_success(candidate_hub, accounts):
 
     tx = candidate_hub.editVoteAddress(new_vote_addr, {'from': agent})
     assert 'VoteAddressEdited' in tx.events
-
-
-# editDescription
-def test_edit_description_permission(candidate_hub, accounts):
-    with brownie.reverts("candidate does not exist"):
-        candidate_hub.editDescription(
-            "test", "test", "test", "test", {'from': accounts[1]})
-
-
-def test_edit_description_success(candidate_hub, accounts):
-    operator = accounts[5]
-    register_candidate(operator=operator)
-
-    moniker = "Test Validator"
-    identity = "test-identity"
-    website = "https://test.com"
-    details = "Test validator details"
-
-    tx = candidate_hub.editDescription(
-        moniker, identity, website, details, {'from': operator})
-
-    assert 'DescriptionEdited' in tx.events
-    assert tx.events['DescriptionEdited']['operateAddr'] == operator
-    assert tx.events['DescriptionEdited']['moniker'] == moniker
-    assert tx.events['DescriptionEdited']['identity'] == identity
-    assert tx.events['DescriptionEdited']['website'] == website
-    assert tx.events['DescriptionEdited']['details'] == details
-    assert candidate_hub.candidateSet(
-        0).dict()['description']['moniker'] == moniker
-    assert candidate_hub.candidateSet(
-        0).dict()['description']['identity'] == identity
-    assert candidate_hub.candidateSet(
-        0).dict()['description']['website'] == website
-    assert candidate_hub.candidateSet(
-        0).dict()['description']['details'] == details
-
-
-def test_edit_description_by_agent_success(candidate_hub, accounts):
-    operator = accounts[5]
-    agent = accounts[6]
-    register_candidate(operator=operator)
-    new_moniker = "Test Validator"
-    new_identity = "test-identity"
-    new_website = "https://test.com"
-    new_details = "Test validator details"
-
-    candidate_hub.updateAgent(agent, {'from': operator})
-
-    tx = candidate_hub.editDescription(
-        new_moniker, new_identity, new_website, new_details, {'from': agent})
-    assert 'DescriptionEdited' in tx.events
 
 
 # editFeeAddress
@@ -1808,13 +1807,7 @@ def test_candidate_update_and_turn_round(candidate_hub, accounts, validator_set,
     for i in range(validator_count):
         candidate_hub.updateAgent(accounts[i], {'from': operators[i]})
     turn_round(consensuses)
-    for i in range(validator_count):
-        moniker = f"validator{i}"
-        identity = f"identity{i}"
-        website = f"https://validator{i}.com"
-        details = f"details{i}"
-        tx = candidate_hub.editDescription(
-            moniker, identity, website, details, {'from': accounts[i]})
+    candidate_hub.editVoteAddress(random_vote_address(), {'from': operators[0]})
     turn_round(consensuses)
     for i in range(validator_count):
         candidate_hub.editFeeAddress(accounts[i], {'from': operators[i]})
@@ -1825,13 +1818,9 @@ def test_candidate_update_and_turn_round(candidate_hub, accounts, validator_set,
     for i, operator in enumerate(operators):
         index = candidate_hub.operateMap(operator)
         c = candidate_hub.candidateSet(index - 1).dict()
-        assert c['agent'] == accounts[i]
+        assert candidate_hub.exMap(operator)['agent'] == accounts[i]
         assert c['feeAddr'] == accounts[i]
         assert c['commissionThousandths'] == 500 + i
-        assert c['description']['moniker'] == f"validator{i}"
-        assert c['description']['identity'] == f"identity{i}"
-        assert c['description']['website'] == f"https://validator{i}.com"
-        assert c['description']['details'] == f"details{i}"
     tx = stake_hub_claim_reward(accounts[0])
     assert 'claimedReward' in tx.events
     turn_round(consensuses)
@@ -1890,3 +1879,45 @@ def test_get_alternate_count_typical_scenarios(candidate_hub):
     # candidateSize < validatorCount, return 0
     alternate_count = candidate_hub.mockGetAlternateCount(5, 10, 8)
     assert alternate_count == 0
+
+
+#  removeCandidate
+def test_remove_candidate_success(candidate_hub, validator_set):
+    operators = [acc for acc in accounts[5:10]]
+    vote_addresses = [random_vote_address() for _ in range(5)]
+    update_agents = [f'0x{"0" * 39}{i + 1}' for i in range(5)]
+    consensuses = [register_candidate(operator=op) for op in operators]
+    for op, agent, vote_addr in zip(operators, update_agents, vote_addresses):
+        candidate_hub.updateAgent(agent, {'from': op})
+        candidate_hub.editVoteAddress(vote_addr, {'from': op})
+
+    turn_round()
+    for i, op in enumerate(operators):
+        candidate = candidate_hub.candidateSet(i)
+        assert candidate == [op, consensuses[i], op, 500, 1000000, 17, 7, 500]
+        assert candidate_hub.operateMap(op) == i + 1
+        assert candidate_hub.getConsensusMap(consensuses[i]) == i + 1
+        assert candidate_hub.exMap(op) == [update_agents[i], vote_addresses[i]]
+        assert candidate_hub.agentMap(update_agents[i]) == i + 1
+
+    candidate_hub.removeCandidateMock(2, {'from': operators[0]})
+    candidate_set_order = [0,4,2,3]
+    for index,i in enumerate(candidate_set_order):
+        candidate = candidate_hub.candidateSet(index)
+        assert candidate == [operators[i], consensuses[i], operators[i], 500, 1000000, 17, 7, 500]
+        assert candidate_hub.operateMap(operators[i]) == index + 1
+        assert candidate_hub.getConsensusMap(consensuses[i]) == index + 1
+        assert candidate_hub.exMap(operators[i]) == [update_agents[i], vote_addresses[i]]
+        assert candidate_hub.agentMap(update_agents[i]) == index + 1
+
+    candidate_hub.removeCandidateMock(1, {'from': operators[0]})
+
+    assert len(candidate_hub.getCandidates()) == 3
+    candidate_set_order = [3, 4, 2]
+    for index, i in enumerate(candidate_set_order):
+        candidate = candidate_hub.candidateSet(index)
+        assert candidate == [operators[i], consensuses[i], operators[i], 500, 1000000, 17, 7, 500]
+        assert candidate_hub.operateMap(operators[i]) == index + 1
+        assert candidate_hub.getConsensusMap(consensuses[i]) == index + 1
+        assert candidate_hub.exMap(operators[i]) == [update_agents[i], vote_addresses[i]]
+        assert candidate_hub.agentMap(update_agents[i]) == index + 1

@@ -106,6 +106,45 @@ def __update_slash_address():
     update_system_contract_address(validator_set_instance, slash_indicator=accounts[0])
 
 
+def test_init_success(validator_set):
+    init_operators = ['0x3aE030Dc3717C66f63D6e8f1d1508a5C941ff46D', '0xDE442f5BA55687a24F04419424E0dc2593cC9f4C',
+                      '0xcb089Be171e256acdaac1eBBEb32fFbA0dd438ee', '0x0A53B7e0Ffd97357e444B85f4D683c1d8e22879A',
+                      '0xd82c24274EBbfe438788D684dC6034c3C67664A4']
+    init_consensuses = ['0x01Bca3615D24d3c638836691517b2B9b49b054B1', '0xa458499604A85E90225a14946f36368Ae24df16D',
+                        '0x5E00C0D5C4C10d4c805aba878D51129A89d513e0', '0x1Cd652bC64Af3f09B490dAae27f46e53726ce230',
+                        '0xDA37ccECBB2D7C83aE27eE2BeBFE8EBCe162c600']
+    init_vote_address = '0x99a1dbde53606922478636c65b06f9683e10bde7f6cbee8f0ebbb803d0beef91fa47f2727ef8533cb5166e54a52d08b8'
+    assert validator_set.blockRewardIncentivePercent() == 10
+    assert validator_set.turnLength() == 1
+    assert validator_set.alreadyInit() is True
+    for index, validator in enumerate(validator_set.getCurrentValidatorSet()):
+        assert validator == [init_operators[index], init_consensuses[index], init_operators[index], 1000, 0]
+        assert validator_set.getValidatorExByConsensus(init_consensuses[index]) == [init_vote_address, 0, 0]
+    validator_set.clearCurrentValidatorSet()
+    init_validator_data = 'f90573f85b944121f067b0f5135d77c29b2b329e8cb1bd96c96094f8b18cecc98d976ad253d38e4100a73d4e154726b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f85b947f461f8a1c35edecd6816e76eb2e84eb661751ee94f8b18cecc98d976ad253d38e4100a73d4e154726b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f85b94fd806ab93db5742944b7b50ce759e5eee5f6fe5094f8b18cecc98d976ad253d38e4100a73d4e154726b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f85b947ef3a94ad1c443481fb3d86829355ca90477f8b594f8b18cecc98d976ad253d38e4100a73d4e154726b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f85b9467d1ad48f91e131413bd0b04e823f3ae4f81e85394f8b18cecc98d976ad253d38e4100a73d4e154726b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f85b943fb42cab4416024dc1b4c9e21b9acd0dfcef35f694f8b18cecc98d976ad253d38e4100a73d4e154726b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f85b943511e3b8ac7336b99517d324145e9b5bb33e08a494f8b18cecc98d976ad253d38e4100a73d4e154726b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f85b94729f39a54304fcc6ec279684c71491a385d7b9ae94f8b18cecc98d976ad253d38e4100a73d4e154726b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f85b94f44a785fd9f23f0abd443541386e71356ce619dc94f8b18cecc98d976ad253d38e4100a73d4e154726b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f85b942efd3cf0733421aec3e4202480d0a90bd157514994f8b18cecc98d976ad253d38e4100a73d4e154726b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f85b94613b0f519ada008cb99b6130e89122ba416bf15994f8b18cecc98d976ad253d38e4100a73d4e154726b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f85b94c0925eeb800ff6ba4695ded61562a10102152b5f94f8b18cecc98d976ad253d38e4100a73d4e154726b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f85b9419e3c7d7e69f273f3f91c060bb438a007f6fc33c94f8b18cecc98d976ad253d38e4100a73d4e154726b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f85b94e127f110d172a0c4c6209fe045dd71781e8fe9d494f8b18cecc98d976ad253d38e4100a73d4e154726b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f85b94f778dc4a199a440dbe9f16d1e13e185bb179b3b794f8b18cecc98d976ad253d38e4100a73d4e154726b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+    validator_set.decodeValidatorSetMock(init_validator_data)
+    init_consensuses2 = ['0x4121F067B0F5135D77C29b2B329e8Cb1bd96C960',
+                         '0x7f461f8a1c35eDEcD6816e76Eb2E84eb661751eE',
+                         '0xfD806AB93db5742944B7B50Ce759E5EeE5f6FE50',
+                         '0x7Ef3a94AD1c443481fb3d86829355CA90477F8b5',
+                         '0x67D1ad48f91E131413BD0b04e823F3AE4F81E853',
+                         '0x3Fb42caB4416024dC1B4C9e21B9acD0DFcef35f6',
+                         '0x3511E3b8aC7336B99517D324145e9b5Bb33e08a4',
+                         '0x729f39a54304fCc6eC279684c71491A385d7b9aE',
+                         '0xF44a785Fd9F23F0abd443541386E71356Ce619dC',
+                         '0x2EFd3CF0733421aec3E4202480d0A90bd1575149',
+                         '0x613b0F519aDA008CB99B6130E89122BA416Bf159',
+                         '0xc0925eeb800fF6Ba4695DED61562A10102152B5f',
+                         '0x19e3C7D7E69F273f3F91C060Bb438a007f6Fc33c',
+                         '0xE127f110D172a0c4C6209fE045dd71781e8fe9d4',
+                         '0xF778dc4A199A440dBE9f16d1e13e185bB179B3b7']
+    for index, validator in enumerate(validator_set.getCurrentValidatorSet()):
+        assert validator == ['0xF8B18CeCC98D976ad253D38E4100a73D4e154726', init_consensuses2[index],
+                             '0xF8B18CeCC98D976ad253D38E4100a73D4e154726', 1000, 0]
+        assert validator_set.getValidatorExByConsensus(init_consensuses2[index]) == [
+            '0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000', 0, 0]
+
+
 def test_check_validator_address_failed_with_zero_address(validator_set):
     assert validator_set.isValidator.call(constants.ADDRESS_ZERO) is False
 
@@ -236,6 +275,7 @@ def test_deposit_to_validator_with_positive_balance(validator_address, deposit_v
     __balance_check(0 - deposit_value, deposit_value, 0)
 
 
+# vote
 def test_vote_addr_and_weights_mismatch_failed(set_candidate):
     operators, consensuses = set_candidate
     accounts[1].transfer(validator_set_instance.address, Web3.to_wei(10, 'ether'))
@@ -247,17 +287,17 @@ def test_vote_addr_and_weights_mismatch_failed(set_candidate):
     validator_set_instance.vote([], [])
 
 
-def test_val_addrs_contains_non_validator(validator_set, set_candidate):
+def test_val_addrs_contains_non_validator_failed(validator_set, set_candidate):
     operators, consensuses = set_candidate
     turn_round()
     consensuses.append(accounts[2])
     weights = [10, 20, 30, 40]
     validator_set.vote(consensuses, weights)
-    assert validator_set.getValidatorByConsensus(consensuses[0])['voteWeight'] == weights[0]
-    assert validator_set.getValidatorByConsensus(consensuses[1])['voteWeight'] == weights[1]
-    assert validator_set.getValidatorByConsensus(consensuses[2])['voteWeight'] == weights[2]
+    assert validator_set.getValidatorExByConsensus(consensuses[0])['voteWeight'] == weights[0]
+    assert validator_set.getValidatorExByConsensus(consensuses[1])['voteWeight'] == weights[1]
+    assert validator_set.getValidatorExByConsensus(consensuses[2])['voteWeight'] == weights[2]
     with brownie.reverts("no match validator"):
-        validator_set.getValidatorByConsensus(consensuses[3])
+        validator_set.getValidatorExByConsensus(consensuses[3])
 
 
 @pytest.mark.xfail
@@ -283,8 +323,10 @@ def test_vote_success(validator_set):
     weights = [10, 20, 30]
     validator_set.vote(consensuses, weights)
     for i in range(len(consensuses)):
-        validator = [operators[i], consensuses[i], operators[i], 1000, 0, vote_address_list[i], weights[i], 0]
+        validator = [operators[i], consensuses[i], operators[i], 1000, 0]
+        validator_ex = [vote_address_list[i], weights[i], 0]
         assert validator_set.getValidatorByConsensus(consensuses[i]) == validator
+        assert validator_set.getValidatorExByConsensus(consensuses[i]) == validator_ex
 
 
 def test_repeated_vote_counts_accumulate_success(validator_set, set_candidate):
@@ -295,11 +337,11 @@ def test_repeated_vote_counts_accumulate_success(validator_set, set_candidate):
     validator_set.vote(consensuses, weights)
     validator_set.vote(consensuses, weights)
     for i in range(len(consensuses)):
-        assert validator_set.getValidatorByConsensus(consensuses[i])['voteWeight'] == weights[i] * 3
+        assert validator_set.getValidatorExByConsensus(consensuses[i])['voteWeight'] == weights[i] * 3
 
     validator_set.vote(consensuses[:-1], weights[:-1])
-    assert validator_set.getValidatorByConsensus(consensuses[0])['voteWeight'] == weights[0] * 4
-    assert validator_set.getValidatorByConsensus(consensuses[1])['voteWeight'] == weights[1] * 4
+    assert validator_set.getValidatorExByConsensus(consensuses[0])['voteWeight'] == weights[0] * 4
+    assert validator_set.getValidatorExByConsensus(consensuses[1])['voteWeight'] == weights[1] * 4
 
 
 def test_vote_for_unelected_validator_failed(validator_set, set_candidate):
@@ -332,10 +374,10 @@ def test_vote_address_contains_felony_failed(validator_set, set_candidate, slash
     assert event_name in tx0.events
     validator_set.vote([consensuses[0]], [10])
     if vote_state:
-        assert validator_set.getValidatorByConsensus(consensuses[0])['voteWeight'] == 10
+        assert validator_set.getValidatorExByConsensus(consensuses[0])['voteWeight'] == 10
     else:
         with brownie.reverts("no match validator"):
-            validator_set.getValidatorByConsensus(consensuses[0])
+            validator_set.getValidatorExByConsensus(consensuses[0])
 
 
 def test_vote_address_contains_unregistered_failed(validator_set, candidate_hub, set_candidate):
@@ -346,10 +388,10 @@ def test_vote_address_contains_unregistered_failed(validator_set, candidate_hub,
     candidate_hub.unregister({'from': operators[0]})
     weights = [10, 20, 30]
     with brownie.reverts("no match validator"):
-        validator_set.getValidatorByConsensus(consensuses[0])
+        validator_set.getValidatorExByConsensus(consensuses[0])
     validator_set.vote(consensuses, weights)
     with brownie.reverts("no match validator"):
-        validator_set.getValidatorByConsensus(consensuses[0])
+        validator_set.getValidatorExByConsensus(consensuses[0])
 
 
 def test_vote_array_length_change_success(validator_set, set_candidate):
@@ -363,7 +405,7 @@ def test_vote_array_length_change_success(validator_set, set_candidate):
     validator_set.vote(consensuses[:2], weights1[:2])
     actual_validator_fee = [140, 200, 150]
     for i in range(len(consensuses)):
-        assert validator_set.getValidatorByConsensus(consensuses[i])['voteWeight'] == actual_validator_fee[i]
+        assert validator_set.getValidatorExByConsensus(consensuses[i])['voteWeight'] == actual_validator_fee[i]
 
 
 # updateValidatorSet
@@ -423,7 +465,8 @@ def test_update_success():
     expect_event(tx, "validatorSetUpdated")
     assert validator_set_instance.getValidators() == [accounts[1]]
     assert validator_set_instance.getValidatorByConsensus(accounts[1]) == [accounts[0], accounts[1], accounts[2], 1000,
-                                                                           0, vote_address, 0, 0]
+                                                                           0]
+    assert validator_set_instance.getValidatorExByConsensus(accounts[1]) == [vote_address, 0, 0]
 
 
 def test_update_validator_set_default_vote_weight(set_candidate):
@@ -434,7 +477,7 @@ def test_update_validator_set_default_vote_weight(set_candidate):
     validator_set_instance.updateValidatorSet([operators[0]], [accounts[1]], [accounts[2]], [1000],
                                               [vote_address], validator_count)
     assert validator_set_instance.getValidators() == [accounts[1]]
-    validator = validator_set_instance.getValidatorByConsensus(accounts[1])
+    validator = validator_set_instance.getValidatorExByConsensus(accounts[1])
     assert validator['voteWeight'] == 0
 
 
@@ -454,7 +497,8 @@ def test_update_validator_set_add_new(validator_set, set_candidate):
     for index, address in enumerate(consensus_addr_list):
         assert validator_set.getValidatorByConsensus(address) == [operate_addr_list[index], address,
                                                                   fee_addr_list[index], commission_thousandths[index],
-                                                                  0, vote_addr_list[index], 0, 0]
+                                                                  0]
+        assert validator_set.getValidatorExByConsensus(address) == [vote_addr_list[index], 0, 0]
 
 
 def test_update_validator_set_modify_existing(validator_set):
@@ -470,9 +514,10 @@ def test_update_validator_set_modify_existing(validator_set):
                                      vote_addr_list, validator_count)
     assert len(validator_set.getValidators()) == 5
     for index, address in enumerate(consensus_addr_list):
-        validator = [operate_addr_list[index], address, fee_addr_list[index], commission_thousandths[index], 0,
-                     vote_addr_list[index], 0, 0]
+        validator = [operate_addr_list[index], address, fee_addr_list[index], commission_thousandths[index], 0]
+        validator_ex = [vote_addr_list[index], 0, 0]
         assert validator_set.getValidatorByConsensus(address) == validator
+        assert validator_set.getValidatorExByConsensus(address) == validator_ex
 
 
 @pytest.mark.parametrize("legnth", [4, 6, 7])
@@ -507,13 +552,15 @@ def test_validator_count_change_update(validator_set, candidate_hub, set_candida
     # commission_thousandths is set to 1000 because there is no stake on the validator.
     commission_thousandths = 1000
     assert validator_set.getValidatorByConsensus(consensuses[-1]) == [accounts[20], consensuses[-1], accounts[20],
-                                                                      commission_thousandths, 0, vote_address, 0, 0]
+                                                                      commission_thousandths, 0]
+    assert validator_set.getValidatorExByConsensus(consensuses[-1]) == [vote_address, 0, 0]
     candidate_hub.refuseDelegate({'from': operators[0]})
     turn_round(consensuses)
     candidate_hub.unregister({'from': operators[0]})
     turn_round(consensuses)
     assert validator_set.getValidatorByConsensus(consensuses[-1]) == [accounts[20], consensuses[-1], accounts[20],
-                                                                      commission_thousandths, 0, vote_address, 0, 0]
+                                                                      commission_thousandths, 0]
+    assert validator_set.getValidatorExByConsensus(consensuses[-1]) == [vote_address, 0, 0]
     with brownie.reverts("no match validator"):
         validator_set.getValidatorByConsensus(consensuses[0])
 
@@ -548,6 +595,37 @@ def test_update_validator_set_updates_ranked_validator_list(validator_set):
         validator_count
     )
     assert validator_set.getRankedValidatorList() == new_consensus_addr_list
+
+
+def test_update_validator_set_clears_maintenance_and_vote_weight(validator_set, set_candidate_maintenance):
+    operators, consensuses = set_candidate_maintenance
+    turn_round()
+    validator_set.enterMaintenance({'from': operators[0]})
+    validator_set.vote(consensuses, [10, 20, 30, 40, 50])
+    assert validator_set.getValidatorExByConsensus(consensuses[0])['enterMaintenanceHeight'] != 0
+    assert validator_set.getValidatorExByConsensus(consensuses[0])['voteWeight'] == 10
+    new_operators = [accounts[10], accounts[11], accounts[12], accounts[13], accounts[14]]
+    new_consensuses = [accounts[15], accounts[16], accounts[17], accounts[18], accounts[19]]
+    new_fee_addrs = [accounts[20], accounts[21], accounts[22], accounts[23], accounts[24]]
+    new_vote_addrs = [random_vote_address() for _ in range(5)]
+    commission_thousandths = [400 for _ in range(5)]
+    validator_count = 5
+    update_system_contract_address(validator_set, candidate_hub=accounts[0])
+    validator_set.updateValidatorSet(
+        new_operators,
+        new_consensuses,
+        new_fee_addrs,
+        commission_thousandths,
+        new_vote_addrs,
+        validator_count
+    )
+    for c in consensuses:
+        with brownie.reverts("no match validator"):
+            validator_set.getValidatorExByConsensus(c)
+    for c in new_consensuses:
+        ex = validator_set.getValidatorExByConsensus(c)
+        assert ex['voteWeight'] == 0
+        assert ex['enterMaintenanceHeight'] == 0
 
 
 # getValidatorsAndVoteAddresses
@@ -832,12 +910,13 @@ def test_distribute_reward_success_with_commissionThousandths_500():
     expect_reward = expect_income * commission // 1000
 
     validator = validator_set_instance.currentValidatorSet(0).dict()
+    vote_address = validator_set_instance.getValidatorExByConsensus(validator['consensusAddress'])['voteAddr']
     validator_set_instance.updateValidatorSet(
         [validator['operateAddress']],
         [validator['consensusAddress']],
         [validator['feeAddress']],
         [commission],
-        [validator['voteAddr']],
+        [vote_address],
         validator_count
     )
 
@@ -946,7 +1025,7 @@ def test_distribute_reward_by_weight_proportion_success(validator_set, system_re
     validator_set.vote(consensuses, weights1, {"from": accounts[99]})
     vote_weight = [85, 80, 130]
     for index, consensus in enumerate(consensuses):
-        assert validator_set.getValidatorByConsensus(consensus).dict()['voteWeight'] == vote_weight[index]
+        assert validator_set.getValidatorExByConsensus(consensus).dict()['voteWeight'] == vote_weight[index]
     __fake_validator_set()
     trackers = get_trackers(operators)
     income = 30000
@@ -1090,7 +1169,7 @@ def test_vote_weight_clears_next_round(validator_set, candidate_hub, set_candida
     tx = candidate_hub.turnRound()
     assert 'voteRewardTransfer' not in tx.events
     for consensus in consensuses:
-        validator = validator_set.getValidatorByConsensus(consensus)
+        validator = validator_set.getValidatorExByConsensus(consensus)
         assert validator['voteWeight'] == 0
 
 
@@ -1425,9 +1504,9 @@ def test_felony_success_with_validator_set_which_has_income(candidate_hub):
 def test_subsidy_reduce():
     validator_set_instance.updateBlockReward(BLOCK_REWARD)
     validator_set_instance.updateSubsidyReduceInterval(3)
-    reduce_interval = validator_set_instance.SUBSIDY_REDUCE_INTERVAL()
+    reduce_interval = validator_set_instance.subsidyReduceInterval()
     chain.mine(reduce_interval - chain.height % reduce_interval - 1)
-    validator_set_instance.deposit(ZERO_ADDRESS, {'value': 1})
+    validator_set_instance.depositMock(ZERO_ADDRESS, {'value': 1})
     assert validator_set_instance.blockReward() == validator_set_instance.BLOCK_REWARD() * validator_set_instance.REDUCE_FACTOR() // 10000
 
 
@@ -1438,12 +1517,12 @@ def test_subsidy_reduce_for_81_times():
 
     validator_set_instance.updateBlockReward(BLOCK_REWARD)
     validator_set_instance.updateSubsidyReduceInterval(3)
-    reduce_interval = validator_set_instance.SUBSIDY_REDUCE_INTERVAL()
+    reduce_interval = validator_set_instance.subsidyReduceInterval()
     chain.mine(reduce_interval - chain.height % reduce_interval - 1)
-    validator_set_instance.deposit(ZERO_ADDRESS, {'value': 1})
+    validator_set_instance.depositMock(ZERO_ADDRESS, {'value': 1})
     for _ in range(80):
         chain.mine(reduce_interval - 1)
-        validator_set_instance.deposit(ZERO_ADDRESS, {'value': 1})
+        validator_set_instance.depositMock(ZERO_ADDRESS, {'value': 1})
     assert validator_set_instance.blockReward() == block_reward
 
 
@@ -1472,13 +1551,13 @@ def test_exit_maintenance_turn_round_no_maintenance_success(validator_set, candi
     turn_round()
 
     for i in range(len(operators)):
-        validator = validator_set.getValidatorByConsensus(consensuses[i])
+        validator = validator_set.getValidatorExByConsensus(consensuses[i])
         assert validator['enterMaintenanceHeight'] == 0
 
     turn_round()
 
     for i in range(len(operators)):
-        validator = validator_set.getValidatorByConsensus(consensuses[i])
+        validator = validator_set.getValidatorExByConsensus(consensuses[i])
         assert validator['enterMaintenanceHeight'] == 0
 
 
@@ -1488,13 +1567,13 @@ def test_exit_maintenance_turn_round_with_maintenance_success(validator_set, can
     turn_round()
     validator_set.enterMaintenance({'from': operators[0]})
     validator_set.enterMaintenance({'from': operators[1]})
-    validator0 = validator_set.getValidatorByConsensus(consensuses[0])
-    validator1 = validator_set.getValidatorByConsensus(consensuses[1])
+    validator0 = validator_set.getValidatorExByConsensus(consensuses[0])
+    validator1 = validator_set.getValidatorExByConsensus(consensuses[1])
     assert validator0['enterMaintenanceHeight'] != 0
     assert validator1['enterMaintenanceHeight'] != 0
     turn_round(chain_get_validator_consensus())
     for i in range(len(operators)):
-        validator = validator_set.getValidatorByConsensus(consensuses[i])
+        validator = validator_set.getValidatorExByConsensus(consensuses[i])
         assert validator['enterMaintenanceHeight'] == 0
 
 
@@ -1514,11 +1593,11 @@ def test_exit_maintenance_turn_round_with_maintenance_slash(validator_set, candi
         assert 'validatorFelony' in tx.events
     for i in range(len(operators[:2])):
         if block_count == 20:
-            validator = validator_set.getValidatorByConsensus(consensuses[i])
+            validator = validator_set.getValidatorExByConsensus(consensuses[i])
             assert validator['enterMaintenanceHeight'] == 0
         else:
             with brownie.reverts("no match validator"):
-                validator_set.getValidatorByConsensus(consensuses[i])
+                validator_set.getValidatorExByConsensus(consensuses[i])
 
 
 def test_exit_maintenance_turn_round_slash_then_exit(validator_set, slash_indicator, candidate_hub,
@@ -1563,8 +1642,8 @@ def test_slash_during_maintenance(validator_set, slash_indicator, set_candidate_
     assert 'validatorMisdemeanor' not in tx.events
     assert 'validatorFelony' not in tx.events
     with brownie.reverts("no match validator"):
-        validator = validator_set.getValidatorByConsensus(consensuses[0])
-    validator = validator_set.getValidatorByConsensus(consensuses[1])
+        validator = validator_set.getValidatorExByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[1])
     assert validator['enterMaintenanceHeight'] == 0
     turn_round(consensuses)
 
@@ -1575,17 +1654,17 @@ def test_validator_apply_maintenance_success(validator_set, set_candidate_mainte
     operators, consensuses = set_candidate_maintenance
     turn_round()
     tx1 = validator_set.enterMaintenance({'from': operators[operator_index]})
-    validator_last = validator_set.getValidatorByConsensus(consensuses[operator_index])
+    validator_last = validator_set.getValidatorExByConsensus(consensuses[operator_index])
     assert validator_last['enterMaintenanceHeight'] != 0
     assert 'validatorEnterMaintenance' in tx1.events
     tx2 = validator_set.enterMaintenance({'from': operators[0]})
-    validator_first = validator_set.getValidatorByConsensus(consensuses[0])
+    validator_first = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator_first['enterMaintenanceHeight'] != 0
     assert 'validatorEnterMaintenance' in tx2.events
     chain.mine(300)
     tx = turn_round(consensuses)
     with brownie.reverts("no match validator"):
-        validator_set.getValidatorByConsensus(consensuses[operator_index])
+        validator_set.getValidatorExByConsensus(consensuses[operator_index])
 
 
 @pytest.mark.parametrize("maintain_index", [
@@ -1614,7 +1693,7 @@ def test_multiple_validators_multiple_candidates_exit_maintenance(validator_set,
     turn_round()
     for i in maintain_index:
         tx = validator_set.enterMaintenance({'from': operators[i]})
-        validator = validator_set.getValidatorByConsensus(consensuses[i])
+        validator = validator_set.getValidatorExByConsensus(consensuses[i])
         assert validator['enterMaintenanceHeight'] != 0
         assert 'validatorEnterMaintenance' in tx.events
     chain.mine(300)
@@ -1623,11 +1702,12 @@ def test_multiple_validators_multiple_candidates_exit_maintenance(validator_set,
     for i in maintain_index:
         maintain_address.append(consensuses[i])
         with brownie.reverts("no match validator"):
-            validator_set.getValidatorByConsensus(consensuses[i])
+            validator_set.getValidatorExByConsensus(consensuses[i])
     for consensus in consensuses:
         if consensus not in maintain_address:
             validator = validator_set.getValidatorByConsensus(consensus)
-            assert validator['enterMaintenanceHeight'] == 0
+            validator_ex = validator_set.getValidatorExByConsensus(consensus)
+            assert validator_ex['enterMaintenanceHeight'] == 0
             assert validator['consensusAddress'] == consensus
     turn_round(consensuses)
 
@@ -1716,7 +1796,7 @@ def test_enter_maintenance_success(validator_set, candidate_hub, set_candidate):
     turn_round()
     assert len(validator_set.getCurrentValidatorSet()) == 3
     tx = validator_set.enterMaintenance({'from': operators[0]})
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] != 0
     expect_event(tx, "validatorEnterMaintenance", {
         'validator': consensuses[0]
@@ -1732,7 +1812,7 @@ def test_enter_maintenance_already_in_maintenance(validator_set, candidate_hub, 
     turn_round()
     assert len(validator_set.getCurrentValidatorSet()) == 5
     validator_set.enterMaintenance({'from': operators[0]})
-    assert validator_set.currentValidatorSet(0)['enterMaintenanceHeight'] != 0
+    assert validator_set.getValidatorExByConsensus(consensuses[0])['enterMaintenanceHeight'] != 0
     with brownie.reverts("can not enter Temporary Maintenance"):
         validator_set.enterMaintenance({'from': operators[0]})
 
@@ -1746,7 +1826,7 @@ def test_enter_maintenance_multiple_validators(validator_set, candidate_hub, set
         expect_event(tx, "validatorEnterMaintenance", {
             'validator': consensuses[i]
         })
-        validator = validator_set.getValidatorByConsensus(consensuses[i])
+        validator = validator_set.getValidatorExByConsensus(consensuses[i])
         assert validator['enterMaintenanceHeight'] != 0
 
 
@@ -1761,7 +1841,7 @@ def test_enter_maintenance_after_exit(validator_set, candidate_hub, set_candidat
     validator_set.exitMaintenanceTurnRound()
 
     tx = validator_set.enterMaintenance({'from': operators[0]})
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] != 0
     expect_event(tx, "validatorEnterMaintenance", {
         'validator': consensuses[0]
@@ -1789,7 +1869,7 @@ def test_revert_when_notenoughalternates_entermaintenance(validator_set, candida
     assert len(validator_set.getCurrentValidatorSet()) == 5
     for i in range(len(operators[:2])):
         validator_set.enterMaintenance({'from': operators[i]})
-        validator = validator_set.getValidatorByConsensus(consensuses[i])
+        validator = validator_set.getValidatorExByConsensus(consensuses[i])
         assert validator['enterMaintenanceHeight'] != 0
     with brownie.reverts("can not enter Temporary Maintenance"):
         validator_set.enterMaintenance({'from': operators[2]})
@@ -1827,7 +1907,7 @@ def test_misdemeanor_apply_maintenance(validator_set, candidate_hub, set_candida
         tx1 = slash_indicator.slash(consensuses[0])
     assert 'validatorMisdemeanor' in tx1.events
     assert 'validatorEnterMaintenance' not in tx1.events
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] == 0
     with brownie.reverts("can not enter Temporary Maintenance"):
         validator_set.enterMaintenance({'from': operators[0]})
@@ -1842,7 +1922,7 @@ def test_alternate_validator_apply_maintenance_success(validator_set, candidate_
 
     validator_set.enterMaintenance({'from': operators[4]})
     tx = validator_set.enterMaintenance({'from': operators[0]})
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] != 0
     assert 'validatorEnterMaintenance' in tx.events
     chain.mine(300)
@@ -1882,7 +1962,7 @@ def test_slash_accumulates_during_and_after_maintenance(validator_set, set_candi
     delegate_coin_success(operators[0], accounts[0], 1e18)
     turn_round()
     validator_set.enterMaintenance({'from': operators[0]})
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] != 0
 
     tx = slash_indicator.slash(consensuses[0])
@@ -1964,7 +2044,7 @@ def test_delegate_and_transfer_during_maintenance(validator_set, candidate_hub, 
     delegate_amount = 100000
     btc_amount = 1000
     tx = validator_set.enterMaintenance({'from': operator})
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] != 0
     delegate_coin_success(operator, delegator, delegate_amount)
     txid = delegate_btc_success(operator, btc_delegator, btc_amount, LOCK_SCRIPT, relay=btc_delegator)
@@ -1990,7 +2070,7 @@ def test_validator_with_no_delegation_cannot_enter_maintenance(validator_set, ca
 
     validator_set.enterMaintenance({'from': operators[0]})
 
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] != 0
 
 
@@ -2011,17 +2091,17 @@ def test_maintenance_state_check_success(validator_set, set_candidate_maintenanc
     for operator in operators[:3]:
         delegate_coin_success(operator, accounts[0], 1e18)
     turn_round()
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] == 0
 
     validator_set.enterMaintenance({'from': operators[0]})
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     maintenance_height = validator['enterMaintenanceHeight']
     assert maintenance_height != 0
     chain.mine(105)
     tx = validator_set.exitMaintenance({'from': operators[0]})
     with brownie.reverts('no match validator'):
-        validator_set.getValidatorByConsensus(consensuses[0])
+        validator_set.getValidatorExByConsensus(consensuses[0])
     expect_event(tx, "validatorExitMaintenance", {
         'validator': consensuses[0]
     })
@@ -2037,11 +2117,11 @@ def test_exitmaintenance_success(validator_set, set_candidate_maintenance):
     turn_round()
     validator_set.deposit(consensuses[0], {"value": 100, "from": accounts[99]})
     validator_set.enterMaintenance({'from': operators[0]})
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] != 0
     chain.mine(40)
     tx = validator_set.exitMaintenance({'from': operators[0]})
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] == 0
     expect_event(tx, "validatorExitMaintenance", {
         'validator': consensuses[0]
@@ -2090,7 +2170,7 @@ def test_success_multiple_validators_exitmaintenance(validator_set, candidate_hu
 
     for i in range(2):
         tx = validator_set.exitMaintenance({'from': operators[i]})
-        validator = validator_set.getValidatorByConsensus(consensuses[i])
+        validator = validator_set.getValidatorExByConsensus(consensuses[i])
         assert validator['enterMaintenanceHeight'] == 0
         expect_event(tx, "validatorExitMaintenance", {
             'validator': consensuses[i]
@@ -2398,12 +2478,12 @@ def test_validator_already_in_maintenance_success(validator_set, set_candidate_m
     turn_round()
 
     validator_set.enterMaintenance({'from': operators[0]})
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] != 0
 
     tx = validator_set.enterMaintenance(consensuses[0])
 
-    validator_after = validator_set.getValidatorByConsensus(consensuses[0])
+    validator_after = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator_after['enterMaintenanceHeight'] == validator['enterMaintenanceHeight']
     assert 'validatorEnterMaintenance' not in tx.events
 
@@ -2419,7 +2499,7 @@ def test_only_one_working_validator_success(validator_set):
 
     tx = validator_set.enterMaintenance(consensus)
 
-    validator = validator_set.getValidatorByConsensus(consensus)
+    validator = validator_set.getValidatorExByConsensus(consensus)
     assert validator['enterMaintenanceHeight'] == 0
     assert 'validatorEnterMaintenance' not in tx.events
 
@@ -2431,7 +2511,7 @@ def test_working_count_equals_validator_count_success(validator_set, candidate_h
     __update_slash_address()
     assert validator_set.getWorkingCount() == len(operators)
     tx = validator_set.enterMaintenance(consensuses[0])
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] == 0
     assert 'validatorEnterMaintenance' not in tx.events
 
@@ -2444,7 +2524,7 @@ def test_validator_can_enter_maintenance_success(validator_set, set_candidate_ma
     assert validator_set.getWorkingCount() == 4
     assert validator_set.validatorCount() == 3
     tx = validator_set.enterMaintenance(consensuses[0])
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] != 0
     expect_event(tx, "validatorEnterMaintenance", {
         'validator': consensuses[0]
@@ -2458,7 +2538,7 @@ def test_multiple_validators_enter_maintenance_success(validator_set, candidate_
     turn_round()
     for i in range(2):
         tx = validator_set.enterMaintenance(consensuses[i])
-        validator = validator_set.getValidatorByConsensus(consensuses[i])
+        validator = validator_set.getValidatorExByConsensus(consensuses[i])
         assert validator['enterMaintenanceHeight'] != 0
         expect_event(tx, "validatorEnterMaintenance", {
             'validator': consensuses[i]
@@ -2471,15 +2551,15 @@ def test_validator_after_exit_maintenance_success(validator_set, set_candidate_m
     turn_round()
 
     validator_set.enterMaintenance(consensuses[0])
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] != 0
 
     validator_set.exitMaintenance({'from': operators[0]})
-    validator_after_exit = validator_set.getValidatorByConsensus(consensuses[0])
+    validator_after_exit = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator_after_exit['enterMaintenanceHeight'] == 0
 
     tx = validator_set.enterMaintenance(consensuses[0])
-    validator_after_enter = validator_set.getValidatorByConsensus(consensuses[0])
+    validator_after_enter = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator_after_enter['enterMaintenanceHeight'] != 0
     expect_event(tx, "validatorEnterMaintenance", {
         'validator': consensuses[0]
@@ -2508,7 +2588,7 @@ def test_validator_has_income_success(validator_set, set_candidate_maintenance):
 
     tx = validator_set.enterMaintenance(consensuses[0])
 
-    validator = validator_set.getValidatorByConsensus(consensuses[0])
+    validator = validator_set.getValidatorExByConsensus(consensuses[0])
     assert validator['enterMaintenanceHeight'] != 0
     assert validator_set.getIncoming(consensuses[0]) == deposit_value
     expect_event(tx, "validatorEnterMaintenance", {
@@ -3007,13 +3087,14 @@ def test_get_working_validators_consistency(validator_set, set_candidate_mainten
     working_validators = validator_set.getWorkingValidators()
     assert working_count == len(working_validators)
 
+
 # getTurnLength
 def test_get_turn_length_success(validator_set):
     assert validator_set.getTurnLength() == 1
+
 
 def test_get_turn_length_after_update(validator_set):
     __update_gov_address()
     hex_value = padding_left(Web3.to_hex(2), 64)
     tx = validator_set.updateParam('turnLength', hex_value)
     assert validator_set.turnLength() == 2
-    

@@ -1215,37 +1215,6 @@ def test_edit_vote_address_and_claim_reward(candidate_hub):
     assert tracker.delta() == TOTAL_REWARD // 2 - 1
     turn_round(chain_get_validator_consensus())
 
-
-def test_edit_description_and_claim_reward(candidate_hub):
-    delegate_amount = MIN_INIT_DELEGATE_VALUE * 100
-    btc_amount = 1000
-    operators, consensuses = setup_validators_and_delegates(validator_count=5,
-                                                            alternate_count=2,
-                                                            candidate_count=7)
-    for i in range(7):
-        delegate_validator(operators, i, accounts[50 + i], delegate_amount - i, btc_amount)
-        delegate_validator(operators, i, accounts[57 + i], delegate_amount - i, btc_amount)
-    turn_round()
-    expect_validator_consensus(consensuses[:5])
-    turn_round(chain_get_validator_consensus())
-    stake_hub_claim_reward(accounts[50])
-    moniker = "Test Validator"
-    identity = "test-identity"
-    website = "https://test.com"
-    details = "Test validator details"
-    candidate_hub.editDescription(moniker, identity, website, details, {'from': operators[0]})
-    turn_round(chain_get_validator_consensus())
-    tracker = get_tracker(accounts[50])
-    stake_hub_claim_reward(accounts[50])
-    assert tracker.delta() == TOTAL_REWARD // 2 - 1
-    turn_round(chain_get_validator_consensus())
-    candidate_hub.editDescription('test1', identity, website, details, {'from': operators[0]})
-    turn_round(chain_get_validator_consensus())
-    stake_hub_claim_reward(accounts[50])
-    assert tracker.delta() == (TOTAL_REWARD // 2) * 2 - 1
-    turn_round(chain_get_validator_consensus())
-
-
 def test_edit_fee_address_and_claim_reward(candidate_hub):
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 100
     btc_amount = 1000
@@ -1312,16 +1281,11 @@ def test_edit_agent_info_and_claim_reward(candidate_hub, validator_set):
         delegate_validator(operators, i, accounts[77 + i], delegate_amount - i, btc_amount)
     turn_round()
     validator_set.setValidatorCount(0)
-    moniker = "Test Validator"
-    identity = "test-identity"
-    website = "https://test.com"
-    details = "Test validator details"
     candidate_hub.updateAgent(accounts[72], {'from': operators[0]})
     candidate_hub.editFeeAddress(accounts[72], {'from': operators[0]})
     candidate_hub.editVoteAddress(random_vote_address(), {'from': operators[0]})
     candidate_hub.editCommissionRate(550, {'from': operators[0]})
     candidate_hub.editConsensusAddress(accounts[72], {'from': operators[0]})
-    candidate_hub.editDescription(moniker, identity, website, details, {'from': operators[0]})
     stake_hub_claim_reward(accounts[70])
     turn_round(chain_get_validator_consensus(), round_count=2)
 
