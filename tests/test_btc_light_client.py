@@ -9,7 +9,7 @@ from .btc_block_data import btc_block_data
 
 
 def teardown_module():
-    gas_price(False)
+    gas_price(0.1)
 
 
 @pytest.fixture(scope="module", autouse=True)
