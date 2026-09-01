@@ -50,6 +50,8 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   // value is the extension information of Validator.
   mapping(address => ValidatorEx) public exMap;
 
+  uint256 public lastRewardBlock;
+
   struct Validator {
     address operateAddress;
     address consensusAddress;
@@ -126,6 +128,8 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   /// @dev This method is called by the golang consensus engine every block
   /// @param valAddr The validator address
   function deposit(address valAddr) external payable onlyCoinbase onlyInit onlyZeroGasPrice {
+    require(block.number > lastRewardBlock, "reward already credited for this block");
+    lastRewardBlock = block.number;
     if (block.number % SUBSIDY_REDUCE_INTERVAL == 0) {
       blockReward = blockReward * REDUCE_FACTOR / 10000;
     }
